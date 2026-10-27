@@ -8,7 +8,9 @@ Next.js (App Router) · TypeScript · Tailwind CSS · Vercel AI SDK (`ai`, `@ai-
 ## Getting started
 
 ```bash
-npm install
+conda env create -f environment.yml   # Node 24 LTS (optionally: -p <path>)
+conda activate readystate
+npm ci
 cp .env.example .env.local   # set GROQ_API_KEY
 npm run dev                  # http://localhost:3000
 ```
@@ -27,6 +29,8 @@ Scripts: `npm run dev`, `npm run build`, `npm run lint`, `npm test` (Vitest).
 | `app/page.tsx` | Dark-mode TTX control plane: masked submit, unmasked rendering, critical alerts panel, AAR view. |
 | `components/ui/*` | Minimal shadcn/ui-compatible `Button`, `Input`, `Card`, `ScrollArea`, `Badge`. Replace with the real ones via `npx shadcn@latest add button input scroll-area card badge --overwrite`. |
 | `supabase/migrations/*` | `sim_logs` table with Row Level Security (users can only insert/read their own rows). |
+
+See [`docs/architecture/groq-models.md`](docs/architecture/groq-models.md) for available Groq models, benchmark results and rate limits.
 
 ### Game loop
 
