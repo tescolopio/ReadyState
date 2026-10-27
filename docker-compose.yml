@@ -1,0 +1,20 @@
+# Self-hosted ReadyState: `docker compose up -d`, then open http://localhost:3000
+# API keys can come from .env.local (optional) or be entered in the app's
+# Settings panel.
+services:
+  readystate:
+    build: .
+    image: readystate:local
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      READYSTATE_MODE: self-hosted
+      # The server calls Ollama, and inside the container "localhost" is the
+      # container itself, so point at Ollama running on the host machine.
+      OLLAMA_BASE_URL: http://host.docker.internal:11434/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

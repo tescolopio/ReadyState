@@ -4,11 +4,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TtxUIMessage } from "@/lib/ttx";
 
-const groq = vi.hoisted(() => ({ model: null as unknown }));
-vi.mock("@/lib/groq", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/groq")>()),
-  getGroqModel: () => groq.model,
+import type { HostedServices } from "@/lib/hosted";
+
+const env = vi.hoisted(() => ({
+  model: null as unknown,
+  mode: "self-hosted" as "self-hosted" | "hosted",
+  hosted: null as HostedServices | null,
+  resolveCalls: [] as unknown[][],
 }));
+vi.mock("@/lib/providers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/providers")>()),
+  resolveModel: (...args: unknown[]) => {
+    env.resolveCalls.push(args);
+    return env.model
+      ? { ok: true, provider: "groq", model: env.model, reasoning: "medium" }
+      : { ok: false, status: 400, error: "No API key for Groq." };
+  },
+}));
+vi.mock("@/lib/config", () => ({ getAppMode: () => env.mode }));
+vi.mock("@/lib/hosted", () => ({ getHostedServices: () => env.hosted }));
 
 const { POST } = await import("./route");
 
@@ -45,11 +59,11 @@ const mockToolCallModel = (toolName: string, input: unknown) =>
     }),
   });
 
-const post = (messages: unknown) =>
+const post = (messages: unknown, settings?: unknown) =>
   POST(
     new Request("http://localhost/api/ttx", {
       method: "POST",
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages, settings }),
     }),
   );
 
@@ -61,23 +75,41 @@ const userMessage: TtxUIMessage = {
 
 describe("POST /api/ttx", () => {
   beforeEach(() => {
-    groq.model = null;
+    env.model = null;
+    env.mode = "self-hosted";
+    env.hosted = null;
+    env.resolveCalls = [];
   });
 
-  it("returns 500 when GROQ_API_KEY is missing", async () => {
+  it("returns the provider error when no model can be resolved", async () => {
     const res = await post([userMessage]);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "No API key for Groq." });
+  });
+
+  it("passes browser provider settings to the resolver", async () => {
+    env.model = mockToolCallModel("generate_turn", turnInput);
+    const settings = { provider: "google", apiKey: "k" };
+    const res = await post([userMessage], settings);
+    await res.text();
+    expect(env.resolveCalls[0]).toEqual(["self-hosted", settings]);
+  });
+
+  it("rejects malformed provider settings", async () => {
+    env.model = mockToolCallModel("generate_turn", turnInput);
+    const res = await post([userMessage], { provider: "nope" });
+    expect(res.status).toBe(400);
   });
 
   it("rejects invalid payloads", async () => {
-    groq.model = mockToolCallModel("generate_turn", turnInput);
+    env.model = mockToolCallModel("generate_turn", turnInput);
     const res = await post("nope");
     expect(res.status).toBe(400);
   });
 
   it("forces the generate_turn tool and streams structured turn data", async () => {
     const model = mockToolCallModel("generate_turn", turnInput);
-    groq.model = model;
+    env.model = model;
 
     const res = await post([userMessage]);
     expect(res.status).toBe(200);
@@ -123,7 +155,7 @@ describe("POST /api/ttx", () => {
 
   it("forces the after_action_report tool once the exercise has ended", async () => {
     const model = mockToolCallModel("after_action_report", {});
-    groq.model = model;
+    env.model = model;
     const ended = { ...turnInput, hours_elapsed: 72, scenario_status: "survived" };
 
     const res = await post([
@@ -148,6 +180,58 @@ describe("POST /api/ttx", () => {
     expect(model.doStreamCalls[0].toolChoice).toEqual({
       type: "tool",
       toolName: "after_action_report",
+    });
+  });
+});
+
+describe("POST /api/ttx in hosted mode", () => {
+  const account = { userId: "user-1" };
+  const hostedServices = (overrides: Partial<HostedServices> = {}): HostedServices => ({
+    authenticate: vi.fn(async () => account),
+    checkQuota: vi.fn(async () => ({ allowed: true as const })),
+    recordUsage: vi.fn(async () => {}),
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    env.model = mockToolCallModel("generate_turn", turnInput);
+    env.mode = "hosted";
+    env.resolveCalls = [];
+  });
+
+  it("fails closed with 503 when no hosted services are wired up", async () => {
+    env.hosted = null;
+    const res = await post([userMessage]);
+    expect(res.status).toBe(503);
+  });
+
+  it("requires a signed-in account", async () => {
+    env.hosted = hostedServices({ authenticate: vi.fn(async () => null) });
+    const res = await post([userMessage]);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 402 when the account is out of quota", async () => {
+    env.hosted = hostedServices({
+      checkQuota: vi.fn(async () => ({ allowed: false as const, reason: "Out of credits." })),
+    });
+    const res = await post([userMessage]);
+    expect(res.status).toBe(402);
+    expect(await res.json()).toEqual({ error: "Out of credits." });
+  });
+
+  it("resolves the model in hosted mode and records usage after the call", async () => {
+    const services = hostedServices();
+    env.hosted = services;
+    const res = await post([userMessage], { provider: "custom", baseURL: "http://evil" });
+    await res.text();
+
+    expect(env.resolveCalls[0][0]).toBe("hosted");
+    expect(services.recordUsage).toHaveBeenCalledWith(account, {
+      phase: "baseline",
+      provider: "groq",
+      inputTokens: 1,
+      outputTokens: 1,
     });
   });
 });

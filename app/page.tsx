@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
+import { ProviderSettingsCard } from "@/components/provider-settings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,7 +28,9 @@ import {
   type TtxUIMessage,
   type TurnOutput,
 } from "@/lib/ttx";
+import type { ServerConfig } from "@/lib/providers";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
+import { useSettingsStore } from "@/store/useSettingsStore";
 import { maskInput, unmaskOutput } from "@/utils/obfuscator";
 
 const PHASE_LABELS: Record<TtxPhase, string> = {
@@ -47,12 +50,40 @@ const PLACEHOLDERS: Record<TtxPhase, string> = {
 
 const AAR_REQUEST = "Exercise ended. Generate the After-Action Report.";
 
+/** API errors arrive as the raw response body, usually `{ "error": "..." }`. */
+const errorText = (error: Error) => {
+  try {
+    const parsed = JSON.parse(error.message);
+    if (typeof parsed?.error === "string") return parsed.error;
+  } catch {}
+  return error.message;
+};
+
 export default function TtxDashboard() {
   const [input, setInput] = useState("");
+  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
   const transport = useMemo(
-    () => new DefaultChatTransport<TtxUIMessage>({ api: "/api/ttx" }),
+    () =>
+      new DefaultChatTransport<TtxUIMessage>({
+        api: "/api/ttx",
+        // Read at send time so saved Settings apply to the next request.
+        body: () => ({ settings: useSettingsStore.getState().settings ?? undefined }),
+      }),
     [],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/config")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((config: ServerConfig | null) => {
+        if (!cancelled) setServerConfig(config);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const { messages, sendMessage, setMessages, status, error, stop } =
     useChat<TtxUIMessage>({ transport });
   // Subscribe so unmasked output re-renders whenever the ledger changes.
@@ -162,7 +193,7 @@ export default function TtxDashboard() {
               )}
               {error && (
                 <div className="mt-4 rounded-md border border-red-900 bg-red-950/50 p-3 text-sm text-red-300">
-                  Transmission failed: {error.message}
+                  Transmission failed: {errorText(error)}
                 </div>
               )}
               <div ref={bottomRef} />
@@ -270,6 +301,10 @@ export default function TtxDashboard() {
               </p>
             </CardContent>
           </Card>
+
+          {serverConfig?.mode === "self-hosted" && (
+            <ProviderSettingsCard config={serverConfig} />
+          )}
         </aside>
       </main>
     </div>

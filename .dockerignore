@@ -1,0 +1,11 @@
+.git
+.next
+node_modules
+npm-debug.log*
+.env*
+!.env.example
+Dockerfile
+docker-compose.yml
+docs
+supabase
+**/*.test.ts

@@ -2,6 +2,7 @@
   "name": "readystate",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/google": "4.0.94",
     "@ai-sdk/openai": "^4.0.103",
     "@ai-sdk/react": "^4.0.158",
     "ai": "^7.0.154",
