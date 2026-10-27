@@ -38,7 +38,31 @@ const PHASE_INSTRUCTIONS: Record<Exclude<TtxPhase, "aar">, string> = {
 const errorResponse = (status: number, error: string) =>
   Response.json({ error }, { status });
 
+/**
+ * Rejects requests that didn't come from this app's own page. Requiring JSON
+ * forces a CORS preflight, which fails because this route sends no CORS
+ * headers, and a cross-origin `Origin` is refused outright. Without this, any
+ * website open in the user's browser could drive a self-hosted server and
+ * spend its keys.
+ */
+function rejectCrossSite(req: Request): Response | null {
+  const contentType = req.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().startsWith("application/json")) {
+    return errorResponse(415, "Expected a JSON request body.");
+  }
+  // Browsers always send Origin on cross-origin POSTs; same-origin ones match Host.
+  const origin = req.headers.get("origin");
+  const host = req.headers.get("host");
+  if (origin && (!URL.canParse(origin) || new URL(origin).host !== host)) {
+    return errorResponse(403, "Cross-origin requests are not allowed.");
+  }
+  return null;
+}
+
 export async function POST(req: Request) {
+  const rejected = rejectCrossSite(req);
+  if (rejected) return rejected;
+
   const mode = getAppMode();
 
   // Hosted mode fails closed: no implementation means no anonymous model calls.

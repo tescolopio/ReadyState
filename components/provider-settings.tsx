@@ -57,9 +57,11 @@ export function ProviderSettingsCard({ config }: { config: ServerConfig }) {
               id={`${id}-provider`}
               value={draft.provider}
               onChange={(event) =>
+                // Drop the key too, so one provider's key is never sent to another.
                 update({
                   provider: event.target.value as ProviderId,
                   model: undefined,
+                  apiKey: undefined,
                   baseURL: undefined,
                 })
               }
@@ -86,7 +88,8 @@ export function ProviderSettingsCard({ config }: { config: ServerConfig }) {
             />
           </div>
 
-          {provider?.requiresKey !== false && (
+          {/* Custom endpoints may or may not need a key, so it's optional there. */}
+          {(provider?.requiresKey !== false || draft.provider === "custom") && (
             <div className="space-y-1">
               <label htmlFor={`${id}-key`} className={labelClass}>
                 API key
@@ -98,7 +101,11 @@ export function ProviderSettingsCard({ config }: { config: ServerConfig }) {
                 value={draft.apiKey ?? ""}
                 onChange={(event) => update({ apiKey: event.target.value })}
                 placeholder={
-                  provider?.serverConfigured ? "Using the server's key" : "Paste your key"
+                  !provider?.requiresKey
+                    ? "Optional"
+                    : provider.serverConfigured
+                      ? "Using the server's key"
+                      : "Paste your key"
                 }
               />
             </div>
