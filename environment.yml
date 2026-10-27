@@ -1,0 +1,5 @@
+name: readystate
+channels:
+  - conda-forge
+dependencies:
+  - nodejs=24

@@ -1,7 +1,7 @@
 import { createOpenAI } from "@ai-sdk/openai";
 
 const DEFAULT_GROQ_BASE_URL = "https://api.groq.com/openai/v1";
-const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
+const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 
 /**
  * Groq exposes an OpenAI-compatible Chat Completions API, so we reuse the

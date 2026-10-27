@@ -1,5 +1,4 @@
 import {
-  convertToModelMessages,
   createUIMessageStreamResponse,
   safeValidateUIMessages,
   streamText,
@@ -9,6 +8,7 @@ import {
 import { getGroqModel, missingKeyResponse } from "@/lib/groq";
 import {
   TARGET_DURATION_HOURS,
+  buildExercisePrompt,
   deriveTtxState,
   ttxTools,
   type TtxPhase,
@@ -23,6 +23,7 @@ Rules:
 - All participant input has been sanitized client-side. Tokens in square brackets such as [Person 1], [Location 1], [Adult 1], [Large Dog] or [Requires Refrigeration] are privacy placeholders. Always reuse them verbatim and never guess the real values behind them.
 - Ground every outcome in realistic physics, logistics, weather, and human physiology. Do not let the participant succeed at implausible actions.
 - Be concise, factual, and professional, like an exercise controller.
+- Exercise context arrives as a compact briefing: the household baseline, a condensed log of earlier turns, the latest turn in full, and the participant's pending action. Treat it as the complete record and keep continuity with it.
 - The exercise is won by surviving ${TARGET_DURATION_HOURS} in-game hours and lost when a critical constraint (water, heat, shelter, medication, medical care) is not secured in time.
 - Never reply with plain text. Always respond by calling the required tool.`;
 
@@ -59,7 +60,11 @@ export async function POST(req: Request) {
   const result = streamText({
     model,
     instructions: `${SYSTEM_PROMPT}\n\n${PHASE_INSTRUCTIONS[phase]}`,
-    messages: await convertToModelMessages(messages),
+    // A single compact briefing instead of the replayed chat keeps each call
+    // well under Groq's per-minute token limit (docs/architecture/groq-models.md).
+    messages: [{ role: "user", content: buildExercisePrompt(messages) }],
+    // "high" costs 3-5x the tokens with no visible quality gain for this task.
+    reasoning: "medium",
     tools: ttxTools,
     activeTools: [toolName],
     toolChoice: { type: "tool", toolName },
