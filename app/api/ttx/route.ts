@@ -5,7 +5,9 @@ import {
   toUIMessageStream,
 } from "ai";
 
-import { getGroqModel, missingKeyResponse } from "@/lib/groq";
+import { getAppMode } from "@/lib/config";
+import { getHostedServices, type HostedAccount } from "@/lib/hosted";
+import { providerSettingsSchema, resolveModel } from "@/lib/providers";
 import {
   TARGET_DURATION_HOURS,
   buildExercisePrompt,
@@ -33,11 +35,29 @@ const PHASE_INSTRUCTIONS: Record<Exclude<TtxPhase, "aar">, string> = {
   ended: `Phase 4 - After-Action Report: the exercise is over. Grade the participant's overall performance across the whole exercise and highlight the specific supply gaps that hurt them.`,
 };
 
+const errorResponse = (status: number, error: string) =>
+  Response.json({ error }, { status });
+
 export async function POST(req: Request) {
-  const model = getGroqModel();
-  if (!model) return missingKeyResponse();
+  const mode = getAppMode();
+
+  // Hosted mode fails closed: no implementation means no anonymous model calls.
+  const hosted = mode === "hosted" ? getHostedServices() : null;
+  let account: HostedAccount | null = null;
+  if (mode === "hosted") {
+    if (!hosted) return errorResponse(503, "Hosted mode is not configured on this server.");
+    account = await hosted.authenticate(req);
+    if (!account) return errorResponse(401, "Sign in to run an exercise.");
+    const quota = await hosted.checkQuota(account);
+    if (!quota.allowed) return errorResponse(402, quota.reason);
+  }
 
   const body = await req.json().catch(() => null);
+  const settings = providerSettingsSchema.optional().safeParse(body?.settings ?? undefined);
+  if (!settings.success) return errorResponse(400, "Invalid provider settings.");
+  const resolved = resolveModel(mode, settings.data);
+  if (!resolved.ok) return errorResponse(resolved.status, resolved.error);
+
   const validated = await safeValidateUIMessages<TtxUIMessage>({
     messages: body?.messages,
     tools: ttxTools,
@@ -58,16 +78,24 @@ export async function POST(req: Request) {
   const toolName = phase === "ended" ? "after_action_report" : "generate_turn";
 
   const result = streamText({
-    model,
+    model: resolved.model,
     instructions: `${SYSTEM_PROMPT}\n\n${PHASE_INSTRUCTIONS[phase]}`,
     // A single compact briefing instead of the replayed chat keeps each call
     // well under Groq's per-minute token limit (docs/architecture/groq-models.md).
     messages: [{ role: "user", content: buildExercisePrompt(messages) }],
-    // "high" costs 3-5x the tokens with no visible quality gain for this task.
-    reasoning: "medium",
+    reasoning: resolved.reasoning,
     tools: ttxTools,
     activeTools: [toolName],
     toolChoice: { type: "tool", toolName },
+    onFinish: async ({ usage }) => {
+      if (!hosted || !account) return;
+      await hosted.recordUsage(account, {
+        phase,
+        provider: resolved.provider,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+      });
+    },
   });
 
   return createUIMessageStreamResponse({
