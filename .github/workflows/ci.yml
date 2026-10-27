@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: 1
+
+jobs:
+  check:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  docker:
+    name: Docker build and smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -t readystate:ci .
+
+      - name: Start self-hosted and hosted containers
+        run: |
+          docker run -d --name selfhosted -p 3000:3000 readystate:ci
+          docker run -d --name hosted -p 3001:3000 -e READYSTATE_MODE=hosted readystate:ci
+          for port in 3000 3001; do
+            for i in $(seq 1 30); do
+              curl -fs "http://localhost:$port/api/config" > /dev/null && break
+              sleep 1
+            done
+          done
+
+      - name: Self-hosted mode serves config with providers
+        run: |
+          body=$(curl -fs http://localhost:3000/api/config)
+          echo "$body"
+          echo "$body" | jq -e '.mode == "self-hosted" and (.providers | length > 0)'
+
+      - name: Hosted mode fails closed
+        run: |
+          body=$(curl -fs http://localhost:3001/api/config)
+          echo "$body"
+          echo "$body" | jq -e '.mode == "hosted" and (.providers | length == 0)'
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' -d '{"messages":[]}' \
+            http://localhost:3001/api/ttx)
+          echo "POST /api/ttx -> $status"
+          test "$status" = 503
+
+      - name: Container logs
+        if: always()
+        run: |
+          docker logs selfhosted || true
+          docker logs hosted || true
