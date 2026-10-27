@@ -138,3 +138,73 @@ export function deriveTtxState(
 
   return { phase, turns, latestTurn, hoursElapsed, outcome, report };
 }
+
+const messageText = (message: TtxUIMessage) =>
+  message.parts
+    .map((part) => (part.type === "text" ? part.text : ""))
+    .join("")
+    .trim();
+
+const alertsLine = (alerts: string[]) =>
+  alerts.length ? alerts.join("; ") : "none";
+
+/**
+ * Builds the compact model prompt for the next call. Instead of replaying the
+ * whole chat (where every turn appears twice, as tool call and echoed result),
+ * it sends the baseline, a one-line log entry per older turn, the latest turn
+ * in full and the participant's pending action. Older narratives are dropped:
+ * the actions, injects and alerts carry the state the model needs, and the
+ * prompt grows by a line per turn instead of a full transcript.
+ */
+export function buildExercisePrompt(messages: TtxUIMessage[]): string {
+  let baseline: string | undefined;
+  let pendingAction: string | undefined;
+  const exchanges: Array<{ action?: string; turn: TurnOutput }> = [];
+
+  for (const message of messages) {
+    if (message.role === "user") {
+      const text = messageText(message);
+      if (!text) continue;
+      if (baseline === undefined) baseline = text;
+      else pendingAction = text;
+      continue;
+    }
+    if (message.role !== "assistant") continue;
+    for (const part of message.parts) {
+      if (part.type !== "tool-generate_turn") continue;
+      const turn = completedOutput<TurnOutput>(part);
+      if (!turn) continue;
+      exchanges.push({ action: pendingAction, turn });
+      pendingAction = undefined;
+    }
+  }
+
+  const sections = [`HOUSEHOLD BASELINE (sanitized):\n${baseline ?? "(not provided)"}`];
+
+  const latest = exchanges.at(-1);
+  const older = exchanges.slice(0, -1);
+  if (older.length) {
+    const log = older.map(({ action, turn }) => {
+      const did = action ? `Participant: ${action} | ` : "";
+      return `- ${turn.time_elapsed}: ${did}Inject: ${turn.new_inject} | Alerts: ${alertsLine(turn.critical_alerts)}`;
+    });
+    sections.push(`EXERCISE LOG (earlier turns, condensed):\n${log.join("\n")}`);
+  }
+
+  if (latest) {
+    const { action, turn } = latest;
+    sections.push(
+      [
+        `LATEST TURN (${turn.time_elapsed}, hours_elapsed ${turn.hours_elapsed}):`,
+        ...(action ? [`Participant action: ${action}`] : []),
+        `Outcome: ${turn.narrative_response}`,
+        `Inject: ${turn.new_inject}`,
+        `Critical alerts: ${alertsLine(turn.critical_alerts)}`,
+      ].join("\n"),
+    );
+  }
+
+  if (pendingAction) sections.push(`PARTICIPANT ACTION:\n${pendingAction}`);
+
+  return sections.join("\n\n");
+}

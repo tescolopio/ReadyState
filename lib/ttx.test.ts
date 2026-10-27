@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildExercisePrompt,
   deriveTtxState,
   type AfterActionReport,
   type TtxUIMessage,
@@ -112,5 +113,58 @@ describe("deriveTtxState", () => {
     ]);
     expect(state.phase).toBe("aar");
     expect(state.report).toEqual(report);
+  });
+});
+
+describe("buildExercisePrompt", () => {
+  it("sends only the baseline before the first turn", () => {
+    const prompt = buildExercisePrompt([user("u1", "[Adult 1], [Large Dog]")]);
+    expect(prompt).toBe("HOUSEHOLD BASELINE (sanitized):\n[Adult 1], [Large Dog]");
+  });
+
+  it("condenses older turns and keeps the latest turn in full", () => {
+    const prompt = buildExercisePrompt([
+      user("u1", "params"),
+      turnMessage("a1", turn({ narrative_response: "Old narrative.", new_inject: "Pipes freeze." })),
+      user("u2", "Drip the faucets."),
+      turnMessage(
+        "a2",
+        turn({
+          narrative_response: "Latest narrative.",
+          time_elapsed: "Hour 8",
+          hours_elapsed: 8,
+          new_inject: "Roads close.",
+          critical_alerts: ["Heat offline"],
+        }),
+      ),
+      user("u3", "Seal one room."),
+    ]);
+
+    expect(prompt).not.toContain("Old narrative.");
+    expect(prompt).toContain("- Hour 0: Inject: Pipes freeze. | Alerts: none");
+    expect(prompt).toContain(
+      [
+        "LATEST TURN (Hour 8, hours_elapsed 8):",
+        "Participant action: Drip the faucets.",
+        "Outcome: Latest narrative.",
+        "Inject: Roads close.",
+        "Critical alerts: Heat offline",
+      ].join("\n"),
+    );
+    expect(prompt.endsWith("PARTICIPANT ACTION:\nSeal one room.")).toBe(true);
+  });
+
+  it("grows by one log line per turn instead of a full transcript", () => {
+    const messages: TtxUIMessage[] = [user("u0", "params")];
+    const lengths: number[] = [];
+    for (let i = 1; i <= 10; i++) {
+      messages.push(
+        turnMessage(`a${i}`, turn({ narrative_response: "N".repeat(800), hours_elapsed: i * 6 })),
+        user(`u${i}`, "Do the next thing."),
+      );
+      lengths.push(buildExercisePrompt(messages).length);
+    }
+    const growth = lengths.at(-1)! - lengths[1];
+    expect(growth / 8).toBeLessThan(150);
   });
 });

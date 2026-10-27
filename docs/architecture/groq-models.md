@@ -55,9 +55,29 @@ Reported in the `x-ratelimit-*` response headers for each model:
 | Requests per day | 1,000 |
 | Tokens per minute | 8,000 (2,000 for `gpt-oss-safeguard-20b`) |
 
-**Tokens per minute is the binding constraint.** Each turn resends the full chat history, and every `generate_turn` call appears twice in it: once as the tool call, once as its echoed result (`execute: async (input) => input` in `lib/ttx.ts`). Prompt size therefore grows by roughly 650+ tokens per turn. By estimate (not yet measured on a full game), a single request approaches 8,000 tokens around turns 8–11. Reaching `TARGET_DURATION_HOURS` (72) at 6–12 hour increments takes 6–12 turns, so long exercises can hit the limit on the free tier.
+**Tokens per minute is the binding constraint.** Reaching `TARGET_DURATION_HOURS` (72) at 6–12 hour increments takes 6–12 turns, and every request plus its completion counts against the 8,000-token window.
 
-Mitigations to consider: keep tool results out of the replayed history, summarize older turns, cap `reasoning_effort` at `medium`, or move to a paid tier.
+Replaying the full chat history made this unworkable. Every `generate_turn` call appeared twice, once as the tool call and once as its echoed result (`execute: async (input) => input` in `lib/ttx.ts`), so the prompt grew by about 800 tokens per turn and would have passed 8,000 around turn 10.
+
+`/api/ttx` now sends one compact briefing built by `buildExercisePrompt` (`lib/ttx.ts`):
+
+1. The sanitized household baseline.
+2. One log line for each earlier turn (clock, participant action, inject, alerts). Older narratives are dropped.
+3. The latest turn in full.
+4. The participant's pending action.
+
+It also pins `reasoning: "medium"`.
+
+Measured on a live playthrough (estimated at 4 characters per token, excluding the roughly 480-token system prompt and tool schema, which stay constant):
+
+| Call | Replayed chat (before) | Compact briefing (after) |
+| --- | --- | --- |
+| Baseline | ~51 | ~46 |
+| Turn 2 | ~687 | ~327 |
+| Turn 3 | ~1,504 | ~571 |
+| AAR | ~2,499 | ~792 (−68%) |
+
+Growth is about 230 tokens per turn, mostly the participant's own action text. By extrapolation, a 12-turn game stays near 3.7k tokens per request, including the system prompt, schema and a medium-effort completion. If longer exercises or a paid tier change the budget, the next lever is trimming or summarizing older log lines.
 
 ## Parameters via the AI SDK
 

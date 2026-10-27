@@ -104,6 +104,19 @@ describe("POST /api/ttx", () => {
       type: "tool",
       toolName: "generate_turn",
     });
+    expect(model.doStreamCalls[0].reasoning).toBe("medium");
+    const sent = model.doStreamCalls[0].prompt.filter((m) => m.role !== "system");
+    expect(sent).toEqual([
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "HOUSEHOLD BASELINE (sanitized):\n[Person 1], [Large Dog], live in [Location 1].",
+          },
+        ],
+      },
+    ]);
     const part = last?.parts.find((p) => p.type === "tool-generate_turn");
     expect(part).toMatchObject({ state: "output-available", output: turnInput });
   });
