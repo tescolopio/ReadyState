@@ -1,7 +1,70 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { usePrivacyStore } from "@/store/usePrivacyStore";
+import { MASKING_CORPUS } from "@/utils/masking-corpus";
 import { maskInput, unmaskOutput } from "@/utils/obfuscator";
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** Whole-word, case-insensitive, so "Mai" doesn't match inside "Maine". */
+const containsWord = (text: string, word: string) =>
+  new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(word)}(?![\\p{L}\\p{N}])`, "iu").test(text);
+
+describe("masking corpus", () => {
+  beforeEach(() => usePrivacyStore.getState().clearMappings());
+
+  it.each(MASKING_CORPUS.map((c, i) => [i + 1, c] as const))(
+    "case %i sends no known PII and keeps what the simulation needs",
+    (_, { text, pii, keep = [] }) => {
+      const masked = maskInput(text);
+      expect(pii.filter((value) => containsWord(masked, value)), masked).toEqual([]);
+      expect(keep.filter((value) => !containsWord(masked, value)), masked).toEqual([]);
+      expect(unmaskOutput(masked)).toBe(text);
+    },
+  );
+
+  it("has at least 50 cases", () => {
+    expect(MASKING_CORPUS.length).toBeGreaterThanOrEqual(50);
+  });
+});
+
+describe("masking details", () => {
+  beforeEach(() => {
+    usePrivacyStore.getState().clearMappings();
+    usePrivacyStore.getState().setAlwaysMask([]);
+  });
+
+  it("tags pets as pets, not people", () => {
+    expect(maskInput("Our dog Max and my wife Priya.")).toBe("Our dog [Pet 1] and my wife [Person 1].");
+  });
+
+  it("tags contact details by kind", () => {
+    expect(maskInput("Call 303-555-0142 or email a.b@example.com, ZIP 80203.")).toBe(
+      "Call [Phone 1] or email [Email 1], ZIP [Postcode 1].",
+    );
+  });
+
+  it("keeps quantities that look like ZIP codes", () => {
+    const text = "A 10000 mAh battery and a 12000 BTU heater.";
+    expect(maskInput(text)).toBe(text);
+  });
+
+  it("keeps masking names from earlier messages without context", () => {
+    maskInput("My wife Priya is diabetic.");
+    expect(maskInput("Priya checks her glucose.")).toBe("[Person 1] checks her glucose.");
+  });
+
+  it("masks names on the always-mask list", () => {
+    usePrivacyStore.getState().setAlwaysMask(["Zorblax", " ", "Zorblax"]);
+    expect(usePrivacyStore.getState().alwaysMask).toEqual(["Zorblax"]);
+    expect(maskInput("zorblax has the radio.")).toBe("[Person 1] has the radio.");
+  });
+
+  it("accepts an always-mask list per call", () => {
+    expect(maskInput("Quillon has the radio.", { alwaysMask: ["Quillon"] })).toBe(
+      "[Person 1] has the radio.",
+    );
+  });
+});
 
 describe("obfuscator", () => {
   beforeEach(() => usePrivacyStore.getState().clearMappings());
