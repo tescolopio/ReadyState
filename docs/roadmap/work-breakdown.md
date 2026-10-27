@@ -15,6 +15,7 @@ These block work below and only the owner can make them:
 | D3 | **Contributor License Agreement.** To sell anything under terms other than AGPL later (for example an enterprise license), outside contributions need a CLA *before* the first external PR is merged. | Platform P4, opening the repo to contributors |
 | D4 | **Legal review** of the privacy policy, terms and medical/safety disclaimer before the hosted launch. | Security S4 |
 | D5 | **Which provider the hosted service uses** (Groq paid tier is the default assumption) and the data-processing terms to advertise. | Hosted H5, Security S4 |
+| D6 | **Knowledge-base review and license.** Who signs off on medical and life-safety content (a qualified clinician or emergency manager), and whether the knowledge base is published as an open dataset (for example CC BY 4.0 for our own writing). | Research R1, R3, R9 |
 
 ## 1. Privacy & Security
 
@@ -42,8 +43,9 @@ The masking layer is the product's core promise, and it currently leaks. A probe
 | P0 | **G2. Eval harness.** Turn the scratch benchmark and playthrough scripts into `scripts/eval/`: scripted households × providers, checking schema validity, tag preservation, outcome distribution, tokens and latency. | `npm run eval` produces a report. It's the gate for G1, G3 and prompt changes. |
 | P1 | **G3. Benchmark the other providers** on the forced tool call (Gemini, Cerebras, OpenRouter, Ollama models such as `gpt-oss:20b`). Today only Groq is verified. | `docs/architecture/` updated with results; any unreliable provider is labelled in Settings. |
 | P1 | **G4. Rate-limit handling.** Turn provider 429s into "Rate limited, retry in N s" (from `retry-after`) instead of a generic error, and retry once on a malformed tool call. | Covered by route tests. |
-| P2 | **G5. Scenario variety.** Scenario picker (winter storm, heat wave, flood, wildfire evacuation, earthquake, extended outage) and difficulty levels. | Selectable in the UI; covered by eval. |
+| P2 | **G5. Scenario variety.** Scenario picker (winter storm, heat wave, flood, wildfire evacuation, earthquake, extended outage) and difficulty levels. Built on Research R2 (taxonomy), R6 (injects) and R7 (tiers). | Selectable in the UI; covered by eval. |
 | P2 | **G6. Long-game budget.** Trim or summarize the oldest log lines past ~10 turns (see the compact briefing in `lib/ttx.ts`). | 20-turn eval stays under 5k tokens per request. |
+| P1 | **G7. Knowledge retrieval.** Add the few knowledge-base records relevant to the current hazard and phase to `buildExercisePrompt`, capped at about 500 tokens (the 8k TPM Groq limit is the constraint), and have the AAR cite record IDs. Depends on R1. | Eval shows grounded injects and cited recommendations within the token cap. |
 
 ## 3. Frontend & UX
 
@@ -91,11 +93,37 @@ All items depend on D1/D2. Integration points already exist in `lib/hosted.ts` a
 | P2 | **M3. Shared core package.** Extract `utils/obfuscator.ts`, `lib/ttx.ts` and the prompt builder into a workspace package for non-web clients. Needs S1 first so the hardened masker is what's shared. | The web app consumes the package with no behavior change. |
 | P2 | **M4. Native mobile client (Expo).** Thin client over `/api/config` and `/api/ttx`, with on-device masking and two backends: a self-hosted URL or a hosted account. PWA (F4) covers phones until then. | TestFlight / internal track build. |
 
+## 7. Research & Knowledge Base
+
+Today every scenario, inject and AAR recommendation comes from the model's memory. That's how the G1 failure (a snow cooler melting in a sub-zero storm) happened. This team builds a sourced, reviewed knowledge base that the simulation retrieves from (G7), so that injects are physically plausible and advice cites real guidance. The knowledge base is retrieved per turn; it isn't used for fine-tuning.
+
+**Sourcing rules for every record:**
+
+- **Prefer US government works:** FEMA/Ready.gov, NWS/NOAA, USGS, CDC, CISA and DOE. These are generally public domain, but check for third-party photos or content inside them.
+- **Military doctrine:** only documents marked *Distribution Statement A* (approved for public release). Never use restricted-distribution, CUI/FOUO or export-controlled material.
+- **Copyrighted guidance** (Red Cross, NFPA, publishers): cite and paraphrase, and link out. Don't bulk-copy without a license.
+- **Provenance:** every record carries the source URL, publisher, publication date, retrieval date, license and reviewer.
+- **Medical and life-safety content** ships only after review by the person named in D6.
+
+| Pri | Item | Done when |
+| --- | --- | --- |
+| P1 | **R1. Schema and provenance.** Define record types in `data/kb/` as JSON or YAML validated by Zod: hazard, guidance, case study, inject, supply item and readiness tier, each with the provenance fields. Keep a license allowlist and add a CI check (with P1) that rejects records with no source or a disallowed license. | Schema and validator merged; 10 seed records pass CI. |
+| P1 | **R2. Hazard taxonomy.** Start from the 18 natural hazards in FEMA's National Risk Index. Add technological and human-caused hazards: grid failure, water contamination, hazmat release, pandemic, cyberattack on utilities and civil unrest. Record for each: onset speed, warning time, typical duration, seasonality, regions, and cascades (for example winter storm → outage → generator carbon monoxide). | Every G5 scenario maps to a taxonomy entry. |
+| P1 | **R3. Official guidance corpus.** Short, atomic do/don't records per hazard and phase (before, during, after), from Ready.gov and FEMA's *Are You Ready?*, CDC (water, food safety, carbon monoxide, heat illness), NWS warning products, USGS (earthquakes) and CISA. | Each launch scenario's hazard has cited guidance for every phase. |
+| P1 | **R4. Historical case studies.** Sourced timelines from official reports and after-action reviews: the February 2021 Texas winter storm, the 2023 Lahaina wildfire, the 2018 Camp Fire, Hurricane Maria's extended outage, the 2003 Northeast blackout and the Flint water crisis. Extract what failed for households, and when. | ≥ 8 case studies; R6 injects cite them. |
+| P1 | **R5. Exercise doctrine and grading.** Align the game loop and AAR with FEMA's Homeland Security Exercise and Evaluation Program (HSEEP), scaled to households: exercise objectives, capability targets, a master inject list, and the AAR/Improvement Plan format. This defines the rubric behind the AAR grade. | The AAR schema in `lib/ttx.ts` maps to the rubric; Simulation adopts it. |
+| P1 | **R6. Inject library.** Realistic injects per hazard, each with preconditions (season, temperature, hours elapsed, what has already failed) and typical timing drawn from R4. The model selects or adapts injects instead of inventing them. | The G2 eval includes a plausibility check, and G1 harshness re-measured with the library. |
+| P2 | **R7. Readiness tiers ("milspec").** Graded levels, cited per criterion: basic (Ready.gov kit), extended self-reliance (two weeks or more), and advanced. The advanced tier borrows public military planning practice: PACE communications plans (primary, alternate, contingency, emergency), METT-TC-style situation assessment, rehearsals and drills, load-out checklists, and Distribution A survival doctrine such as ATP 3-50.21. These tiers drive difficulty levels and AAR recommendations. | Tiers documented; difficulty selection uses them. |
+| P2 | **R8. Regional risk data.** Bundle FEMA National Risk Index county scores and NOAA climate normals, so a household's region sets its likely hazards and weather. Use coarse regions only (state or county, never an address), consistent with S1. | Region → top hazards and seasonal conditions works offline. |
+| P2 | **R9. Special-needs guidance.** Infants, older adults, disabilities, pets and livestock, medications that need refrigeration, and powered medical devices (oxygen concentrators, CPAP, dialysis). This feeds the medical-needs fields in F2. Requires D6 review. | Every F2 medical-needs option has reviewed guidance records. |
+| P2 | **R10. Freshness.** Annual re-review, a link checker in CI, and a changelog for guidance that changes. | Stale or broken sources are flagged automatically. |
+
 ## Suggested sequencing
 
 1. **Now, in parallel:**
    - Privacy S1/S2, Simulation G1/G2, Frontend F1/F2, Platform P1.
-   - Owner decisions D1–D3.
-2. **Self-hosted release v0.2:** after S1, S2, G1, F1–F3 and P1/P2. Publish the image and announce self-hosting.
-3. **Hosted beta:** H1–H5, F5, S3–S5, P3. Invite-only, then public.
-4. **After launch:** G5/G6, F6/F7, H6/H7, then desktop (M1/M2) and mobile (M3/M4).
+   - Research R1/R2. Everything else in Research builds on them.
+   - Owner decisions D1–D3 and D6.
+2. **Self-hosted release v0.2:** after S1, S2, G1, F1–F3 and P1/P2. Publish the image and announce self-hosting. Research continues with R3–R6 in parallel.
+3. **Hosted beta:** H1–H5, F5, S3–S5, P3, plus G7 with R3–R6, so paying users get grounded scenarios. Invite-only, then public.
+4. **After launch:** G5/G6 with R7/R8, R9/R10, F6/F7, H6/H7, then desktop (M1/M2) and mobile (M3/M4).
