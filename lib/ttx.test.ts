@@ -16,6 +16,7 @@ const turn = (overrides: Partial<TurnOutput> = {}): TurnOutput => ({
   new_inject: "Pipes begin to freeze.",
   critical_alerts: [],
   suggested_actions: [],
+  response_options: [],
   scenario_status: "ongoing",
   ...overrides,
 });

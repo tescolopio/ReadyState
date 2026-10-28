@@ -34,6 +34,7 @@ const turnInput = {
   new_inject: "[Person 1] reports the furnace is silent.",
   critical_alerts: ["Heat source offline"],
   suggested_actions: [],
+  response_options: [],
   scenario_status: "ongoing",
 };
 

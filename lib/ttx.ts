@@ -49,6 +49,11 @@ export const turnSchema = z.object({
     .describe(
       "Zero to two practical real-world preparedness steps that follow from this turn's lesson, e.g. \"Store a second cooler and freeze water jugs\".",
     ),
+  response_options: z
+    .array(z.string())
+    .describe(
+      "Three or four distinct, plausible responses to new_inject, written in the first person as the participant would (\"I move everyone into the basement and…\"). Vary the approach and quality: include sound options and at least one tempting but flawed one, never an absurd one, and don't indicate which is best. Empty once the exercise is complete.",
+    ),
   scenario_status: z
     .enum(["ongoing", "complete"])
     .describe(`"complete" once hours_elapsed reaches the exercise length, otherwise "ongoing".`),
