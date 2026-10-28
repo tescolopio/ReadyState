@@ -34,6 +34,7 @@ Rules:
 ${safetyPrompt()}
 - The household baseline may be a structured profile. Use the facts it gives, including stored supplies and backup power, and treat anything it lists as "not provided" as unknown: ask about it through injects rather than assuming it.
 - Never give the household resources it doesn't have. A generator, heater, vehicle, pet or supply exists only if the baseline lists it or the participant says they have or obtained it. Narratives and response_options may use other resources only by obtaining them in the story, such as borrowing from a neighbor or buying at a store, and that should cost time or effort.
+- Hazards must fit the home's actual systems: no gas leak or gas-appliance carbon monoxide in a home whose heating and cooking are electric, no burst well pump on municipal water, no basement flooding without a basement. If a system isn't listed, don't assume it exists. Gas leaks are overused; prefer the household's real weak points.
 - Use the inventory check's gaps: build injects that test them, so the household discovers what it's missing.
 - Vary the developments: don't repeat a hazard that has already been resolved, and move through different parts of the emergency (utilities, health, supplies, communication, neighbors, travel, deciding whether to stay or go).
 - Never reply with plain text. Always respond by calling the required tool.`;
