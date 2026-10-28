@@ -16,6 +16,35 @@ These block work below and only the owner can make them:
 | D4 | **Legal review** of the privacy policy, terms and medical/safety disclaimer before the hosted launch. | Security S4 |
 | D5 | **Which provider the hosted service uses** (Groq paid tier is the default assumption) and the data-processing terms to advertise. | Hosted H5, Security S4 |
 | D6 | **Knowledge-base review and license.** Who signs off on medical and life-safety content (a qualified clinician or emergency manager), and whether the knowledge base is published as an open dataset (for example CC BY 4.0 for our own writing). | Research R1, R3, R9 |
+| D7 | **Adopt the journal visual identity.** The [design brief](../product/design-brief.md) specifies a warm, light field-journal style and rules out military styling. The current UI is a dark "TTX control plane" terminal. Recommended: adopt the brief. | Frontend F8–F13 |
+| D8 | **Practice framing instead of win/lose.** The engine today ends in `survived` or `failed` with a letter grade. The brief frames exercises as practice with feedback on every decision, a path instead of a percentage, and no shaming. Recommended: keep realistic consequences, but drop the fail state and grade in favor of per-decision feedback and an action plan. | Simulation G1, G8; Frontend F9, F10 |
+| D9 | **Where health constraints live.** `dataset_bridging.md` proposes a server-side `health_constraints` table; the brief keeps detailed profiles on the device. Recommended: local by default, server copy only for opt-in hosted sync. | Research R11, Hosted H6 |
+
+## Product direction
+
+The [product and experience design brief](../product/design-brief.md) is the reference for what ReadyState should feel like and do. The supporting research is in [Data sources](../architecture/datasources.md) and [Dataset bridging](../architecture/dataset_bridging.md).
+
+What the brief changes:
+
+- **The core loop becomes respond → feedback → action.** The participant writes a response, then sees "What you covered," "What to consider" and "Why it matters," and can turn a lesson into an action-plan item. Today, feedback arrives only once, in the final AAR (G8, F9, F12).
+- **Privacy shifts toward attributes.** The engine should receive "two adults, one young child, one person needs help with stairs, urban area," built from a structured profile with a visible "What the scenario engine sees" preview. Free-text masking (S1) stays as the safety net for typed responses (F2, S2).
+- **Pause and resume are first-class:** the draft is saved, and resume shows a short recap (F3, G10).
+- **Family exercises:** up to three households on their own devices, converging on shared decisions (team 8).
+- **A fictional sample exercise before any signup** (F11).
+
+Brief requirements traced to items:
+
+| Brief ID | Requirement | Items |
+| --- | --- | --- |
+| UX01 | Fictional sample before signup | F11 |
+| UX02 | Response before feedback; both readable after | F9, G8 |
+| UX03 | Resume with saved response and recap | F3, G10 |
+| UX04 | Lesson becomes a linked action | F12, G8 |
+| UX05 | Basic profile first, optional detail later | F2 |
+| GR01–GR04 | Up to three households, shared decision, reveal rule, own devices | C1–C4 |
+| VS01 | Journal palette and shared labels on all surfaces | F8 |
+| PR01 | Personalization separate from data contribution; engine preview | S2, F2 |
+| AC01 | Keyboard, focus, text scaling, status without color | F7 |
 
 ## 1. Privacy & Security
 
@@ -45,6 +74,9 @@ The masking layer is the product's core promise, and it currently leaks. A probe
 | P1 | **G4. Rate-limit handling.** Turn provider 429s into "Rate limited, retry in N s" (from `retry-after`) instead of a generic error, and retry once on a malformed tool call. | Covered by route tests. |
 | P2 | **G5. Scenario variety.** Scenario picker (winter storm, heat wave, flood, wildfire evacuation, earthquake, extended outage) and difficulty levels. Built on Research R2 (taxonomy), R6 (injects) and R7 (tiers). | Selectable in the UI; covered by eval. |
 | P2 | **G6. Long-game budget.** Trim or summarize the oldest log lines past ~10 turns (see the compact briefing in `lib/ttx.ts`). | 20-turn eval stays under 5k tokens per request. |
+| P1 | **G8. Per-decision feedback.** Add `feedback` (`covered`, `consider`, `why`) and `suggested_actions` to the `generate_turn` schema, so every response is evaluated, not only the final AAR. Acknowledge alternative reasonable responses, per the brief. Depends on D8. | Every turn carries structured feedback; eval checks it references the participant's actual response. |
+| P1 | **G9. Continuity guardrails.** Track resources explicitly in the briefing (water, stored power in Wh, medication days, as in `dataset_bridging.md`) and established events, so the model can't contradict earlier turns. This is also the structural fix behind G1's melting snow cooler. | Eval finds no contradictions of time, resources or prior choices across 12-turn runs. |
+| P2 | **G10. Resume recap.** A short "what has happened and what you decided" summary, built from the exercise log without a model call where possible. | Resume shows a recap of three sentences or fewer. |
 | P1 | **G7. Knowledge retrieval.** Add the few knowledge-base records relevant to the current hazard and phase to `buildExercisePrompt`, capped at about 500 tokens (the 8k TPM Groq limit is the constraint), and have the AAR cite record IDs. Depends on R1. | Eval shows grounded injects and cited recommendations within the token cap. |
 
 ## 3. Frontend & UX
@@ -52,12 +84,18 @@ The masking layer is the product's core promise, and it currently leaks. A probe
 | Pri | Item | Done when |
 | --- | --- | --- |
 | P0 | **F1. Verify the Settings panel in a browser.** It was API-tested only. | Save / reset / provider switch / error display checked on Chrome, Firefox and Safari. |
-| P0 | **F2. Structured household setup.** Replace the free-text baseline with a form (people and roles, pets, medical needs, supplies, home type, region). It feeds S1 and produces cleaner prompts. | The baseline is generated from the form; free text remains an option. |
+| P0 | **F2. Structured household setup.** Replace the free-text baseline with a progressive form, per brief §7: start with household size, age ranges and general location, then optional pets, housing, supplies, mobility and medical needs. Medical needs map to functional-constraint tags (R11), so the diagnosis never leaves the device. Unknown fields stay unknown rather than becoming assumptions. The form generates the attribute summary shown in the "What the scenario engine sees" preview (S2). | The baseline is generated from the form; first practice works with only the basic fields; free text remains an option. |
 | P1 | **F3. Persist exercises locally.** Use Dexie (installed, unused) so a reload doesn't lose the exercise, and keep a history list of past AARs. | Reload resumes; history view lists past exercises. |
 | P1 | **F4. Mobile layout pass.** Fixed `h-[60vh]` scroll areas and the sidebar need a phone layout (collapsible panels). Add proper PWA icons (only `favicon.ico` exists). | Usable at 360 px wide; installs with real icons. |
 | P1 | **F5. Hosted-mode UI.** Sign-in, plan/credits display, and handling of 401 (sign in) and 402 (upgrade). Depends on H1. | Flows work against Hosted team endpoints. |
 | P2 | **F6. AAR export.** Print-friendly view and PDF download. Optionally a supply checklist built from `supply_gaps`. | Exported AAR matches the on-screen report. |
-| P2 | **F7. Accessibility.** Keyboard flow, screen-reader labels for streaming output, and an alternative to the `animate-pulse` alerts. | axe clean; reduced-motion respected. |
+| P2 | **F7. Accessibility.** Keyboard flow, screen-reader labels for streaming output, and an alternative to the `animate-pulse` alerts. 44 × 44 px touch targets and status that doesn't rely on color alone (brief AC01). | axe clean; reduced-motion respected. |
+| P1 | **F8. Journal visual system.** The brief's tokens (paper `#F6F2E9`, ink `#24342F`, forest teal `#245C50`, amber, brick) as Tailwind theme variables, Source Serif 4 and Source Sans 3 via `next/font`, the 4–48 px spacing scale, and the unfinished-path icon. Depends on D7. | Contrast verified (WCAG AA); every screen uses the tokens. |
+| P1 | **F9. Respond-then-feedback flow.** Scenario entry (label, simulated time, title, situation, prompt), then a spacious response field and "Submit response." Feedback appears below, in three parts, with the submitted response kept visible. "Save and leave" and "Continue the exercise" as secondary actions. Uses G8. | Brief UX02 met on mobile and desktop. |
+| P1 | **F10. Decision path.** Replace the percentage bar with a path of completed decisions, the labeled current step and an open continuation, with no spoilers. | No percentage anywhere in the exercise UI. |
+| P1 | **F11. Sample exercise.** A fixed, short power-outage exercise with a fictional household (the brief's "Alex"), with no account, settings or round controls, ending in "Make this mine." | Brief UX01; works with no API key configured (canned or cached responses). |
+| P1 | **F12. Action plan.** Turn a lesson or suggested action into a checklist item linked to its decision; stored locally (F3). | Brief UX04; actions survive reload. |
+| P2 | **F13. Navigation.** Journal, Exercises, My household, Action plan and Settings, with labeled bottom navigation on mobile and a sidebar on desktop. | Matches brief §3 on both layouts. |
 
 ## 4. Hosted service (backend)
 
@@ -117,13 +155,37 @@ Today every scenario, inject and AAR recommendation comes from the model's memor
 | P2 | **R8. Regional risk data.** Bundle FEMA National Risk Index county scores and NOAA climate normals, so a household's region sets its likely hazards and weather. Use coarse regions only (state or county, never an address), consistent with S1. | Region → top hazards and seasonal conditions works offline. |
 | P2 | **R9. Special-needs guidance.** Infants, older adults, disabilities, pets and livestock, medications that need refrigeration, and powered medical devices (oxygen concentrators, CPAP, dialysis). This feeds the medical-needs fields in F2. Requires D6 review. | Every F2 medical-needs option has reviewed guidance records. |
 | P2 | **R10. Freshness.** Annual re-review, a link checker in CI, and a changelog for guidance that changes. | Stale or broken sources are flagged automatically. |
+| P1 | **R11. Functional constraint dictionary.** Turn [Dataset bridging](../architecture/dataset_bridging.md) into the canonical tag list (`[Refrigerated Medication Dependent]`, `[Hardware Power Dependent]`, `[Air Quality Sensitive]`, `[Anaphylaxis Risk]`, …). Each tag carries thresholds (temperature range, watts, buffer days) with a primary source. Resolve the review notes in that doc first (CPAP wattage, stockpile wording, missing citations). Requires D6 and D9. | F2 emits only dictionary tags; every threshold has a source. |
+
+The sources in [Data sources](../architecture/datasources.md) seed R3 (Ready.gov, CDC, USDA), R8 (FEMA NRI, NWS) and R9 (CDC special needs, Ready.gov and ASPCA pets).
+
+## 8. Groups (family and community)
+
+The brief's family model: up to three households, each on its own devices, with private local injects that converge on shared decisions. Needs a shared real-time backend, so it follows the hosted beta. Many rules are still open in the brief (§9).
+
+| Pri | Item | Done when |
+| --- | --- | --- |
+| P2 | **C1. Group sessions.** Data model and sync for a group exercise: households, participants and devices, a shared clock, and per-household and shared injects (Supabase Realtime in hosted mode). | Three households on separate devices stay in sync. |
+| P2 | **C2. Family overview.** Up to three household cards showing chosen shared updates and progress, plus a clear active-household indicator. | Brief GR01. |
+| P2 | **C3. Shared decisions and reveal rules.** A shared inject collects each household's response. The organiser picks "show as they arrive" or "hide until discussion," and the rule is shown before anyone answers. | Brief GR02, GR03. |
+| P2 | **C4. Private versus shared context.** Profiles and notes stay in their household; only deliberately shared summaries reach the group, with a consent step. | Brief GR04; covered by tests. |
+
+## 9. Product design
+
+| Pri | Item | Done when |
+| --- | --- | --- |
+| P0 | **DS1. First prototype** (brief §9). The power-outage exercise at mobile and desktop sizes, in three states: new inject, response in progress, feedback revealed. Test with Sam's household and Alex's sample journey. | Clickable prototype reviewed by the owner; guides F8–F12. |
+| P1 | **DS2. Usability round.** Answer the brief's five persona questions with representative users. | Findings documented; changes filed. |
+| P1 | **DS3. Brand.** Ready State versus RdyState naming, and unfinished-path logo concepts. | Name and icon chosen; PWA icons (F4) produced. |
+| P2 | **DS4. Family prototype.** Three households, private injects, one shared decision, both reveal rules. | Guides C1–C4. |
 
 ## Suggested sequencing
 
 1. **Now, in parallel:**
    - Privacy S1/S2, Simulation G1/G2, Frontend F1/F2, Platform P1.
    - Research R1/R2. Everything else in Research builds on them.
-   - Owner decisions D1–D3 and D6.
-2. **Self-hosted release v0.2:** after S1, S2, G1, F1–F3 and P1/P2. Publish the image and announce self-hosting. Research continues with R3–R6 in parallel.
-3. **Hosted beta:** H1–H5, F5, S3–S5, P3, plus G7 with R3–R6, so paying users get grounded scenarios. Invite-only, then public.
-4. **After launch:** G5/G6 with R7/R8, R9/R10, F6/F7, H6/H7, then desktop (M1/M2) and mobile (M3/M4).
+   - Design DS1, which shapes all the journal UI work.
+   - Owner decisions D1–D3 and D6–D9.
+2. **Self-hosted release v0.2, the journal experience:** S1, S2, G1, G8, G9, F1–F3 and F8–F10, plus P1/P2. The brief puts the visual identity and the individual exercise flow first. Publish the image and announce self-hosting. Research continues with R3–R6 and R11 in parallel.
+3. **Hosted beta:** H1–H5, F5, F11, F12, S3–S5, P3, plus G7 with R3–R6, so paying users get grounded scenarios. Invite-only, then public.
+4. **After launch:** G5/G6/G10 with R7/R8, R9/R10, F6/F7/F13, H6/H7, then groups (DS4, C1–C4), desktop (M1/M2) and mobile (M3/M4).
