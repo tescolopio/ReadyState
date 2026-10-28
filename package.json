@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "eval": "vitest run --config vitest.eval.config.mts",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

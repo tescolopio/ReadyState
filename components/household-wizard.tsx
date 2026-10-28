@@ -20,6 +20,7 @@ import {
   describeHousehold,
   hasProfile,
   newId,
+  privateTerms,
   type AgeRange,
   type HouseholdProfile,
   type Need,
@@ -29,7 +30,9 @@ import {
   type PetKind,
   type SupplyId,
 } from "@/lib/household";
+import { TEST_HOUSEHOLDS } from "@/lib/test-households";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
+import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { maskInput } from "@/utils/obfuscator";
 
 const labelClass = "font-mono text-[10px] uppercase tracking-widest text-zinc-500";
@@ -132,6 +135,64 @@ function NumberField({
   );
 }
 
+/**
+ * Fills the wizard with a fictional household from lib/test-households.ts, for
+ * testing and demos. Asks before replacing a profile the person has entered.
+ */
+function TestHouseholdPicker({
+  replacing,
+  onLoad,
+}: {
+  replacing: boolean;
+  onLoad: (profile: HouseholdProfile) => void;
+}) {
+  const id = useId();
+  const [pending, setPending] = useState<string | null>(null);
+  const load = (householdId: string) => {
+    const household = TEST_HOUSEHOLDS.find((h) => h.id === householdId);
+    // A copy, so edits in the wizard never change the shared test data.
+    if (household) onLoad(structuredClone(household.profile));
+    setPending(null);
+  };
+  const chosen = TEST_HOUSEHOLDS.find((h) => h.id === pending);
+
+  return (
+    <div className="space-y-2 rounded-md border border-dashed border-zinc-700 p-3">
+      <label htmlFor={id} className={labelClass}>
+        Load a test household (fictional)
+      </label>
+      <select
+        id={id}
+        value=""
+        onChange={(event) => {
+          if (!event.target.value) return;
+          if (replacing) setPending(event.target.value);
+          else load(event.target.value);
+        }}
+        className={fieldClass}
+      >
+        <option value="">Choose a persona…</option>
+        {TEST_HOUSEHOLDS.map((household) => (
+          <option key={household.id} value={household.id}>
+            {household.persona}
+          </option>
+        ))}
+      </select>
+      {chosen && (
+        <div className="flex flex-wrap items-center gap-2 text-sm" role="alert">
+          <span>Replace your current household with {chosen.persona}?</span>
+          <Button type="button" size="sm" onClick={() => load(chosen.id)}>
+            Replace
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setPending(null)}>
+            Cancel
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const personTitle = (person: Person, index: number) =>
   person.localName?.trim() || `Person ${index + 1}${person.ageRange ? ` (${AGE_RANGES[person.ageRange]})` : ""}`;
 
@@ -144,7 +205,7 @@ export function HouseholdWizard({
   onStart,
   onClose,
 }: {
-  onStart: (baseline: string) => void;
+  onStart: (profile: HouseholdProfile) => void;
   onClose: () => void;
 }) {
   const saved = useHouseholdStore((state) => state.profile);
@@ -162,7 +223,13 @@ export function HouseholdWizard({
 
   const current = STEPS[step];
   const preview = useMemo(
-    () => (current === "Review" ? maskInput(describeHousehold(profile), { dryRun: true }) : ""),
+    () =>
+      current === "Review"
+        ? maskInput(describeHousehold(profile), {
+            alwaysMask: [...usePrivacyStore.getState().alwaysMask, ...privateTerms(profile)],
+            dryRun: true,
+          })
+        : "",
     [current, profile],
   );
 
@@ -217,6 +284,14 @@ export function HouseholdWizard({
           </li>
         ))}
       </ol>
+
+      <TestHouseholdPicker
+        replacing={hasProfile(profile)}
+        onLoad={(next) => {
+          update(next);
+          setStep(STEPS.length - 1);
+        }}
+      />
 
       <p className="text-sm text-zinc-400">{WHY[current]}</p>
 
@@ -576,7 +651,7 @@ export function HouseholdWizard({
             type="button"
             size="sm"
             disabled={!hasProfile(profile)}
-            onClick={() => onStart(describeHousehold(profile))}
+            onClick={() => onStart(profile)}
           >
             <Play className="h-4 w-4" aria-hidden />
             Start exercise

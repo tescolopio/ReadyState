@@ -119,3 +119,21 @@ describe("obfuscator", () => {
     expect(unmaskOutput("[Person 1]")).toBe("[Person 1]");
   });
 });
+
+describe("masking regressions from the test households", () => {
+  beforeEach(() => usePrivacyStore.getState().clearMappings());
+
+  it("doesn't read a counted noun as a name with an age", () => {
+    expect(maskInput("People (4): 2 adults.")).toBe("People (4): 2 adults.");
+  });
+
+  it("doesn't extend a name with a word from the next line", () => {
+    expect(maskInput("Keys are with our neighbor Mrs. Okonkwo\nEmergency to practice: earthquake.")).toBe(
+      "Keys are with our neighbor [Person 1]\nEmergency to practice: earthquake.",
+    );
+  });
+
+  it("keeps a phone number's brackets inside the tag", () => {
+    expect(maskInput("Call him at (206) 555-0142.")).toBe("Call him at [Phone 1].");
+  });
+});

@@ -306,7 +306,7 @@ export function describeHousehold(profile: HouseholdProfile): string {
   const { people, pets, location, home, supplies } = profile;
 
   if (people.length) {
-    lines.push(`People (${people.length}): ${countBy(people, personLabel)}.`);
+    lines.push(`People: ${countBy(people, personLabel)}.`);
     people.forEach((person, index) => {
       if (person.needs.length) {
         lines.push(`- Person ${index + 1} (${personLabel(person)}): ${person.needs.map(describeNeed).join("; ")}.`);
@@ -377,3 +377,19 @@ export function describeHousehold(profile: HouseholdProfile): string {
 /** True once the profile has anything worth starting an exercise from. */
 export const hasProfile = (profile: HouseholdProfile) =>
   profile.people.length > 0 || profile.pets.length > 0 || Boolean(profile.location.region);
+
+/**
+ * Everything in the profile that must never be sent: names (whole, and each
+ * word, so "Priya's" is caught in notes), plus medication and device names.
+ * Passed to `maskInput` as `alwaysMask` so free-text notes can't leak them.
+ */
+export function privateTerms(profile: HouseholdProfile): string[] {
+  const names = [...profile.people, ...profile.pets]
+    .map((entry) => entry.localName?.trim())
+    .filter((name): name is string => Boolean(name));
+  const details = profile.people
+    .flatMap((person) => person.needs.map((need) => need.localDetail?.trim()))
+    .filter((detail): detail is string => Boolean(detail));
+  const words = names.flatMap((name) => name.split(/\s+/)).filter((word) => word.length > 1);
+  return [...new Set([...names, ...words, ...details])];
+}

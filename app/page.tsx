@@ -30,7 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { describeHousehold, hasProfile } from "@/lib/household";
+import { describeHousehold, hasProfile, privateTerms, type HouseholdProfile } from "@/lib/household";
 import {
   TARGET_DURATION_HOURS,
   deriveTtxState,
@@ -122,20 +122,22 @@ export default function TtxDashboard() {
   );
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Sanitizes raw text before it reaches chat state / the API.
-  const submitText = (raw: string) => {
+  // Sanitizes raw text before it reaches chat state / the API. The household's
+  // names and medication names are always masked, even in typed responses.
+  const submitText = (raw: string, profile: HouseholdProfile = household) => {
     const text = raw.trim();
     if (!text || inputLocked) return;
     setInput("");
-    void sendMessage({ text: maskInput(text) });
+    const alwaysMask = [...usePrivacyStore.getState().alwaysMask, ...privateTerms(profile)];
+    void sendMessage({ text: maskInput(text, { alwaysMask }) });
   };
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     submitText(input);
   };
-  const startWithHousehold = (baseline: string) => {
+  const startWithHousehold = (profile: HouseholdProfile) => {
     setWizardOpen(false);
-    submitText(baseline);
+    submitText(describeHousehold(profile), profile);
   };
   // Guided responses fill the box rather than sending, so the participant can edit them.
   const chooseOption = (option: string) => {
@@ -227,7 +229,7 @@ export default function TtxDashboard() {
                         <Button
                           type="button"
                           variant="outline"
-                          onClick={() => startWithHousehold(describeHousehold(household))}
+                          onClick={() => startWithHousehold(household)}
                           disabled={inputLocked}
                         >
                           <Play className="h-4 w-4" aria-hidden />
