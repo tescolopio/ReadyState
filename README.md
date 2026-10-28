@@ -49,6 +49,7 @@ Scripts: `npm run dev`, `npm run build`, `npm start`, `npm run lint`, `npm run t
 Further reading:
 
 - [Product and experience design brief](docs/product/design-brief.md): personas, the journal experience, visual identity, the family model and requirements.
+- [Modern design treatment](docs/product/design-treatment-modern.md): Style B, the alternative visual treatment for the A/B test.
 - [Work breakdown](docs/roadmap/work-breakdown.md): the roadmap by team, traced to the brief.
 - [Deployment modes](docs/architecture/deployment-modes.md): self-hosted vs hosted, providers, desktop and mobile plans.
 - [Groq models](docs/architecture/groq-models.md): benchmarks and rate limits.

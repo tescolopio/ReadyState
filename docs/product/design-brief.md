@@ -2,6 +2,8 @@
 
 _Version 0.1 · October 27, 2026_
 
+This brief's visual identity (§4) is **Style A, the Journal treatment**. [Style B, the Modern treatment](design-treatment-modern.md), is an alternative built on the same screens and tokens; the two are compared in an A/B test.
+
 Ready State is a smart tabletop exercise application that helps individuals, households, extended families and communities practice decisions before an emergency. Its experience centers on a personal preparedness field journal: read a developing situation, explain a response, learn what was considered or missed, and turn lessons into practical actions.
 
 This brief gives product, design and development work one reference for the concept, intended users, interface, visual style and initial family exercise model. The immediate design priority is the exercise and feedback experience across mobile, desktop and web.
