@@ -45,7 +45,13 @@ Scripts: `npm run dev`, `npm run build`, `npm start`, `npm run lint`, `npm run t
 | `components/ui/*` | Minimal shadcn/ui-compatible `Button`, `Input`, `Card`, `ScrollArea`, `Badge`. Replace with the real ones via `npx shadcn@latest add button input scroll-area card badge --overwrite`. |
 | `supabase/migrations/*` | `sim_logs`, `subscriptions` and `usage_events` with Row Level Security. |
 
-Further reading: [Deployment modes](docs/architecture/deployment-modes.md) (self-hosted vs hosted, providers, desktop and mobile plans) and [Groq models](docs/architecture/groq-models.md) (benchmarks and rate limits).
+Further reading:
+
+- [Product and experience design brief](docs/product/design-brief.md): personas, the journal experience, visual identity, the family model and requirements.
+- [Work breakdown](docs/roadmap/work-breakdown.md): the roadmap by team, traced to the brief.
+- [Deployment modes](docs/architecture/deployment-modes.md): self-hosted vs hosted, providers, desktop and mobile plans.
+- [Groq models](docs/architecture/groq-models.md): benchmarks and rate limits.
+- [Data sources](docs/architecture/datasources.md) and [Dataset bridging](docs/architecture/dataset_bridging.md): official guidance to ground scenarios, and how medical needs become functional constraints.
 
 ### Game loop
 
