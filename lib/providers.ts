@@ -156,9 +156,12 @@ export function resolveModel(
     blankToUndefined(settings?.model) ??
     (usesServerDefaults ? blankToUndefined(process.env.READYSTATE_MODEL) : undefined) ??
     preset.defaultModel;
-  const apiKey = blankToUndefined(settings?.apiKey) ?? serverKeyFor(provider);
+  const clientBaseURL = preset.editableBaseURL ? blankToUndefined(settings?.baseURL) : undefined;
+  // Never send the server's key to an endpoint the browser chose.
+  const apiKey =
+    blankToUndefined(settings?.apiKey) ?? (clientBaseURL ? undefined : serverKeyFor(provider));
   const baseURL =
-    (preset.editableBaseURL ? blankToUndefined(settings?.baseURL) : undefined) ??
+    clientBaseURL ??
     (usesServerDefaults ? blankToUndefined(process.env.READYSTATE_BASE_URL) : undefined) ??
     (preset.baseURLEnv ? blankToUndefined(process.env[preset.baseURLEnv]) : undefined) ??
     preset.baseURL;
