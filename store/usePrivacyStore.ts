@@ -10,6 +10,9 @@ interface PrivacyState {
   entityMap: Record<string, string>;
   addMapping: (realValue: string, tag: string) => void;
   clearMappings: () => void;
+  /** Names the user wants masked wherever they appear, even if no detector catches them. */
+  alwaysMask: string[];
+  setAlwaysMask: (names: string[]) => void;
 }
 
 export const usePrivacyStore = create<PrivacyState>()((set) => ({
@@ -17,4 +20,7 @@ export const usePrivacyStore = create<PrivacyState>()((set) => ({
   addMapping: (realValue, tag) =>
     set((state) => ({ entityMap: { ...state.entityMap, [tag]: realValue } })),
   clearMappings: () => set({ entityMap: {} }),
+  alwaysMask: [],
+  setAlwaysMask: (names) =>
+    set({ alwaysMask: [...new Set(names.map((name) => name.trim()).filter(Boolean))] }),
 }));

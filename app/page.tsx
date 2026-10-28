@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
+import { AlwaysMaskCard } from "@/components/always-mask";
 import { ProviderSettingsCard } from "@/components/provider-settings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -173,8 +174,9 @@ export default function TtxDashboard() {
                     Awaiting baseline parameters
                   </p>
                   <p className="mt-2">
-                    Describe your household, supplies, and constraints. Names
-                    and places are replaced with tags like{" "}
+                    Describe your household, supplies, and constraints. Names,
+                    pets, places, addresses and contact details are replaced
+                    with tags like{" "}
                     <code className="text-zinc-200">[Person 1]</code> before
                     anything leaves your browser.
                   </p>
@@ -301,6 +303,8 @@ export default function TtxDashboard() {
               </p>
             </CardContent>
           </Card>
+
+          <AlwaysMaskCard />
 
           {serverConfig?.mode === "self-hosted" && (
             <ProviderSettingsCard config={serverConfig} />
