@@ -58,8 +58,8 @@ Further reading:
 
 1. **Baseline** – sanitized household parameters → inciting incident.
 2. **Action & Inject** – each action returns `{ narrative_response, time_elapsed, hours_elapsed, new_inject, critical_alerts, scenario_status }`, and the clock advances.
-3. **End condition** – the model reports `failed`, or the participant survives `TARGET_DURATION_HOURS` (72).
-4. **After-Action Report** – structured grade, strengths, supply gaps and recommendations.
+3. **Exercise complete** – after `TARGET_DURATION_HOURS` (72) in-game hours. There's no win or lose: setbacks are things to respond to, and feedback on each response says what you covered, what to consider and why it matters.
+4. **Debrief** – what you need to know about your situation, what you can do better, and what went well. No grade.
 
 Real names and places never leave the browser: only the masked text is sent to `/api/ttx`, and tags are restored client-side before rendering.
 

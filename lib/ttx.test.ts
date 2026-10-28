@@ -42,10 +42,10 @@ const turnMessage = (id: string, output: TurnOutput): TtxUIMessage => ({
 });
 
 const report: AfterActionReport = {
-  summary: "Solid response.",
-  strengths: ["Water storage"],
-  supply_gaps: ["Generator"],
-  recommendations: ["Buy a generator"],
+  summary: "Water storage carried the household; heat was the weak point.",
+  went_well: ["Water storage"],
+  need_to_know: ["The furnace needs power to run"],
+  do_better: ["Plan a safe backup heat source"],
 };
 
 describe("deriveTtxState", () => {

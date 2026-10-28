@@ -59,16 +59,27 @@ export const turnSchema = z.object({
     .describe(`"complete" once hours_elapsed reaches the exercise length, otherwise "ongoing".`),
 });
 
-/** End-of-exercise review: decisions, lessons and an action plan. No grade (decision D8). */
+/**
+ * End-of-exercise debrief. There's no win or lose (decision D8): it answers
+ * "what do I need to know?" and "what can I/we do better?".
+ */
 export const afterActionReportSchema = z.object({
-  summary: z.string().describe("Two to four sentences on how the exercise went and what it revealed."),
-  strengths: z.array(z.string()).describe("Decisions that went well."),
-  supply_gaps: z
+  summary: z
+    .string()
+    .describe("Two to four sentences on what the exercise showed about this household's situation and plan."),
+  went_well: z
     .array(z.string())
-    .describe("Specific supplies or capabilities that were missing."),
-  recommendations: z
+    .describe("Decisions and preparations that helped, specific to what the participant actually did."),
+  need_to_know: z
     .array(z.string())
-    .describe("Concrete preparedness actions to take before a real event, most important first."),
+    .describe(
+      'What this household needs to know about its own situation, learned from the exercise: dependencies, timings and risks, stated factually (e.g. "Without power, your cooler keeps the insulin in range for about a day if the ice is replaced").',
+    ),
+  do_better: z
+    .array(z.string())
+    .describe(
+      'What the household can do better: concrete changes to plans, skills or supplies, most important first, phrased as actions (e.g. "Freeze water jugs to use as ice and drinking water").',
+    ),
 });
 
 export type TurnOutput = z.infer<typeof turnSchema>;
