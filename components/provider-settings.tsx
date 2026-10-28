@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import type { ProviderId, ProviderSettings, ServerConfig } from "@/lib/providers";
 import { useSettingsStore } from "@/store/useSettingsStore";
 
-const labelClass = "font-mono text-[10px] uppercase tracking-widest text-zinc-500";
+const labelClass = "text-sm font-semibold text-ink-3";
 
 /** Self-hosted only: pick the model provider and bring your own API key. */
 export function ProviderSettingsCard({ config }: { config: ServerConfig }) {
@@ -42,7 +42,7 @@ export function ProviderSettingsCard({ config }: { config: ServerConfig }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-sky-400">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold text-action">
           <KeyRound className="h-4 w-4" aria-hidden />
           Model Provider
         </CardTitle>
@@ -65,7 +65,7 @@ export function ProviderSettingsCard({ config }: { config: ServerConfig }) {
                   baseURL: undefined,
                 })
               }
-              className="flex h-9 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+              className="flex min-h-11 w-full rounded-control border border-line-strong bg-field px-3 text-sm text-ink "
             >
               {config.providers.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -137,9 +137,9 @@ export function ProviderSettingsCard({ config }: { config: ServerConfig }) {
               Use server defaults
             </Button>
           </div>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-ink-3">
             {status ??
-              "Keys stay in this browser and are sent only to this ReadyState server."}
+ "Keys stay in this browser and are sent only to this ReadyState server."}
           </p>
         </form>
       </CardContent>

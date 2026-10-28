@@ -26,7 +26,7 @@ export function AlwaysMaskCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-emerald-400">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold text-action">
           <EyeOff className="h-4 w-4" aria-hidden />
           Always Mask
         </CardTitle>
@@ -35,7 +35,7 @@ export function AlwaysMaskCard() {
         <form onSubmit={save} className="space-y-2 text-sm">
           <label
             htmlFor={`${id}-names`}
-            className="font-mono text-[10px] uppercase tracking-widest text-zinc-500"
+            className="text-sm font-semibold text-ink-3"
           >
             Names, comma-separated
           </label>
@@ -51,7 +51,7 @@ export function AlwaysMaskCard() {
               Set
             </Button>
           </div>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-ink-3">
             {alwaysMask.length > 0
               ? `Masking ${alwaysMask.length} name${alwaysMask.length === 1 ? "" : "s"} in everything you send.`
               : "For names the automatic masking misses. Kept in memory only."}

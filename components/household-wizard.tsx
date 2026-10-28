@@ -36,25 +36,25 @@ import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { maskInput } from "@/utils/obfuscator";
 
-const labelClass = "font-mono text-[10px] uppercase tracking-widest text-zinc-500";
+const labelClass = "text-sm font-semibold text-ink-3";
 const fieldClass =
-  "flex h-9 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500";
+ "flex min-h-11 w-full rounded-control border border-line-strong bg-field px-3 text-sm text-ink ";
 const textAreaClass =
-  "w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500";
+ "w-full rounded-control border border-line-strong bg-field px-3 py-2 text-sm text-ink placeholder:text-ink-3 ";
 
 const STEPS = ["People", "Pets", "Home", "Health needs", "Supplies", "Review"] as const;
 type Step = (typeof STEPS)[number];
 
 const WHY: Record<Step, string> = {
   People:
-    "Ages shape what can go wrong and who can help. Names are optional and never leave this device; the scenario sees “older adult”, not a name.",
+ "Ages shape what can go wrong and who can help. Names are optional and never leave this device; the scenario sees “older adult”, not a name.",
   Pets: "Pets need food, water and a plan: many shelters don't accept them, and stressed animals bolt.",
   Home: "Heating, water and power decide how a storm or outage plays out. A general region (like a state) is enough: never enter an address.",
-  "Health needs":
-    "Describe what a need demands, not a diagnosis. Medication and device names stay on this device; the scenario sees only the constraint, such as “refrigerated medication, 14 days on hand”.",
+ "Health needs":
+ "Describe what a need demands, not a diagnosis. Medication and device names stay on this device; the scenario sees only the constraint, such as “refrigerated medication, 14 days on hand”.",
   Supplies: "What you already have changes which problems you face. Skip anything you're unsure of: it stays unknown, not assumed.",
   Review:
-    "The inventory check compares what you have with Ready.gov and CDC guidance. Its gaps go into the exercise, so you can practice handling them. Below that is exactly what the scenario engine receives.",
+ "The inventory check compares what you have with Ready.gov and CDC guidance. Its gaps go into the exercise, so you can practice handling them. Below that is exactly what the scenario engine receives.",
 };
 
 /** Typical draws from data/rules/guidance.json ("devices.power"), for people who don't know their device's rating. */
@@ -149,11 +149,11 @@ function NumberField({
  * testing and demos. Asks before replacing a profile the person has entered.
  */
 const STATUS_LABELS: Record<FindingStatus, { text: string; className: string }> = {
-  missing: { text: "Missing", className: "border-red-800 text-red-300" },
-  short: { text: "Short", className: "border-amber-700 text-amber-300" },
-  partial: { text: "Partly covered", className: "border-amber-900 text-amber-200" },
-  unknown: { text: "To check", className: "border-zinc-600 text-zinc-300" },
-  ok: { text: "Covered", className: "border-emerald-800 text-emerald-300" },
+  missing: { text: "Missing", className: "border-error text-error" },
+  short: { text: "Short", className: "border-attention-accent text-attention" },
+  partial: { text: "Partly covered", className: "border-attention-accent text-attention" },
+  unknown: { text: "To check", className: "border-line-strong text-ink-2" },
+  ok: { text: "Covered", className: "border-success text-success" },
 };
 
 /** The inventory check's findings, gaps first, each with what to do about it. */
@@ -169,17 +169,17 @@ function InventoryCheck({ findings }: { findings: Finding[] }) {
         {findings.map((finding) => {
           const status = STATUS_LABELS[finding.status];
           return (
-            <li key={finding.id} className="flex gap-2 rounded-md border border-zinc-800 p-2 text-sm">
+            <li key={finding.id} className="flex gap-2 rounded-control border border-line p-2 text-sm">
               <span
                 className={`h-fit shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${status.className}`}
               >
                 {status.text}
               </span>
               <span>
-                <span className="text-zinc-500">{finding.area} · </span>
+                <span className="text-ink-3">{finding.area} · </span>
                 {finding.finding}
                 {finding.action && finding.status !== "ok" && (
-                  <span className="block text-zinc-400">
+                  <span className="block text-ink-2">
                     {finding.kind === "plan" ? "Plan: " : "Get: "}
                     {finding.action}
                   </span>
@@ -189,7 +189,7 @@ function InventoryCheck({ findings }: { findings: Finding[] }) {
           );
         })}
       </ul>
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-ink-3">
         Guidance: Ready.gov (water, food, pets, basic kit) and CDC (medication, carbon monoxide). This check
         compares supplies with general guidance; it isn&apos;t a readiness score.
       </p>
@@ -215,7 +215,7 @@ function TestHouseholdPicker({
   const chosen = TEST_HOUSEHOLDS.find((h) => h.id === pending);
 
   return (
-    <div className="space-y-2 rounded-md border border-dashed border-zinc-700 p-3">
+    <div className="space-y-2 rounded-control border border-dashed border-line-strong p-3">
       <label htmlFor={id} className={labelClass}>
         Load a test household (fictional)
       </label>
@@ -312,10 +312,10 @@ export function HouseholdWizard({
     });
 
   return (
-    <section aria-label="Household setup" className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+    <section aria-label="Household setup" className="space-y-4 rounded-panel border border-line bg-surface p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-emerald-400">
+          <p className="flex items-center gap-2 text-sm font-semibold text-action">
             <Home className="h-4 w-4" aria-hidden />
             My household · step {step + 1} of {STEPS.length}
           </p>
@@ -335,8 +335,8 @@ export function HouseholdWizard({
               aria-current={index === step ? "step" : undefined}
               className={`rounded-full border px-2.5 py-1 text-xs ${
                 index === step
-                  ? "border-emerald-500 text-emerald-300"
-                  : "border-zinc-700 text-zinc-400 hover:text-zinc-200"
+                  ? "border-action text-action"
+                  : "border-line-strong text-ink-2 hover:text-ink"
               }`}
             >
               {name}
@@ -353,12 +353,12 @@ export function HouseholdWizard({
         }}
       />
 
-      <p className="text-sm text-zinc-400">{WHY[current]}</p>
+      <p className="text-sm text-ink-2">{WHY[current]}</p>
 
       {current === "People" && (
         <div className="space-y-3">
           {profile.people.map((person, index) => (
-            <div key={person.id} className="grid gap-2 rounded-md border border-zinc-800 p-3 sm:grid-cols-[1fr_1fr_auto]">
+            <div key={person.id} className="grid gap-2 rounded-control border border-line p-3 sm:grid-cols-[1fr_1fr_auto]">
               <Field label={`Person ${index + 1} name (optional, this device only)`}>
                 {(id) => (
                   <Input
@@ -409,7 +409,7 @@ export function HouseholdWizard({
       {current === "Pets" && (
         <div className="space-y-3">
           {profile.pets.map((pet, index) => (
-            <div key={pet.id} className="grid gap-2 rounded-md border border-zinc-800 p-3 sm:grid-cols-2">
+            <div key={pet.id} className="grid gap-2 rounded-control border border-line p-3 sm:grid-cols-2">
               <Field label={`Pet ${index + 1} name (optional, this device only)`}>
                 {(id) => (
                   <Input
@@ -574,10 +574,10 @@ export function HouseholdWizard({
       {current === "Health needs" && (
         <div className="space-y-3">
           {profile.people.length === 0 && (
-            <p className="text-sm text-zinc-400">Add people in the first step to record their needs.</p>
+            <p className="text-sm text-ink-2">Add people in the first step to record their needs.</p>
           )}
           {profile.people.map((person, index) => (
-            <fieldset key={person.id} className="space-y-2 rounded-md border border-zinc-800 p-3">
+            <fieldset key={person.id} className="space-y-2 rounded-control border border-line p-3">
               <legend className="px-1 text-sm font-medium">{personTitle(person, index)}</legend>
               {(Object.entries(NEED_INFO) as [NeedKind, (typeof NEED_INFO)[NeedKind]][]).map(([kind, info]) => {
                 const need = person.needs.find((n) => n.kind === kind);
@@ -592,7 +592,7 @@ export function HouseholdWizard({
                       />
                       <span>
                         {info.label}
-                        {info.hint && <span className="block text-xs text-zinc-500">{info.hint}</span>}
+                        {info.hint && <span className="block text-xs text-ink-3">{info.hint}</span>}
                       </span>
                     </label>
                     {need && info.asks && (
@@ -621,13 +621,13 @@ export function HouseholdWizard({
                               onChange={(watts) => setNeed(person, kind, { watts })}
                             />
                             {need.watts === undefined && (
-                              <div className="flex flex-wrap gap-1 text-xs text-zinc-400">
+                              <div className="flex flex-wrap gap-1 text-xs text-ink-2">
                                 <span>Not sure? Typical:</span>
                                 {TYPICAL_DEVICES.map((device) => (
                                   <button
                                     key={device.label}
                                     type="button"
-                                    className="underline hover:text-zinc-200"
+                                    className="underline hover:text-ink"
                                     onClick={() => setNeed(person, kind, { watts: device.watts })}
                                   >
                                     {device.label} (~{device.watts} W)
@@ -712,15 +712,15 @@ export function HouseholdWizard({
           <InventoryCheck findings={assessInventory(profile)} />
           <div>
             <p className={labelClass}>What the scenario engine sees</p>
-            <pre className="mt-1 whitespace-pre-wrap rounded-md border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs text-zinc-300">
+            <pre className="mt-1 whitespace-pre-wrap rounded-control border border-line bg-field p-3 font-mono text-xs text-ink-2">
               {preview}
             </pre>
           </div>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-ink-3">
             Your profile is saved in this browser only.{" "}
             <button
               type="button"
-              className="underline hover:text-zinc-300"
+              className="underline hover:text-ink"
               onClick={() => {
                 clearProfile();
                 setDraft(useHouseholdStore.getState().profile);
@@ -733,7 +733,7 @@ export function HouseholdWizard({
         </div>
       )}
 
-      <div className="flex flex-wrap justify-between gap-2 border-t border-zinc-800 pt-3">
+      <div className="flex flex-wrap justify-between gap-2 border-t border-line pt-3">
         <Button type="button" variant="outline" size="sm" onClick={() => go(-1)} disabled={step === 0}>
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Back

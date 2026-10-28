@@ -1,0 +1,229 @@
+[
+  {
+    "id": "u0",
+    "role": "user",
+    "parts": [
+      {
+        "type": "text",
+        "text": "People: 2 adults, 2 children (2–12).\n- Person 3 (child (2–12)): [Air Quality Sensitive].\nPets: 1 large dog.\n- large dog: anxious in storms, pulls on the leash\nLocation: Ohio, suburban.\nHome: house, 2 floors, basement. Heating: natural gas furnace. Cooking: gas. Water: municipal water. Backup power: none.\nHome notes: Attached garage. The kids' bedrooms are upstairs above the garage and get cold first.\nStored: 8 gallons of stored water (about 2.0 days at 1 gallon per person per day, before pets), 5 days of food, 7 days of pet food.\nHas: flashlights or headlamps, spare batteries, first aid kit, smoke detectors, battery carbon monoxide detector, cooler, extra blankets, manual can opener.\nEmergency to practice: winter storm."
+      }
+    ]
+  },
+  {
+    "id": "a0",
+    "role": "assistant",
+    "parts": [
+      {
+        "type": "tool-generate_turn",
+        "toolCallId": "preview-0",
+        "state": "output-available",
+        "input": {
+          "feedback": null,
+          "narrative_response": "A severe winter storm moves into Ohio, bringing heavy snowfall, high winds, and temperatures dropping to -5 °F (-20 °C). The storm knocks out the local power grid at 3 AM, leaving your home without electricity. Your natural gas furnace continues to run on gas, but the thermostat loses power and the blower fan cycles off intermittently, causing indoor temperatures to begin falling, especially on the upper floors where the children's bedrooms are located. The storm also brings down a large tree branch that blocks the driveway, making vehicle access difficult. You are now without power, with limited stored water and food, and a large dog that becomes anxious in storms.",
+          "time_elapsed": "Hour 0",
+          "hours_elapsed": 0,
+          "new_inject": "The temperature in the upstairs bedrooms has dropped to 55 °F, and the children are beginning to shiver. The furnace blower is no longer circulating warm air, and the house is drawing cold air through the gaps around the windows. Your carbon monoxide detector is battery‑operated and still functional. You hear the wind rattling the garage door, and the large dog is pacing near the front door, whimpering.",
+          "critical_alerts": [],
+          "suggested_actions": [],
+          "response_options": [
+            "I gather the blankets and move the children and the dog into the basement, closing the basement door to retain heat, and turn on flashlights to conserve battery power.",
+            "I check the furnace control panel for any error codes, ensure the gas supply valve is open, and try to manually reset the furnace while also layering the children in extra blankets upstairs.",
+            "I decide to go outside briefly to clear the driveway of the fallen branch with a shovel, hoping to improve access for a future rescue, then return indoors to assess the heating situation.",
+            "I open the windows slightly to let fresh air in, assuming it will improve indoor air quality for the air‑quality‑sensitive child, while keeping the furnace on as is."
+          ],
+          "scenario_status": "ongoing"
+        },
+        "output": {
+          "feedback": null,
+          "narrative_response": "A severe winter storm moves into Ohio, bringing heavy snowfall, high winds, and temperatures dropping to -5 °F (-20 °C). The storm knocks out the local power grid at 3 AM, leaving your home without electricity. Your natural gas furnace continues to run on gas, but the thermostat loses power and the blower fan cycles off intermittently, causing indoor temperatures to begin falling, especially on the upper floors where the children's bedrooms are located. The storm also brings down a large tree branch that blocks the driveway, making vehicle access difficult. You are now without power, with limited stored water and food, and a large dog that becomes anxious in storms.",
+          "time_elapsed": "Hour 0",
+          "hours_elapsed": 0,
+          "new_inject": "The temperature in the upstairs bedrooms has dropped to 55 °F, and the children are beginning to shiver. The furnace blower is no longer circulating warm air, and the house is drawing cold air through the gaps around the windows. Your carbon monoxide detector is battery‑operated and still functional. You hear the wind rattling the garage door, and the large dog is pacing near the front door, whimpering.",
+          "critical_alerts": [],
+          "suggested_actions": [],
+          "response_options": [
+            "I gather the blankets and move the children and the dog into the basement, closing the basement door to retain heat, and turn on flashlights to conserve battery power.",
+            "I check the furnace control panel for any error codes, ensure the gas supply valve is open, and try to manually reset the furnace while also layering the children in extra blankets upstairs.",
+            "I decide to go outside briefly to clear the driveway of the fallen branch with a shovel, hoping to improve access for a future rescue, then return indoors to assess the heating situation.",
+            "I open the windows slightly to let fresh air in, assuming it will improve indoor air quality for the air‑quality‑sensitive child, while keeping the furnace on as is."
+          ],
+          "scenario_status": "ongoing"
+        }
+      }
+    ]
+  },
+  {
+    "id": "u1",
+    "role": "user",
+    "parts": [
+      {
+        "type": "text",
+        "text": "I gather the blankets and move the children and the dog into the basement, closing the basement door to retain heat, and turn on flashlights to conserve battery power."
+      }
+    ]
+  },
+  {
+    "id": "a1",
+    "role": "assistant",
+    "parts": [
+      {
+        "type": "tool-generate_turn",
+        "toolCallId": "preview-1",
+        "state": "output-available",
+        "input": {
+          "feedback": {
+            "covered": [
+              "Moving children and dog to the basement to utilize the warmer area",
+              "Gathering blankets to provide additional insulation",
+              "Turning on flashlights and conserving battery power"
+            ],
+            "consider": [
+              "Checking the furnace blower and attempting a safe manual reset or contacting a professional",
+              "Sealing drafts around windows and the basement door to retain heat longer",
+              "Monitoring indoor temperature and carbon‑monoxide detector battery status",
+              "Ensuring proper ventilation in case of a gas leak, especially with the furnace running",
+              "Keeping water and pet‑food supplies within easy reach in the basement"
+            ],
+            "why": "Staying in the warmest part of the house and using blankets are solid first steps, but without addressing the furnace blower or possible gas leak you risk losing heat and safety. Sealing drafts and watching CO detector batteries extend safe heating time, while keeping water nearby prevents dehydration if you must stay put longer."
+          },
+          "narrative_response": "You and the children, along with the dog, settle in the basement with the blankets. The basement stays noticeably warmer than the upstairs, but after six hours the temperature has slipped to about 48 °F. The children are still shivering and the dog is restless. The furnace blower remains silent, and a faint gas odor drifts from the furnace area. Your battery‑operated carbon monoxide detector begins beeping, indicating a low battery. The driveway remains blocked by the fallen branch, keeping the garage inaccessible.",
+          "time_elapsed": "Hour 6",
+          "hours_elapsed": 6,
+          "new_inject": "The basement temperature is now 48 °F, the children are still cold, the dog is anxious, you detect a faint gas smell near the furnace, and the carbon monoxide detector is beeping low‑battery. The driveway blockage persists.",
+          "critical_alerts": [],
+          "suggested_actions": [
+            "Store spare batteries for carbon‑monoxide detectors and replace them annually.",
+            "Keep an extra set of heavy blankets or a sleeping bag on each floor for rapid relocation during cold events."
+          ],
+          "response_options": [
+            "I keep everyone in the basement, add extra blankets, open a small window for ventilation, replace the CO detector battery with a spare, and stay alert for the gas smell while we wait for help.",
+            "I move the children back upstairs to try to get the furnace blower working again, despite the cold, hoping the furnace will circulate warm air.",
+            "I call a neighbor or emergency services to report the gas smell and low CO‑detector battery, asking for assistance and possible safe heating options.",
+            "I attempt to clear the fallen branch from the driveway myself so we can get the dog into the garage and use the outdoor space for additional shelter."
+          ],
+          "scenario_status": "ongoing"
+        },
+        "output": {
+          "feedback": {
+            "covered": [
+              "Moving children and dog to the basement to utilize the warmer area",
+              "Gathering blankets to provide additional insulation",
+              "Turning on flashlights and conserving battery power"
+            ],
+            "consider": [
+              "Checking the furnace blower and attempting a safe manual reset or contacting a professional",
+              "Sealing drafts around windows and the basement door to retain heat longer",
+              "Monitoring indoor temperature and carbon‑monoxide detector battery status",
+              "Ensuring proper ventilation in case of a gas leak, especially with the furnace running",
+              "Keeping water and pet‑food supplies within easy reach in the basement"
+            ],
+            "why": "Staying in the warmest part of the house and using blankets are solid first steps, but without addressing the furnace blower or possible gas leak you risk losing heat and safety. Sealing drafts and watching CO detector batteries extend safe heating time, while keeping water nearby prevents dehydration if you must stay put longer."
+          },
+          "narrative_response": "You and the children, along with the dog, settle in the basement with the blankets. The basement stays noticeably warmer than the upstairs, but after six hours the temperature has slipped to about 48 °F. The children are still shivering and the dog is restless. The furnace blower remains silent, and a faint gas odor drifts from the furnace area. Your battery‑operated carbon monoxide detector begins beeping, indicating a low battery. The driveway remains blocked by the fallen branch, keeping the garage inaccessible.",
+          "time_elapsed": "Hour 6",
+          "hours_elapsed": 6,
+          "new_inject": "The basement temperature is now 48 °F, the children are still cold, the dog is anxious, you detect a faint gas smell near the furnace, and the carbon monoxide detector is beeping low‑battery. The driveway blockage persists.",
+          "critical_alerts": [],
+          "suggested_actions": [
+            "Store spare batteries for carbon‑monoxide detectors and replace them annually.",
+            "Keep an extra set of heavy blankets or a sleeping bag on each floor for rapid relocation during cold events."
+          ],
+          "response_options": [
+            "I keep everyone in the basement, add extra blankets, open a small window for ventilation, replace the CO detector battery with a spare, and stay alert for the gas smell while we wait for help.",
+            "I move the children back upstairs to try to get the furnace blower working again, despite the cold, hoping the furnace will circulate warm air.",
+            "I call a neighbor or emergency services to report the gas smell and low CO‑detector battery, asking for assistance and possible safe heating options.",
+            "I attempt to clear the fallen branch from the driveway myself so we can get the dog into the garage and use the outdoor space for additional shelter."
+          ],
+          "scenario_status": "ongoing"
+        }
+      }
+    ]
+  },
+  {
+    "id": "u2",
+    "role": "user",
+    "parts": [
+      {
+        "type": "text",
+        "text": "I move the children back upstairs to try to get the furnace blower working again, despite the cold, hoping the furnace will circulate warm air."
+      }
+    ]
+  },
+  {
+    "id": "a2",
+    "role": "assistant",
+    "parts": [
+      {
+        "type": "tool-generate_turn",
+        "toolCallId": "preview-2",
+        "state": "output-available",
+        "input": {
+          "feedback": {
+            "covered": [
+              "You moved the children back upstairs to attempt furnace repair."
+            ],
+            "consider": [
+              "Addressing the faint gas smell by turning off the gas supply and ventilating the area.",
+              "Replacing the low‑battery carbon‑monoxide detector promptly.",
+              "Providing immediate warmth to the children to prevent hypothermia, such as using extra blankets or a safe heat source."
+            ],
+            "why": "Gas leaks can quickly become dangerous; turning off the supply and ventilating reduces the risk of fire or carbon monoxide buildup. A low‑battery CO detector may not alert you to rising CO levels, so a fresh battery is essential. Prolonged exposure to temperatures below 50 °F can lead to hypothermia in children, so maintaining adequate warmth is a priority."
+          },
+          "narrative_response": "You carry the children back upstairs despite the cold. Inside the furnace room you hear the faint gas odor again. You locate the furnace's circuit breaker and flip it, but the blower does not restart. The children’s shivering intensifies as the temperature remains around 48 °F. The dog remains restless in the basement. The carbon‑monoxide detector continues to beep, indicating a low battery. Without fresh batteries, its alarm may be unreliable. The gas smell persists, raising concern of a leak. No additional heat source is available, and the driveway blockage still prevents garage access.",
+          "time_elapsed": "Hour 10",
+          "hours_elapsed": 10,
+          "new_inject": "A faint gas odor continues near the furnace, and the carbon monoxide detector battery is low. The children are now visibly colder, with chattering teeth. You must decide how to address the potential gas leak, the CO detector issue, and the immediate need for warmth.",
+          "critical_alerts": [
+            "Gas odor detected near furnace – possible leak.",
+            "Carbon monoxide detector battery low – reduced warning capability.",
+            "Children exposed to 48 °F for extended period – risk of hypothermia."
+          ],
+          "suggested_actions": [
+            "Keep a spare set of fresh batteries for carbon monoxide detectors and replace them promptly when low.",
+            "Store a safe, battery‑powered emergency heater (e.g., an electric heater with a surge protector) for use during power loss."
+          ],
+          "response_options": [
+            "I turn off the main gas valve, open windows for ventilation, replace the carbon monoxide detector battery with spares, and call the gas utility for assistance while keeping the children warm with extra blankets.",
+            "I locate fresh batteries, replace the carbon monoxide detector battery, and stay with the children in the upstairs bedroom, using blankets and the fireplace (if safe) to try to raise the temperature while I continue to troubleshoot the furnace.",
+            "I decide the safest option is to evacuate the house with the family and the dog, heading to a neighbor’s home for warmth and to wait for professional help with the gas issue.",
+            "I open the furnace panel, attempt to reset the blower motor myself, ignoring the gas smell and low battery CO detector, hoping the furnace will start and heat the house."
+          ],
+          "scenario_status": "ongoing"
+        },
+        "output": {
+          "feedback": {
+            "covered": [
+              "You moved the children back upstairs to attempt furnace repair."
+            ],
+            "consider": [
+              "Addressing the faint gas smell by turning off the gas supply and ventilating the area.",
+              "Replacing the low‑battery carbon‑monoxide detector promptly.",
+              "Providing immediate warmth to the children to prevent hypothermia, such as using extra blankets or a safe heat source."
+            ],
+            "why": "Gas leaks can quickly become dangerous; turning off the supply and ventilating reduces the risk of fire or carbon monoxide buildup. A low‑battery CO detector may not alert you to rising CO levels, so a fresh battery is essential. Prolonged exposure to temperatures below 50 °F can lead to hypothermia in children, so maintaining adequate warmth is a priority."
+          },
+          "narrative_response": "You carry the children back upstairs despite the cold. Inside the furnace room you hear the faint gas odor again. You locate the furnace's circuit breaker and flip it, but the blower does not restart. The children’s shivering intensifies as the temperature remains around 48 °F. The dog remains restless in the basement. The carbon‑monoxide detector continues to beep, indicating a low battery. Without fresh batteries, its alarm may be unreliable. The gas smell persists, raising concern of a leak. No additional heat source is available, and the driveway blockage still prevents garage access.",
+          "time_elapsed": "Hour 10",
+          "hours_elapsed": 10,
+          "new_inject": "A faint gas odor continues near the furnace, and the carbon monoxide detector battery is low. The children are now visibly colder, with chattering teeth. You must decide how to address the potential gas leak, the CO detector issue, and the immediate need for warmth.",
+          "critical_alerts": [
+            "Gas odor detected near furnace – possible leak.",
+            "Carbon monoxide detector battery low – reduced warning capability.",
+            "Children exposed to 48 °F for extended period – risk of hypothermia."
+          ],
+          "suggested_actions": [
+            "Keep a spare set of fresh batteries for carbon monoxide detectors and replace them promptly when low.",
+            "Store a safe, battery‑powered emergency heater (e.g., an electric heater with a surge protector) for use during power loss."
+          ],
+          "response_options": [
+            "I turn off the main gas valve, open windows for ventilation, replace the carbon monoxide detector battery with spares, and call the gas utility for assistance while keeping the children warm with extra blankets.",
+            "I locate fresh batteries, replace the carbon monoxide detector battery, and stay with the children in the upstairs bedroom, using blankets and the fireplace (if safe) to try to raise the temperature while I continue to troubleshoot the furnace.",
+            "I decide the safest option is to evacuate the house with the family and the dog, heading to a neighbor’s home for warmth and to wait for professional help with the gas issue.",
+            "I open the furnace panel, attempt to reset the blower motor myself, ignoring the gas smell and low battery CO detector, hoping the furnace will start and heat the house."
+          ],
+          "scenario_status": "ongoing"
+        }
+      }
+    ]
+  }
+]

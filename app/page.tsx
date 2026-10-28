@@ -1,550 +1,230 @@
-"use client";
+import { ArrowRight, ClipboardList, Home, MessageSquareText, ShieldCheck, Sparkles } from "lucide-react";
+import Link from "next/link";
 
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type DeepPartial } from "ai";
-import {
-  Activity,
-  AlertTriangle,
-  ClipboardCheck,
-  Clock,
-  Home,
-  Loader2,
-  Play,
-  RotateCcw,
-  Send,
-  ShieldCheck,
-} from "lucide-react";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type FormEvent,
-} from "react";
+import { SimulationLabel, Wordmark } from "@/components/brand";
+import { SiteFooter } from "@/components/site-footer";
+import { SCENARIOS } from "@/lib/household";
 
-import { AlwaysMaskCard } from "@/components/always-mask";
-import { HouseholdWizard } from "@/components/household-wizard";
-import { ProviderSettingsCard } from "@/components/provider-settings";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { hasProfile, privateTerms, type HouseholdProfile } from "@/lib/household";
-import { engineBaseline } from "@/lib/inventory";
-import {
-  TARGET_DURATION_HOURS,
-  deriveTtxState,
-  type AfterActionReport,
-  type TtxPhase,
-  type TtxUIMessage,
-  type TurnFeedback,
-  type TurnOutput,
-} from "@/lib/ttx";
-import type { ServerConfig } from "@/lib/providers";
-import { useHouseholdStore } from "@/store/useHouseholdStore";
-import { usePrivacyStore } from "@/store/usePrivacyStore";
-import { useSettingsStore } from "@/store/useSettingsStore";
-import { maskInput, unmaskOutput } from "@/utils/obfuscator";
+/**
+ * The public website (design brief §3 "Sample experience", Modern treatment
+ * §5). Copy describes only what the product actually does: no invented
+ * customer counts, testimonials or certifications.
+ */
+const STEPS = [
+  { icon: Sparkles, title: "Situation", text: "A developing emergency, shaped by your household: who's home, your pets, your house and what you have on hand." },
+  { icon: MessageSquareText, title: "Your response", text: "Write what you'd do, or start from one of the offered choices. There's no single right answer." },
+  { icon: ClipboardList, title: "Feedback", text: "What you covered, what to consider, and why it matters, grounded in guidance from agencies like FEMA and the CDC." },
+  { icon: Home, title: "Action", text: "Turn lessons into a practical plan: what to get, what to decide, what to practice." },
+];
 
-const PHASE_LABELS: Record<TtxPhase, string> = {
-  baseline: "PHASE 1 // BASELINE",
-  loop: "PHASE 2 // ACTION & INJECT",
-  ended: "PHASE 3 // EXERCISE COMPLETE",
-  aar: "PHASE 4 // DEBRIEF",
-};
+const sampleHref = "/exercise?sample=alex";
 
-const PLACEHOLDERS: Record<TtxPhase, string> = {
-  baseline:
-    "Describe your household: e.g. 2 adults, a large dog, insulin that requires refrigeration, winter storm in Denver…",
-  loop: "What would you do next?",
-  ended: "Exercise complete — review your decisions.",
-  aar: "Exercise complete — reset to run a new scenario.",
-};
-
-const AAR_REQUEST = "The exercise is over. Please prepare the debrief.";
-
-/** API errors arrive as the raw response body, usually `{ "error": "..." }`. */
-const errorText = (error: Error) => {
-  try {
-    const parsed = JSON.parse(error.message);
-    if (typeof parsed?.error === "string") return parsed.error;
-  } catch {}
-  return error.message;
-};
-
-export default function TtxDashboard() {
-  const [input, setInput] = useState("");
-  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport<TtxUIMessage>({
-        api: "/api/ttx",
-        // Read at send time so saved Settings apply to the next request.
-        body: () => ({ settings: useSettingsStore.getState().settings ?? undefined }),
-      }),
-    [],
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/config")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((config: ServerConfig | null) => {
-        if (!cancelled) setServerConfig(config);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  const { messages, sendMessage, setMessages, status, error, stop } =
-    useChat<TtxUIMessage>({ transport });
-  // Subscribe so unmasked output re-renders whenever the ledger changes.
-  const entityMap = usePrivacyStore((state) => state.entityMap);
-  const clearMappings = usePrivacyStore((state) => state.clearMappings);
-
-  const ttx = useMemo(() => deriveTtxState(messages), [messages]);
-  const busy = status === "submitted" || status === "streaming";
-  const inputLocked = busy || ttx.phase === "ended" || ttx.phase === "aar";
-
-  const bottomRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const [wizardOpen, setWizardOpen] = useState(false);
-  const household = useHouseholdStore((state) => state.profile);
-  // The household profile lives in localStorage, which the server render can't see.
-  const hydrated = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false,
-  );
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  // Sanitizes raw text before it reaches chat state / the API. The household's
-  // names and medication names are always masked, even in typed responses.
-  const maskFor = (profile: HouseholdProfile) => (text: string) =>
-    maskInput(text, { alwaysMask: [...usePrivacyStore.getState().alwaysMask, ...privateTerms(profile)] });
-  const submitText = (raw: string) => {
-    const text = raw.trim();
-    if (!text || inputLocked) return;
-    setInput("");
-    void sendMessage({ text: maskFor(household)(text) });
-  };
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    submitText(input);
-  };
-  const startWithHousehold = (profile: HouseholdProfile) => {
-    if (inputLocked) return;
-    setWizardOpen(false);
-    // Only the household part is masked; the official guidance is public text.
-    void sendMessage({ text: engineBaseline(profile, maskFor(profile)) });
-  };
-  // Guided responses fill the box rather than sending, so the participant can edit them.
-  const chooseOption = (option: string) => {
-    setInput(unmaskOutput(option));
-    inputRef.current?.focus();
-  };
-  const options = ttx.phase === "loop" && !busy ? (ttx.latestTurn?.response_options ?? []) : [];
-
-  const requestAfterActionReport = () => {
-    if (busy) return;
-    void sendMessage({ text: AAR_REQUEST });
-  };
-
-  const resetExercise = () => {
-    void stop();
-    setMessages([]);
-    clearMappings();
-    setInput("");
-  };
-
-  const progress = Math.min(
-    100,
-    Math.round((ttx.hoursElapsed / TARGET_DURATION_HOURS) * 100),
-  );
-  const alerts = ttx.latestTurn?.critical_alerts ?? [];
-
+export default function HomePage() {
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 bg-zinc-900/80 px-6 py-3">
-        <div className="flex items-center gap-3">
-          <Activity className="h-5 w-5 text-emerald-400" aria-hidden />
-          <h1 className="font-mono text-sm font-semibold tracking-widest">
-            READYSTATE{" "}
-            <span className="text-zinc-500">{"// PRACTICE EXERCISE"}</span>
-          </h1>
-          <Badge variant="outline" className="font-mono">
-            {PHASE_LABELS[ttx.phase]}
-          </Badge>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 font-mono text-sm">
-            <Clock className="h-4 w-4 text-zinc-400" aria-hidden />
-            <span>{ttx.latestTurn?.time_elapsed ?? "Hour 0"}</span>
-            <span className="text-zinc-500">/ T+{TARGET_DURATION_HOURS}h</span>
+    <div className="flex min-h-screen flex-col bg-canvas">
+      <header className="border-b border-line bg-surface">
+        <nav aria-label="Main" className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <Wordmark />
+          <div className="flex flex-wrap items-center gap-1 text-sm font-semibold sm:gap-4">
+            <a href="#how" className="rounded-control px-2 py-2 text-ink-2 hover:text-ink">
+              How it works
+            </a>
+            <a href="#exercises" className="rounded-control px-2 py-2 text-ink-2 hover:text-ink">
+              Exercises
+            </a>
+            <a href="#run-it" className="rounded-control px-2 py-2 text-ink-2 hover:text-ink">
+              Run it yourself
+            </a>
+            <Link href="/exercise" className="rounded-control border border-line-strong px-3 py-2 text-ink hover:bg-action-soft">
+              Open the app
+            </Link>
           </div>
-          <Button variant="outline" size="sm" onClick={resetExercise}>
-            <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-            Reset
-          </Button>
-        </div>
+        </nav>
       </header>
-      <div className="h-1 w-full bg-zinc-900">
-        <div
-          className="h-full bg-emerald-500 transition-all"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
 
-      <main className="grid flex-1 grid-cols-1 gap-4 p-4 lg:grid-cols-[1fr_320px]">
-        <Card className="flex min-h-0 flex-col">
-          <CardHeader className="border-b border-zinc-800">
-            <CardTitle className="font-mono text-xs uppercase tracking-widest text-zinc-400">
-              Simulation Terminal
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
-            <ScrollArea className="h-[60vh] flex-1 px-4 py-4 lg:h-[calc(100vh-15rem)]">
-              {messages.length === 0 &&
-                (wizardOpen ? (
-                  <HouseholdWizard onStart={startWithHousehold} onClose={() => setWizardOpen(false)} />
-                ) : (
-                  <div className="space-y-3 rounded-lg border border-dashed border-zinc-800 p-6 text-sm text-zinc-400">
-                    <p className="font-mono text-xs uppercase tracking-widest text-zinc-500">
-                      Awaiting baseline parameters
-                    </p>
-                    <p>
-                      Set up your household step by step, as briefly or in as much detail as
-                      you like, or describe it in your own words below. Names, pets, places,
-                      addresses and contact details are replaced with tags like{" "}
-                      <code className="text-zinc-200">[Person 1]</code> before anything leaves
-                      your browser.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button type="button" onClick={() => setWizardOpen(true)}>
-                        <Home className="h-4 w-4" aria-hidden />
-                        {hydrated && hasProfile(household) ? "Review my household" : "Set up my household"}
-                      </Button>
-                      {hydrated && hasProfile(household) && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => startWithHousehold(household)}
-                          disabled={inputLocked}
-                        >
-                          <Play className="h-4 w-4" aria-hidden />
-                          Start with my saved household
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              <div className="space-y-4">
-                {messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} />
-                ))}
-              </div>
-              {busy && (
-                <div className="mt-4 flex items-center gap-2 font-mono text-xs text-zinc-500">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                  CONTROLLER PROCESSING…
-                </div>
-              )}
-              {error && (
-                <div className="mt-4 rounded-md border border-red-900 bg-red-950/50 p-3 text-sm text-red-300">
-                  Transmission failed: {errorText(error)}
-                </div>
-              )}
-              <div ref={bottomRef} />
-            </ScrollArea>
-
-            <div className="border-t border-zinc-800 p-4">
-              {ttx.phase === "ended" ? (
-                <Button
-                  className="w-full"
-                  onClick={requestAfterActionReport}
-                  disabled={busy}
-                >
-                  <ClipboardCheck className="h-4 w-4" aria-hidden />
-                  Debrief: what we learned
-                </Button>
-              ) : (
-                <form onSubmit={handleSubmit} className="space-y-2">
-                  {options.length > 0 && (
-                    <fieldset>
-                      <legend className="mb-2 font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-                        Choose a response to start from, or write your own
-                      </legend>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {options.map((option, index) => (
-                          <button
-                            key={index}
-                            type="button"
-                            onClick={() => chooseOption(option)}
-                            className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-left text-sm text-zinc-200 hover:border-sky-600 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-                          >
-                            {unmaskOutput(option)}
-                          </button>
-                        ))}
-                      </div>
-                    </fieldset>
-                  )}
-                  <div className="flex gap-2">
-                    <textarea
-                      ref={inputRef}
-                      value={input}
-                      rows={3}
-                      onChange={(event) => setInput(event.target.value)}
-                      onKeyDown={(event) => {
-                        // Enter adds a line; Ctrl/Cmd+Enter sends.
-                        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-                          event.preventDefault();
-                          submitText(input);
-                        }
-                      }}
-                      placeholder={PLACEHOLDERS[ttx.phase]}
-                      disabled={inputLocked}
-                      aria-label="Your response"
-                      className="min-h-[4.5rem] w-full resize-y rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
-                    />
-                    <Button type="submit" className="self-end" disabled={inputLocked || !input.trim()}>
-                      <Send className="h-4 w-4" aria-hidden />
-                      Submit response
-                    </Button>
-                  </div>
-                </form>
-              )}
+      <main className="flex-1">
+        <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-14 lg:grid-cols-[0.38fr_0.62fr] lg:py-20">
+          <div className="space-y-5">
+            <p className="text-sm font-semibold text-action">Personal preparedness, practiced</p>
+            <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">Practice the unexpected.</h1>
+            <p className="max-w-prose text-lg text-ink-2">
+              Explore realistic scenarios. Test your decisions. Build your household plan.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                href={sampleHref}
+                className="inline-flex min-h-11 items-center gap-2 rounded-control bg-action px-5 font-semibold text-on-action hover:bg-action-hover"
+              >
+                Try a sample exercise
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
+              <a href="#how" className="rounded-control px-2 py-2 font-semibold text-ink underline underline-offset-4">
+                See how it works
+              </a>
             </div>
-          </CardContent>
-        </Card>
+            <p className="text-sm text-ink-3">No account needed for the sample. It uses a fictional household and saves nothing.</p>
+          </div>
+          <ExercisePreview />
+        </section>
 
-        <aside className="flex flex-col gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-amber-400">
-                <AlertTriangle className="h-4 w-4" aria-hidden />
-                Needs attention
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              {alerts.length === 0 ? (
-                <p className="text-sm text-zinc-500">Nothing needs attention right now.</p>
-              ) : (
-                // Steady, not pulsing: exercise events shouldn't look like live alarms.
-                alerts.map((alert, index) => (
-                  <Badge
-                    key={`${alert}-${index}`}
-                    variant="outline"
-                    className="whitespace-normal border-amber-700 text-left text-amber-200"
-                  >
-                    {unmaskOutput(alert)}
-                  </Badge>
-                ))
-              )}
-            </CardContent>
-          </Card>
+        <section id="how" className="border-y border-line bg-surface">
+          <div className="mx-auto max-w-6xl px-4 py-14">
+            <h2 className="text-3xl font-semibold">How it works</h2>
+            <ol className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {STEPS.map(({ icon: Icon, title, text }, index) => (
+                <li key={title} className="rounded-panel border border-line bg-canvas p-5">
+                  <Icon className="h-6 w-6 text-action" aria-hidden />
+                  <h3 className="mt-3 text-lg font-semibold">
+                    <span className="text-ink-3">{index + 1}. </span>
+                    {title}
+                  </h3>
+                  <p className="mt-2 text-ink-2">{text}</p>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-6 max-w-prose text-ink-2">
+              There&apos;s no score and no game over. Each exercise ends with a debrief: what you need to know about your
+              situation, and what you can do better.
+            </p>
+          </div>
+        </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-emerald-400">
-                <ShieldCheck className="h-4 w-4" aria-hidden />
-                Privacy Ledger (local only)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {Object.keys(entityMap).length === 0 ? (
-                <p className="text-sm text-zinc-500">No entities masked yet.</p>
-              ) : (
-                <ul className="space-y-1 font-mono text-xs">
-                  {Object.entries(entityMap).map(([tag, real]) => (
-                    <li key={tag} className="flex justify-between gap-2">
-                      <span className="text-emerald-300">{tag}</span>
-                      <span className="truncate text-zinc-400">{real}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+        <section id="exercises" className="mx-auto max-w-6xl px-4 py-14">
+          <h2 className="text-3xl font-semibold">Exercises</h2>
+          <p className="mt-3 max-w-prose text-ink-2">Pick an emergency, or let ReadyState choose one that fits your region and season.</p>
+          <ul className="mt-6 flex flex-wrap gap-2">
+            {Object.entries(SCENARIOS)
+              .filter(([id]) => id !== "surprise")
+              .map(([id, label]) => (
+                <li key={id} className="rounded-full border border-line-strong bg-surface px-4 py-2 text-sm font-semibold">
+                  {label}
+                </li>
+              ))}
+          </ul>
+        </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-mono text-xs uppercase tracking-widest text-zinc-400">
-                Exercise Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1 font-mono text-xs text-zinc-300">
-              <p>
-                Turns: <span className="text-zinc-100">{ttx.turns.length}</span>
+        <section className="border-y border-line bg-surface">
+          <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 lg:grid-cols-2">
+            <div className="space-y-4">
+              <h2 className="text-3xl font-semibold">Practice that fits your household</h2>
+              <p className="text-ink-2">
+                A short setup covers who lives with you, pets, your home, health needs and supplies. Skip anything; it stays
+                unknown rather than assumed. An inventory check compares your supplies with Ready.gov and CDC guidance, and
+                the exercise tests the gaps it finds.
               </p>
-              <p>
-                Elapsed:{" "}
-                <span className="text-zinc-100">
-                  {ttx.hoursElapsed}h / {TARGET_DURATION_HOURS}h
-                </span>
+              <p className="flex gap-2 text-ink-2">
+                <ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-success" aria-hidden />
+                Names, medication names and addresses stay on your device. The scenario engine sees only what the exercise
+                needs, and you can read exactly what it receives before you start.
               </p>
-              <p>
-                Status:{" "}
-                <span className="text-zinc-100">
-                  {ttx.phase === "ended" || ttx.phase === "aar" ? "COMPLETE" : "IN PROGRESS"}
-                </span>
+            </div>
+            <figure className="rounded-panel border border-line bg-canvas p-5">
+              <figcaption className="text-sm font-semibold text-ink-2">What the scenario engine sees (example)</figcaption>
+              <pre className="mt-3 whitespace-pre-wrap font-sans text-sm text-ink">
+                {`People: 2 adults, 2 children (2–12).
+- Person 3: [Air Quality Sensitive].
+Pets: 1 large dog.
+Location: Ohio, suburban.
+Home: house, 2 floors, basement. Heating: natural gas furnace.
+Stored: 8 gallons of water (about 2 days for 4 people).
+Emergency to practice: winter storm.`}
+              </pre>
+            </figure>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-6xl px-4 py-14">
+          <h2 className="text-3xl font-semibold">Practice with family</h2>
+          <p className="mt-3 max-w-prose text-ink-2">
+            Planned: connect up to three households, each responding to its own situation on its own devices, then decide
+            together who checks on whom and where everyone goes.
+          </p>
+        </section>
+
+        <section id="run-it" className="border-t border-line bg-surface">
+          <div className="mx-auto grid max-w-6xl gap-6 px-4 py-14 md:grid-cols-2">
+            <div className="rounded-panel border border-line bg-canvas p-6">
+              <h2 className="text-2xl font-semibold">Run it yourself</h2>
+              <p className="mt-3 text-ink-2">
+                ReadyState is open source (AGPL-3.0). Run it on your own computer with Docker or Node, and use your own AI
+                provider key, or a fully local model with Ollama so nothing leaves your machine.
               </p>
-            </CardContent>
-          </Card>
+              <a
+                href="https://github.com/tescolopio/ReadyState"
+                className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-control border border-line-strong px-4 font-semibold hover:bg-action-soft"
+              >
+                Get the code
+              </a>
+            </div>
+            <div className="rounded-panel border border-line bg-canvas p-6">
+              <h2 className="text-2xl font-semibold">Hosted service</h2>
+              <p className="mt-3 text-ink-2">
+                A hosted version, with no setup and no API keys, is in development. Details will be announced when it&apos;s
+                ready.
+              </p>
+            </div>
+          </div>
+        </section>
 
-          <AlwaysMaskCard />
-
-          {serverConfig?.mode === "self-hosted" && (
-            <ProviderSettingsCard config={serverConfig} />
-          )}
-        </aside>
+        <section className="mx-auto max-w-6xl px-4 py-14 text-center">
+          <h2 className="text-3xl font-semibold">See it for yourself</h2>
+          <Link
+            href={sampleHref}
+            className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-control bg-action px-5 font-semibold text-on-action hover:bg-action-hover"
+          >
+            Try a sample exercise
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
+        </section>
       </main>
+      <SiteFooter />
     </div>
   );
 }
 
-function MessageBubble({ message }: { message: TtxUIMessage }) {
-  if (message.role === "user") {
-    const text = message.parts
-      .map((part) => (part.type === "text" ? part.text : ""))
-      .join("");
-    return (
-      <div className="ml-auto max-w-[85%] rounded-lg border border-zinc-700 bg-zinc-800/80 px-4 py-3">
-        <p className="mb-1 font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-          Participant · sanitized transmission
-        </p>
-        <p className="whitespace-pre-wrap text-sm">{text}</p>
+/**
+ * A static, clearly labeled illustration of one exercise moment, built from
+ * real markup rather than an image (Modern treatment §5). Not interactive.
+ */
+function ExercisePreview() {
+  return (
+    <figure aria-label="Illustrative example of an exercise" className="rounded-panel border border-line bg-surface p-5 shadow-panel">
+      <div className="flex items-center justify-between gap-2">
+        <SimulationLabel />
+        <span className="text-xs text-ink-3">Illustrative example</span>
       </div>
-    );
-  }
-
-  return (
-    <div className="max-w-[85%] space-y-3 rounded-lg border border-zinc-800 bg-slate-900 px-4 py-3">
-      <p className="font-mono text-[10px] uppercase tracking-widest text-sky-400">
-        Exercise Controller
-      </p>
-      {message.parts.map((part, index) => {
-        switch (part.type) {
-          case "text":
-            return part.text.trim() ? (
-              <p key={index} className="whitespace-pre-wrap text-sm">
-                {unmaskOutput(part.text)}
-              </p>
-            ) : null;
-          case "tool-generate_turn":
-            return part.state === "output-error" ? (
-              <p key={index} className="text-sm text-red-300">
-                {part.errorText}
-              </p>
-            ) : (
-              <TurnView key={index} turn={part.input} />
-            );
-          case "tool-after_action_report":
-            return part.state === "output-error" ? (
-              <p key={index} className="text-sm text-red-300">
-                {part.errorText}
-              </p>
-            ) : (
-              <ReportView key={index} report={part.input} />
-            );
-          default:
-            return null;
-        }
-      })}
-    </div>
-  );
-}
-
-/** A labeled list that renders nothing until the model has streamed an item. */
-function ItemList({
-  title,
-  items,
-  className,
-}: {
-  title: string;
-  items?: (string | undefined)[];
-  className?: string;
-}) {
-  const present = items?.filter((item): item is string => Boolean(item));
-  if (!present?.length) return null;
-  return (
-    <div>
-      <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">{title}</p>
-      <ul className={`mt-1 list-disc space-y-1 pl-5 text-sm ${className ?? ""}`}>
-        {present.map((item, index) => (
-          <li key={index}>{unmaskOutput(item)}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-/** Feedback on the participant's response, in the design brief's three parts. */
-function FeedbackView({ feedback }: { feedback?: DeepPartial<TurnFeedback> | null }) {
-  if (!feedback) return null;
-  return (
-    <section
-      aria-label="Feedback on your response"
-      className="space-y-3 rounded-md border border-emerald-900/70 bg-emerald-950/30 p-3"
-    >
-      <ItemList title="What you covered" items={feedback.covered} />
-      <ItemList title="What to consider" items={feedback.consider} />
-      {feedback.why && (
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-            Why it matters
-          </p>
-          <p className="mt-1 text-sm">{unmaskOutput(feedback.why)}</p>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function TurnView({ turn }: { turn?: DeepPartial<TurnOutput> }) {
-  if (!turn) return null;
-  return (
-    <div className="space-y-3">
-      <FeedbackView feedback={turn.feedback} />
-      <ItemList title="Next steps for your real plan" items={turn.suggested_actions} />
-      {turn.time_elapsed && (
-        <p className="font-mono text-xs text-zinc-400">[{turn.time_elapsed}]</p>
-      )}
-      {turn.narrative_response && (
-        <p className="whitespace-pre-wrap text-sm leading-relaxed">
-          {unmaskOutput(turn.narrative_response)}
+      <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-ink-3">Hour 6 · Power outage</p>
+      <div className="mt-2 rounded-control border-l-4 border-attention-accent bg-attention-soft p-4">
+        <p className="text-sm font-semibold text-attention">What&apos;s happening now</p>
+        <p className="mt-1">
+          The power has been out since morning. Your refrigerator has been closed, but it&apos;s warming, and the forecast
+          says the outage could last two more days.
         </p>
-      )}
-      {turn.new_inject && (
-        <div className="rounded-md border border-amber-900/70 bg-amber-950/40 p-3">
-          <p className="mb-1 font-mono text-[10px] uppercase tracking-widest text-amber-400">
-            Inject
-          </p>
-          <p className="whitespace-pre-wrap text-sm text-amber-100">
-            {unmaskOutput(turn.new_inject)}
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ReportView({ report }: { report?: DeepPartial<AfterActionReport> }) {
-  if (!report) return null;
-  return (
-    <div className="space-y-3">
-      <p className="font-mono text-xs uppercase tracking-widest text-zinc-300">Debrief</p>
-      {report.summary && <p className="text-sm">{unmaskOutput(report.summary)}</p>}
-      <ItemList title="What you need to know" items={report.need_to_know} />
-      <ItemList title="What you can do better" items={report.do_better} />
-      <ItemList title="What went well" items={report.went_well} />
-      <p className="text-xs text-zinc-500">
-        Completing an exercise is practice, not proof of real-world readiness.
-      </p>
-    </div>
+      </div>
+      <div className="mt-3 rounded-control border border-line bg-action-soft p-3 text-sm">
+        <p className="text-xs font-semibold text-ink-2">Your response</p>
+        <p className="mt-1">Keep the fridge shut, move the milk and medication into a cooler with ice, and plan meals around what spoils first.</p>
+      </div>
+      <div className="mt-3 space-y-2 rounded-control border border-line bg-success-soft p-3 text-sm">
+        <p>
+          <strong>What you covered:</strong> keeping the fridge closed and starting a cooler early.
+        </p>
+        <p>
+          <strong>What to consider:</strong> a thermometer for the cooler, and how much ice you&apos;ll need for two days.
+        </p>
+        <p>
+          <strong>Why it matters:</strong> a closed fridge keeps food safe for about 4 hours; after that, perishables above 40 °F
+          should go.
+        </p>
+      </div>
+      <div className="mt-4 flex items-center gap-2" aria-hidden>
+        <span className="h-3 w-3 rounded-full bg-action" />
+        <span className="h-0.5 w-8 bg-action" />
+        <span className="h-3 w-3 rounded-full bg-action" />
+        <span className="h-0.5 w-8 bg-action" />
+        <span className="h-4 w-4 rounded-full border-[3px] border-attention-accent bg-surface" />
+        <span className="h-0.5 w-16 border-t-2 border-dashed border-line-strong" />
+      </div>
+    </figure>
   );
 }

@@ -1,26 +1,137 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * ReadyState design tokens (work item F8, decision D7). Two visual treatments
+ * share one set of semantic tokens over identical screens, so they can be
+ * compared in an A/B test:
+ *   Style A, Journal: docs/product/design-brief.md §4
+ *   Style B, Modern:  docs/product/design-treatment-modern.md §4
+ * Components use only these tokens, never raw colors. The active style is
+ * the data-style attribute on <html> (see app/layout.tsx).
+ */
+
+[data-style="a"] {
+  --rs-canvas: #f6f2e9; /* Paper */
+  --rs-surface: #fffcf6; /* Page */
+  --rs-raised: #ffffff;
+  --rs-field: #fffcf6;
+  --rs-line: #d9d3c7; /* Rule: decorative only */
+  --rs-line-strong: #857f73; /* Input and control boundaries */
+  --rs-ink: #24342f;
+  --rs-ink-2: #58645d;
+  --rs-ink-3: #636b65;
+  --rs-action: #245c50; /* Forest teal */
+  --rs-action-hover: #1b473e;
+  --rs-on-action: #fffcf6;
+  --rs-action-soft: #e4eee9;
+  --rs-success: #2b6a4f;
+  --rs-success-soft: #e6f0ea;
+  --rs-attention: #8a5711; /* Amber, darkened for text contrast */
+  --rs-attention-accent: #a66a16;
+  --rs-attention-soft: #f7ecd9;
+  --rs-error: #a33d32; /* Brick */
+  --rs-error-soft: #f6e3df;
+  --rs-focus: #245c50;
+  --rs-font-heading: var(--font-source-serif), Georgia, serif;
+  --rs-font-body: var(--font-source-sans), system-ui, sans-serif;
+  --rs-radius-panel: 12px;
+  --rs-radius-control: 8px;
+  --rs-shadow: 0 1px 2px rgb(36 52 47 / 0.06);
+  color-scheme: light;
+}
+
+[data-style="b"] {
+  --rs-canvas: #0b1422;
+  --rs-surface: #111f30;
+  --rs-raised: #182b3e;
+  --rs-field: #102235;
+  --rs-line: #294156; /* border-subtle */
+  --rs-line-strong: #64819b; /* border-control */
+  --rs-ink: #f4f7fb;
+  --rs-ink-2: #b7c8da;
+  --rs-ink-3: #91a7bc;
+  --rs-action: #22d9e8;
+  --rs-action-hover: #62e7f0;
+  --rs-on-action: #071722;
+  --rs-action-soft: #0e3340;
+  --rs-success: #35d3b0;
+  --rs-success-soft: #0f3430;
+  --rs-attention: #f5bc59;
+  --rs-attention-accent: #f5bc59;
+  --rs-attention-soft: #33290f;
+  --rs-error: #ff8f96;
+  --rs-error-soft: #3a1c22;
+  --rs-focus: #9cefff;
+  --rs-font-heading: var(--font-inter), system-ui, sans-serif;
+  --rs-font-body: var(--font-inter), system-ui, sans-serif;
+  --rs-radius-panel: 12px;
+  --rs-radius-control: 8px;
+  --rs-shadow: none;
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-canvas: var(--rs-canvas);
+  --color-surface: var(--rs-surface);
+  --color-raised: var(--rs-raised);
+  --color-field: var(--rs-field);
+  --color-line: var(--rs-line);
+  --color-line-strong: var(--rs-line-strong);
+  --color-ink: var(--rs-ink);
+  --color-ink-2: var(--rs-ink-2);
+  --color-ink-3: var(--rs-ink-3);
+  --color-action: var(--rs-action);
+  --color-action-hover: var(--rs-action-hover);
+  --color-on-action: var(--rs-on-action);
+  --color-action-soft: var(--rs-action-soft);
+  --color-success: var(--rs-success);
+  --color-success-soft: var(--rs-success-soft);
+  --color-attention: var(--rs-attention);
+  --color-attention-accent: var(--rs-attention-accent);
+  --color-attention-soft: var(--rs-attention-soft);
+  --color-error: var(--rs-error);
+  --color-error-soft: var(--rs-error-soft);
+  --color-focus: var(--rs-focus);
+  --font-heading: var(--rs-font-heading);
+  --font-sans: var(--rs-font-body);
+  --radius-panel: var(--rs-radius-panel);
+  --radius-control: var(--rs-radius-control);
+  --shadow-panel: var(--rs-shadow);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--rs-canvas);
+  color: var(--rs-ink);
+  font-family: var(--rs-font-body);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--rs-font-heading);
+  letter-spacing: -0.01em;
+}
+
+/* Visible focus everywhere (AC01), in the style's focus color. */
+:focus-visible {
+  outline: 2px solid var(--rs-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Elements that belong to one treatment only, such as each style's mark (components/brand.tsx). */
+[data-style="a"] .style-b-only,
+[data-style="b"] .style-a-only {
+  display: none;
 }
