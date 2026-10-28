@@ -5,7 +5,23 @@
     "publisher": "FEMA / Ready.gov",
     "url": "https://www.ready.gov/kit",
     "license": "public-domain",
-    "verified": null
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "ready-gov-water",
+    "title": "Water",
+    "publisher": "FEMA / Ready.gov",
+    "url": "https://www.ready.gov/water",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "ready-gov-food",
+    "title": "Food",
+    "publisher": "FEMA / Ready.gov",
+    "url": "https://www.ready.gov/food",
+    "license": "public-domain",
+    "verified": "2026-10-27"
   },
   {
     "id": "ready-gov-pets",
@@ -13,7 +29,15 @@
     "publisher": "FEMA / Ready.gov",
     "url": "https://www.ready.gov/pets",
     "license": "public-domain",
-    "verified": null
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "ready-gov-earthquakes",
+    "title": "Earthquakes",
+    "publisher": "FEMA / Ready.gov",
+    "url": "https://www.ready.gov/earthquakes",
+    "license": "public-domain",
+    "verified": "2026-10-27"
   },
   {
     "id": "ready-gov-power-outages",
@@ -40,6 +64,54 @@
     "verified": null
   },
   {
+    "id": "fema-basic-kit",
+    "title": "How to Build a Kit for Emergencies",
+    "publisher": "FEMA",
+    "url": "https://www.fema.gov/print/txt/node/503732",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "cdc-water-supply",
+    "title": "How to Create an Emergency Water Supply",
+    "publisher": "CDC",
+    "url": "https://www.cdc.gov/water-emergency/about/how-to-create-and-store-an-emergency-water-supply.html",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "cdc-power-outage",
+    "title": "What to Do to Protect Yourself During a Power Outage",
+    "publisher": "CDC",
+    "url": "https://www.cdc.gov/natural-disasters/response/what-to-do-protect-yourself-during-a-power-outage.html",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "cdc-prepare-your-health-rx",
+    "title": "Prepare Your Health: Prescriptions",
+    "publisher": "CDC",
+    "url": "https://stacks.cdc.gov/view/cdc/80937",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "cdc-insulin-emergency",
+    "title": "Managing Insulin in an Emergency",
+    "publisher": "CDC",
+    "url": "https://www.cdc.gov/diabetes/articles/managing-insulin-in-emergency.html",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "fda-insulin-emergency",
+    "title": "Information Regarding Insulin Storage and Switching Between Products in an Emergency",
+    "publisher": "FDA",
+    "url": "https://www.fda.gov/drugs/emergency-preparedness-drugs/information-regarding-insulin-storage-and-switching-between-products-emergency",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
     "id": "cdc-disability-kit",
     "title": "Build a Kit (people with disabilities)",
     "publisher": "CDC",
@@ -49,11 +121,75 @@
   },
   {
     "id": "cdc-carbon-monoxide",
-    "title": "Carbon Monoxide Poisoning",
+    "title": "Carbon Monoxide (CO) Poisoning Basics",
     "publisher": "CDC",
-    "url": "https://www.cdc.gov/carbon-monoxide/",
+    "url": "https://www.cdc.gov/carbon-monoxide/about/index.html",
     "license": "public-domain",
-    "verified": null
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "cdc-heat-illness",
+    "title": "Symptoms of Heat-Related Illnesses",
+    "publisher": "CDC",
+    "url": "https://www.cdc.gov/extreme-heat/signs-symptoms/",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "cdc-hypothermia",
+    "title": "Preventing Hypothermia",
+    "publisher": "CDC",
+    "url": "https://www.cdc.gov/winter-weather/prevention/index.html",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "cdc-frostbite",
+    "title": "Preventing Frostbite",
+    "publisher": "CDC",
+    "url": "https://www.cdc.gov/winter-weather/prevention/preventing-frostbite.html",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "cdc-infant-feeding",
+    "title": "Facts About Infant Feeding During Emergencies",
+    "publisher": "CDC",
+    "url": "https://www.cdc.gov/infant-feeding-emergencies-toolkit/php/facts.html",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "cdc-hygiene-emergency",
+    "title": "Guidelines for Personal Hygiene During an Emergency",
+    "publisher": "CDC",
+    "url": "https://www.cdc.gov/water-emergency/safety/guidelines-for-personal-hygiene-during-an-emergency.html",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "epa-water-disinfection",
+    "title": "Emergency Disinfection of Drinking Water",
+    "publisher": "EPA",
+    "url": "https://www.epa.gov/ground-water-and-drinking-water/emergency-disinfection-drinking-water",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "epa-wildfire-smoke",
+    "title": "Wildfire Smoke and Health",
+    "publisher": "EPA",
+    "url": "https://www.epa.gov/wildfires/wildfire-smoke-and-health",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "nws-flood-safety",
+    "title": "Turn Around Don't Drown",
+    "publisher": "NOAA National Weather Service",
+    "url": "https://www.weather.gov/safety/flood-turn-around-dont-drown",
+    "license": "public-domain",
+    "verified": "2026-10-27"
   },
   {
     "id": "usda-power-outage-food",
@@ -62,6 +198,14 @@
     "url": "https://www.foodsafety.gov/food-safety-charts/food-safety-during-power-outage",
     "license": "public-domain",
     "verified": null
+  },
+  {
+    "id": "red-cross-kit",
+    "title": "What Do You Need in a Survival Kit",
+    "publisher": "American Red Cross",
+    "url": "https://www.redcross.org/get-help/how-to-prepare-for-emergencies/survival-kit-supplies.html",
+    "license": "cite-only",
+    "verified": "2026-10-27"
   },
   {
     "id": "fema-hseep",

@@ -178,6 +178,7 @@ export const SUPPLY_ITEMS = {
     "power-bank": "Phone power banks",
     "car-charger": "Car phone charger",
     "hand-crank": "Hand-crank or solar charger",
+    "extension-cord": "Heavy-duty outdoor extension cord (over 20 ft)",
   },
   Communication: {
     "weather-radio": "Battery or hand-crank weather radio",
@@ -196,18 +197,25 @@ export const SUPPLY_ITEMS = {
     "fuel": "Spare fuel for stove or generator",
     cooler: "Cooler",
     "ice-packs": "Ice packs or frozen water bottles",
+    formula: "Ready-to-feed infant formula",
   },
   Water: {
     "water-filter": "Water filter or purification tablets",
     bleach: "Unscented bleach",
+  },
+  Sanitation: {
+    sanitation: "Moist towelettes, garbage bags and ties",
+    "hand-sanitizer": "Hand sanitizer (at least 60% alcohol)",
+    "plastic-sheeting": "Plastic sheeting and duct tape",
   },
   Safety: {
     "first-aid": "First aid kit",
     "co-detector": "Battery carbon monoxide detector",
     "smoke-detector": "Smoke detectors",
     "fire-extinguisher": "Fire extinguisher",
-    "n95": "N95 masks",
-    "utility-tools": "Wrench or tool to shut off utilities",
+    "n95": "N95 masks or dust masks",
+    "air-cleaner": "Portable air cleaner",
+    "utility-tools": "Wrench or pliers to shut off utilities",
   },
   Documents: {
     cash: "Cash in small bills",

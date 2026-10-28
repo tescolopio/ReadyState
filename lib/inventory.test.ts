@@ -25,7 +25,7 @@ describe("assessInventory", () => {
     const priya = assessInventory(household("priya"));
     expect(byId(priya, "priya-3-daily-medication")).toMatchObject({
       status: "short",
-      finding: "Person 3 (older adult (65+)): daily medication they can't skip: about 6 days on hand, below the recommended 7.",
+      finding: "Person 3 (older adult (65+)): daily medication they can't skip: about 6 days on hand, below the recommended 7 to 10.",
     });
     // Priya has a power station, so the device check asks about runtime.
     expect(byId(priya, "priya-3-device-power")).toMatchObject({ status: "partial" });
@@ -58,7 +58,7 @@ describe("assessInventory", () => {
 
   it("lists the basic kit items that are missing", () => {
     expect(byId(assessInventory(household("alex")), "basic-kit")?.finding).toBe(
-      "Missing 8 of 10 basic kit items: a battery or hand-crank weather radio, spare batteries, a first aid kit, a whistle, N95 masks, a wrench to shut off utilities, a manual can opener, a paper map.",
+      "Missing 10 of 12 basic kit items: a battery or hand-crank radio with NOAA weather alerts, a first aid kit, extra batteries, a whistle, dust masks, plastic sheeting and duct tape, moist towelettes, garbage bags and ties, a wrench or pliers to turn off utilities, a manual can opener, local maps.",
     );
   });
 

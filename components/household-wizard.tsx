@@ -275,10 +275,12 @@ export function HouseholdWizard({
   const preview = useMemo(
     () =>
       current === "Review"
-        ? maskInput(engineBaseline(profile), {
-            alwaysMask: [...usePrivacyStore.getState().alwaysMask, ...privateTerms(profile)],
-            dryRun: true,
-          })
+        ? engineBaseline(profile, (text) =>
+            maskInput(text, {
+              alwaysMask: [...usePrivacyStore.getState().alwaysMask, ...privateTerms(profile)],
+              dryRun: true,
+            }),
+          )
         : "",
     [current, profile],
   );

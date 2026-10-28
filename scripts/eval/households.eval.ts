@@ -136,7 +136,7 @@ async function play(household: TestHousehold): Promise<Result> {
   const alwaysMask = privateTerms(profile);
   const mask = (text: string) => maskInput(text, { alwaysMask });
 
-  const baseline = mask(engineBaseline(profile));
+  const baseline = engineBaseline(profile, mask);
   const result: Result = { household, baseline, turns: [], problems: [], notes: [] };
   const messages: TtxUIMessage[] = [];
   let next = baseline;

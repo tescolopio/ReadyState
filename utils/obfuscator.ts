@@ -213,8 +213,10 @@ const UK_POSTCODE = /\b[A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2}\b/gu;
 const CA_POSTCODE = /\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b/gu;
 
 // Places. The state itself is kept: it's coarse and the simulation needs the region.
+// A two-letter code followed by a lowercase word is an abbreviation, not a
+// state: "Battery CO detectors" is about carbon monoxide, not Colorado.
 const CITY_STATE = new RegExp(
-  String.raw`\b(\p{Lu}[\p{L}'.-]+(?:\s+\p{Lu}[\p{L}'.-]+){0,2}),?\s+(?:${US_STATES.join("|")})\b`,
+  String.raw`\b(\p{Lu}[\p{L}'.-]+(?:\s+\p{Lu}[\p{L}'.-]+){0,2}),?\s+(?:${US_STATES.filter((s) => s.length > 2).join("|")}|(?:${US_STATES.filter((s) => s.length === 2).join("|")})(?![ \t]+\p{Ll}))\b`,
   "gu",
 );
 /** A town right before a UK or Canadian postcode, as in "Bath BA1 2AB". */
@@ -332,7 +334,10 @@ const contextDetectors = (text: string): Detection[] => [
     ...matchAll(text, CITY_STATE, "Location", 1),
     ...matchAll(text, LIVES_IN, "Location", 1),
     ...matchAll(text, CITY_BEFORE_POSTCODE, "Location", 1),
-  ].filter(({ value }) => isLikelyPlace(value)),
+  ]
+    // "moved to Denver CO" captures "Denver CO"; the state stays visible, as everywhere else.
+    .map(({ value, kind }) => ({ value: withoutTrailingState(value), kind }))
+    .filter(({ value }) => isLikelyPlace(value)),
 ];
 
 /** "Lakeland, Florida" -> "Lakeland": the state is kept, as everywhere else. */

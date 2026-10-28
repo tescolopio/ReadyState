@@ -35,6 +35,7 @@ export const PROFILE_FACTS: Record<string, string> = {
   "water.daysPerPerson": "Stored gallons divided by headcount",
   "food.days": "Days of food",
   "petFood.days": "Days of pet food",
+  "water.daysHotWeather": 'Stored water in days at 2 gallons per person per day, formatted ("1.5 days")',
   "needs.kinds": "Every need id recorded for anyone in the household",
   "people.ageRanges": "Every age range id in the household",
 };
@@ -77,6 +78,8 @@ export function profileFacts(profile: HouseholdProfile): Facts {
     "water.daysPerPerson": supplies.waterGallons === undefined ? undefined : supplies.waterGallons / headcount,
     "food.days": supplies.foodDays,
     "petFood.days": supplies.petFoodDays,
+    "water.daysHotWeather":
+      supplies.waterGallons === undefined ? undefined : days(Math.round((supplies.waterGallons / headcount / 2) * 10) / 10),
     "needs.kinds": [...new Set(people.flatMap((person) => person.needs.map((need) => need.kind)))],
     "people.ageRanges": [...new Set(people.flatMap((person) => (person.ageRange ? [person.ageRange] : [])))],
   };
@@ -108,6 +111,7 @@ export function evaluate(condition: Condition, facts: Facts): boolean {
   if ("includesAll" in condition) return condition.includesAll.every((item) => list.includes(item));
   if ("includesAny" in condition) return condition.includesAny.some((item) => list.includes(item));
   if ("gt" in condition) return typeof value === "number" && value > condition.gt;
+  if ("lt" in condition) return typeof value === "number" && value < condition.lt;
   return (value !== undefined && value !== false) === condition.exists;
 }
 
