@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { describeHousehold, privateTerms } from "@/lib/household";
+import { privateTerms } from "@/lib/household";
+import { engineBaseline } from "@/lib/inventory";
 import { PRIVACY_LEAKS, TEST_HOUSEHOLDS } from "@/lib/test-households";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { maskInput } from "@/utils/obfuscator";
@@ -12,7 +13,7 @@ const containsWord = (text: string, word: string) =>
 /** Exactly what the wizard sends for a profile. */
 const outgoing = (id: string) => {
   const { profile } = TEST_HOUSEHOLDS.find((household) => household.id === id)!;
-  return maskInput(describeHousehold(profile), { alwaysMask: privateTerms(profile), dryRun: true });
+  return maskInput(engineBaseline(profile), { alwaysMask: privateTerms(profile), dryRun: true });
 };
 
 describe("test households", () => {

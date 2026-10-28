@@ -17,7 +17,6 @@ import {
   SETTINGS,
   SUPPLY_ITEMS,
   WATER_SOURCE,
-  describeHousehold,
   hasProfile,
   newId,
   privateTerms,
@@ -30,6 +29,7 @@ import {
   type PetKind,
   type SupplyId,
 } from "@/lib/household";
+import { assessInventory, engineBaseline, type Finding, type FindingStatus } from "@/lib/inventory";
 import { TEST_HOUSEHOLDS } from "@/lib/test-households";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
@@ -52,7 +52,8 @@ const WHY: Record<Step, string> = {
   "Health needs":
     "Describe what a need demands, not a diagnosis. Medication and device names stay on this device; the scenario sees only the constraint, such as “refrigerated medication, 14 days on hand”.",
   Supplies: "What you already have changes which problems you face. Skip anything you're unsure of: it stays unknown, not assumed.",
-  Review: "This is exactly what the scenario engine will receive. Anything you skipped is marked unknown.",
+  Review:
+    "The inventory check compares what you have with Ready.gov and CDC guidance. Its gaps go into the exercise, so you can practice handling them. Below that is exactly what the scenario engine receives.",
 };
 
 /** Parses a number field, keeping blank as "unknown" rather than 0. */
@@ -139,6 +140,55 @@ function NumberField({
  * Fills the wizard with a fictional household from lib/test-households.ts, for
  * testing and demos. Asks before replacing a profile the person has entered.
  */
+const STATUS_LABELS: Record<FindingStatus, { text: string; className: string }> = {
+  missing: { text: "Missing", className: "border-red-800 text-red-300" },
+  short: { text: "Short", className: "border-amber-700 text-amber-300" },
+  partial: { text: "Partly covered", className: "border-amber-900 text-amber-200" },
+  unknown: { text: "To check", className: "border-zinc-600 text-zinc-300" },
+  ok: { text: "Covered", className: "border-emerald-800 text-emerald-300" },
+};
+
+/** The inventory check's findings, gaps first, each with what to do about it. */
+function InventoryCheck({ findings }: { findings: Finding[] }) {
+  const open = findings.filter((finding) => finding.status !== "ok");
+  const covered = findings.length - open.length;
+  return (
+    <section aria-label="Inventory check" className="space-y-2">
+      <p className={labelClass}>
+        Inventory check · {open.length} to work on, {covered} covered
+      </p>
+      <ul className="space-y-2">
+        {findings.map((finding) => {
+          const status = STATUS_LABELS[finding.status];
+          return (
+            <li key={finding.id} className="flex gap-2 rounded-md border border-zinc-800 p-2 text-sm">
+              <span
+                className={`h-fit shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${status.className}`}
+              >
+                {status.text}
+              </span>
+              <span>
+                <span className="text-zinc-500">{finding.area} · </span>
+                {finding.finding}
+                {finding.action && finding.status !== "ok" && (
+                  <span className="block text-zinc-400">
+                    {finding.kind === "plan" ? "Plan: " : "Get: "}
+                    {finding.action}
+                  </span>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-xs text-zinc-500">
+        Guidance: Ready.gov (water, food, pets, basic kit) and CDC (medication, carbon monoxide). This check
+        compares supplies with general guidance; it isn&apos;t a readiness score.
+      </p>
+    </section>
+  );
+}
+
 function TestHouseholdPicker({
   replacing,
   onLoad,
@@ -225,7 +275,7 @@ export function HouseholdWizard({
   const preview = useMemo(
     () =>
       current === "Review"
-        ? maskInput(describeHousehold(profile), {
+        ? maskInput(engineBaseline(profile), {
             alwaysMask: [...usePrivacyStore.getState().alwaysMask, ...privateTerms(profile)],
             dryRun: true,
           })
@@ -618,6 +668,7 @@ export function HouseholdWizard({
             blank="Surprise me"
             onChange={(scenario) => update({ ...profile, scenario: scenario ?? "surprise" })}
           />
+          <InventoryCheck findings={assessInventory(profile)} />
           <div>
             <p className={labelClass}>What the scenario engine sees</p>
             <pre className="mt-1 whitespace-pre-wrap rounded-md border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs text-zinc-300">

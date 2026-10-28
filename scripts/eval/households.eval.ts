@@ -11,7 +11,8 @@ import path from "node:path";
 import { readUIMessageStream, type UIMessageChunk } from "ai";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { describeHousehold, privateTerms } from "@/lib/household";
+import { privateTerms } from "@/lib/household";
+import { engineBaseline } from "@/lib/inventory";
 import { PRIVACY_LEAKS, TEST_HOUSEHOLDS, type TestHousehold } from "@/lib/test-households";
 import {
   deriveTtxState,
@@ -117,7 +118,7 @@ async function play(household: TestHousehold): Promise<Result> {
   const alwaysMask = privateTerms(profile);
   const mask = (text: string) => maskInput(text, { alwaysMask });
 
-  const baseline = mask(describeHousehold(profile));
+  const baseline = mask(engineBaseline(profile));
   const result: Result = { household, baseline, turns: [], problems: [], notes: [] };
   const messages: TtxUIMessage[] = [];
   let next = baseline;
