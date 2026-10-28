@@ -49,6 +49,7 @@ Further reading:
 
 - [Product and experience design brief](docs/product/design-brief.md): personas, the journal experience, visual identity, the family model and requirements.
 - [Work breakdown](docs/roadmap/work-breakdown.md): the roadmap by team, traced to the brief.
+- [Local test checklist](docs/testing/local-test.md): run it yourself and check it by hand in a browser.
 - [Deployment modes](docs/architecture/deployment-modes.md): self-hosted vs hosted, providers, desktop and mobile plans.
 - [Groq models](docs/architecture/groq-models.md): benchmarks and rate limits.
 - [Data sources](docs/architecture/datasources.md) and [Dataset bridging](docs/architecture/dataset_bridging.md): official guidance to ground scenarios, and how medical needs become functional constraints.
