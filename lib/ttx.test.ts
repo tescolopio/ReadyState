@@ -9,11 +9,13 @@ import {
 } from "@/lib/ttx";
 
 const turn = (overrides: Partial<TurnOutput> = {}): TurnOutput => ({
+  feedback: null,
   narrative_response: "A winter storm knocks out power.",
   time_elapsed: "Hour 0",
   hours_elapsed: 0,
   new_inject: "Pipes begin to freeze.",
   critical_alerts: [],
+  suggested_actions: [],
   scenario_status: "ongoing",
   ...overrides,
 });
@@ -39,9 +41,6 @@ const turnMessage = (id: string, output: TurnOutput): TtxUIMessage => ({
 });
 
 const report: AfterActionReport = {
-  overall_grade: "B",
-  score: 82,
-  outcome: "survived",
   summary: "Solid response.",
   strengths: ["Water storage"],
   supply_gaps: ["Generator"],
@@ -78,24 +77,26 @@ describe("deriveTtxState", () => {
     expect(deriveTtxState([user("u1", "params"), streaming]).phase).toBe("baseline");
   });
 
-  it("ends when a critical constraint fails", () => {
+  it("keeps going after a setback: there is no fail state", () => {
     const state = deriveTtxState([
       turnMessage("a1", turn()),
-      turnMessage("a2", turn({ hours_elapsed: 24, scenario_status: "failed" })),
+      turnMessage("a2", turn({ hours_elapsed: 24, critical_alerts: ["Insulin above 8 °C"] })),
     ]);
-    expect(state).toMatchObject({ phase: "ended", outcome: "failed", hoursElapsed: 24 });
+    expect(state).toMatchObject({ phase: "loop", hoursElapsed: 24 });
   });
 
-  it("ends as survived once the target duration is reached", () => {
-    const state = deriveTtxState([
-      turnMessage("a1", turn({ hours_elapsed: 72, time_elapsed: "Hour 72" })),
-    ]);
-    expect(state).toMatchObject({ phase: "ended", outcome: "survived" });
+  it("ends once the exercise reaches its full length", () => {
+    expect(
+      deriveTtxState([turnMessage("a1", turn({ hours_elapsed: 72, time_elapsed: "Hour 72" }))]).phase,
+    ).toBe("ended");
+    expect(deriveTtxState([turnMessage("a1", turn({ scenario_status: "complete" }))]).phase).toBe(
+      "ended",
+    );
   });
 
   it("moves to the AAR phase once the report is generated", () => {
     const state = deriveTtxState([
-      turnMessage("a1", turn({ scenario_status: "survived", hours_elapsed: 72 })),
+      turnMessage("a1", turn({ scenario_status: "complete", hours_elapsed: 72 })),
       user("u2", "Generate the AAR"),
       {
         id: "a2",

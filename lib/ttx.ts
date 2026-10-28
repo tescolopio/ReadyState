@@ -1,10 +1,28 @@
 import { tool, type InferUITools, type UIDataTypes, type UIMessage } from "ai";
 import { z } from "zod";
 
-/** Survive this many in-game hours to win the exercise. */
+/** The exercise runs for this many in-game hours. */
 export const TARGET_DURATION_HOURS = 72;
 
+/** Feedback on one response, in the three parts the design brief specifies. */
+export const feedbackSchema = z.object({
+  covered: z
+    .array(z.string())
+    .describe("What the response handled well, specific to what the participant actually wrote."),
+  consider: z
+    .array(z.string())
+    .describe("Considerations the response missed or could strengthen. Empty if nothing important."),
+  why: z
+    .string()
+    .describe(
+      "One to three sentences on why these points matter, grounded in preparedness guidance. Acknowledge other reasonable approaches.",
+    ),
+});
+
 export const turnSchema = z.object({
+  feedback: feedbackSchema
+    .nullable()
+    .describe("Feedback on the participant's latest response. null on the first turn, when there is no response yet."),
   narrative_response: z
     .string()
     .describe(
@@ -26,30 +44,30 @@ export const turnSchema = z.object({
     .describe(
       "Short, urgent warnings about unmet critical constraints (e.g. water, heat, medication). Empty if none.",
     ),
-  scenario_status: z
-    .enum(["ongoing", "failed", "survived"])
+  suggested_actions: z
+    .array(z.string())
     .describe(
-      '"failed" if a critical constraint was not secured, "survived" once the target duration is reached, otherwise "ongoing".',
+      "Zero to two practical real-world preparedness steps that follow from this turn's lesson, e.g. \"Store a second cooler and freeze water jugs\".",
     ),
+  scenario_status: z
+    .enum(["ongoing", "complete"])
+    .describe(`"complete" once hours_elapsed reaches the exercise length, otherwise "ongoing".`),
 });
 
+/** End-of-exercise review: decisions, lessons and an action plan. No grade (decision D8). */
 export const afterActionReportSchema = z.object({
-  overall_grade: z
-    .enum(["A", "B", "C", "D", "F"])
-    .describe("Letter grade for the participant's overall performance."),
-  score: z.number().describe("Numeric score from 0 to 100."),
-  outcome: z.enum(["failed", "survived"]),
-  summary: z.string().describe("Two to four sentence executive summary."),
+  summary: z.string().describe("Two to four sentences on how the exercise went and what it revealed."),
   strengths: z.array(z.string()).describe("Decisions that went well."),
   supply_gaps: z
     .array(z.string())
     .describe("Specific supplies or capabilities that were missing."),
   recommendations: z
     .array(z.string())
-    .describe("Concrete preparedness actions to take before a real event."),
+    .describe("Concrete preparedness actions to take before a real event, most important first."),
 });
 
 export type TurnOutput = z.infer<typeof turnSchema>;
+export type TurnFeedback = z.infer<typeof feedbackSchema>;
 export type AfterActionReport = z.infer<typeof afterActionReportSchema>;
 
 /**
@@ -60,7 +78,7 @@ export type AfterActionReport = z.infer<typeof afterActionReportSchema>;
 export const ttxTools = {
   generate_turn: tool({
     description:
-      "Report the result of the participant's action, advance the clock and introduce the next inject.",
+      "Give feedback on the participant's response, report its result, advance the clock and introduce the next inject.",
     inputSchema: turnSchema,
     execute: async (input) => input,
   }),
@@ -81,7 +99,8 @@ export type TtxUIMessage = UIMessage<
 /**
  * Phase 1 `baseline`: waiting for sanitized household parameters.
  * Phase 2 `loop`: action -> result + inject, time advances.
- * Phase 3 `ended`: a critical constraint failed or the target duration was reached.
+ * Phase 3 `ended`: the exercise reached its full length. There is no fail state
+ * (decision D8): setbacks are consequences to respond to, not game over.
  * Phase 4 `aar`: the After-Action Report has been generated.
  */
 export type TtxPhase = "baseline" | "loop" | "ended" | "aar";
@@ -91,7 +110,6 @@ export interface TtxState {
   turns: TurnOutput[];
   latestTurn?: TurnOutput;
   hoursElapsed: number;
-  outcome?: "failed" | "survived";
   report?: AfterActionReport;
 }
 
@@ -123,20 +141,15 @@ export function deriveTtxState(
   const latestTurn = turns.at(-1);
   const hoursElapsed = latestTurn?.hours_elapsed ?? 0;
 
-  let outcome: TtxState["outcome"];
-  if (latestTurn?.scenario_status === "failed") outcome = "failed";
-  else if (
-    latestTurn?.scenario_status === "survived" ||
-    (latestTurn && hoursElapsed >= targetHours)
-  )
-    outcome = "survived";
+  const complete =
+    latestTurn?.scenario_status === "complete" || (latestTurn !== undefined && hoursElapsed >= targetHours);
 
   let phase: TtxPhase = "baseline";
   if (report) phase = "aar";
-  else if (outcome) phase = "ended";
+  else if (complete) phase = "ended";
   else if (latestTurn) phase = "loop";
 
-  return { phase, turns, latestTurn, hoursElapsed, outcome, report };
+  return { phase, turns, latestTurn, hoursElapsed, report };
 }
 
 const messageText = (message: TtxUIMessage) =>
