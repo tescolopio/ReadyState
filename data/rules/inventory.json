@@ -4,7 +4,7 @@
     "type": "supply",
     "area": "Water",
     "kind": "get",
-    "metric": "water.daysPerPerson",
+    "metric": "water.days",
     "minimum": 3,
     "goal": 14,
     "messages": {
@@ -15,15 +15,17 @@
     },
     "actions": {
       "unknown": "Count your stored water.",
-      "short": "Store about {shortByGallons} more gallons (1 gallon per person per day{pets.any?, plus extra for pets}).",
-      "partial": "Store about {shortByGallons} more gallons (1 gallon per person per day{pets.any?, plus extra for pets})."
+      "short": "Store about {shortByGallons} more gallons: the household uses about {water.gallonsPerDay} gallons a day (1 gallon per person{pets.waterGallonsPerDay?, plus about {pets.waterGallonsPerDay} for pets}){pets.weightsMissing?; add your pets' weights to include their water}.",
+      "partial": "Store about {shortByGallons} more gallons: the household uses about {water.gallonsPerDay} gallons a day (1 gallon per person{pets.waterGallonsPerDay?, plus about {pets.waterGallonsPerDay} for pets}){pets.weightsMissing?; add your pets' weights to include their water}."
     },
     "status": "draft",
     "sources": [
       "cdc-water-supply",
-      "ready-gov-water"
+      "ready-gov-water",
+      "akc-dog-water"
     ],
-    "guidance": "water.supply"
+    "guidance": "water.supply",
+    "notes": "Pets' water (about 1 oz per lb per day, AKC) is included when their weights are recorded."
   },
   {
     "id": "food",
@@ -94,12 +96,13 @@
     },
     "actions": {
       "unknown": "Count your pet food.",
-      "short": "Add about {shortBy} more of pet food, and water for them too.",
-      "partial": "Add about {shortBy} more of pet food, and water for them too."
+      "short": "Add about {shortBy} more of pet food, and water for them too.{pets.kcalPerDay? Your pets need about {pets.kcalPerDay} kcal a day; check the food bag's calories per cup to convert.}",
+      "partial": "Add about {shortBy} more of pet food, and water for them too.{pets.kcalPerDay? Your pets need about {pets.kcalPerDay} kcal a day; check the food bag's calories per cup to convert.}"
     },
     "status": "draft",
     "sources": [
-      "ready-gov-pets"
+      "ready-gov-pets",
+      "pna-calories"
     ],
     "notes": "Ready.gov says several days of pet food; the 3-day and 2-week thresholds mirror the human guidance. No authoritative pet-specific figure found."
   },
@@ -259,11 +262,15 @@
         {
           "fact": "hasBackupPower",
           "equals": true
+        },
+        {
+          "fact": "need.backupHours",
+          "exists": false
         }
       ]
     },
     "failStatus": "partial",
-    "finding": "{person.label}: {need.label}: backup power is recorded; check how many hours it runs the device.{need.kwhPerDay? It needs about {need.kwhPerDay} kWh a day.}",
+    "finding": "{person.label}: {need.label}: backup power is recorded; add its battery capacity (Wh) and the device's watts to work out how many hours it runs.{need.kwhPerDay? It needs about {need.kwhPerDay} kWh a day.}",
     "action": "Check your backup's capacity in watt-hours against the device, and test it under load.",
     "status": "draft",
     "sources": [
@@ -690,6 +697,245 @@
     "status": "draft",
     "sources": [
       "epa-wildfire-smoke"
+    ]
+  },
+  {
+    "id": "device-power-hours-short",
+    "type": "check",
+    "forEach": "need",
+    "findingId": "{person.id}-device-power",
+    "area": "Power",
+    "kind": "get",
+    "guidance": "devices.power",
+    "when": {
+      "all": [
+        {
+          "fact": "need.kind",
+          "equals": "powered-device"
+        },
+        {
+          "fact": "need.backupHours",
+          "lt": 24
+        }
+      ]
+    },
+    "failStatus": "short",
+    "finding": "{person.label}: {need.label}: the recorded battery runs it for only about {need.backupHours} hours.",
+    "action": "Plan more battery capacity or a way to recharge (car, solar, generator outdoors), and decide early where to go if the outage outlasts the battery.",
+    "status": "draft",
+    "sources": [
+      "cdc-electricity-dependent-2017"
+    ]
+  },
+  {
+    "id": "device-power-hours",
+    "type": "check",
+    "forEach": "need",
+    "findingId": "{person.id}-device-power",
+    "area": "Power",
+    "kind": "get",
+    "guidance": "devices.power",
+    "when": {
+      "all": [
+        {
+          "fact": "need.kind",
+          "equals": "powered-device"
+        },
+        {
+          "fact": "need.backupHours",
+          "gt": 23.99
+        }
+      ]
+    },
+    "pass": {
+      "fact": "need.backupHours",
+      "gt": 72
+    },
+    "failStatus": "partial",
+    "reportOk": true,
+    "finding": "{person.label}: {need.label}: the recorded battery runs it for about {need.backupHours} hours.",
+    "action": "Plan how to recharge the battery if the outage lasts longer than that.",
+    "status": "draft",
+    "sources": [
+      "cdc-electricity-dependent-2017"
+    ]
+  },
+  {
+    "id": "device-watts-unknown",
+    "type": "check",
+    "forEach": "need",
+    "findingId": "{person.id}-device-watts",
+    "area": "Power",
+    "kind": "plan",
+    "guidance": "devices.power",
+    "when": {
+      "all": [
+        {
+          "fact": "need.kind",
+          "equals": "powered-device"
+        },
+        {
+          "fact": "need.watts",
+          "exists": false
+        }
+      ]
+    },
+    "failStatus": "unknown",
+    "finding": "{person.label}: {need.label}: power draw not recorded (typical: a CPAP about 56 W, a home oxygen concentrator about 350 W).",
+    "action": "Find the watts on the device's label or manual and record them, so backup runtime can be worked out.",
+    "status": "draft",
+    "sources": [
+      "philips-everflo",
+      "resmed-airsense-11"
+    ]
+  },
+  {
+    "id": "calorie-needs",
+    "type": "check",
+    "area": "Food",
+    "kind": "get",
+    "guidance": "calories.people",
+    "when": {
+      "fact": "household.kcalPerDay",
+      "exists": true
+    },
+    "failStatus": "unknown",
+    "finding": "The household needs about {household.kcalPerDay} kcal a day: about {household.kcal3Days} for 3 days and {household.kcal14Days} for 2 weeks{pets.kcalPerDay?, plus about {pets.kcalPerDay} kcal a day for the pets}.",
+    "action": "Check your stored food's calorie labels against this, and favor calorie-dense foods that need no cooking.",
+    "status": "draft",
+    "sources": [
+      "dga-2010-calories",
+      "dga-2020-food-pattern-modeling"
+    ]
+  },
+  {
+    "id": "pet-weights",
+    "type": "check",
+    "area": "Pets",
+    "kind": "plan",
+    "guidance": "calories.pets",
+    "when": {
+      "fact": "pets.weightsMissing",
+      "equals": true
+    },
+    "failStatus": "unknown",
+    "finding": "A dog or cat has no weight recorded, so its food and water can't be worked out.",
+    "action": "Add each dog's and cat's weight in the household setup.",
+    "status": "draft",
+    "sources": [
+      "pna-calories",
+      "akc-dog-water"
+    ]
+  },
+  {
+    "id": "toilet-plan",
+    "type": "check",
+    "area": "Kit",
+    "kind": "get",
+    "guidance": "sanitation.toilets",
+    "when": {
+      "any": [
+        {
+          "fact": "scenario",
+          "in": [
+            "earthquake",
+            "flood",
+            "hurricane",
+            "boil-water"
+          ]
+        },
+        {
+          "fact": "home.water",
+          "equals": "well"
+        }
+      ]
+    },
+    "pass": {
+      "fact": "supplies.have",
+      "includes": "toilet-kit"
+    },
+    "failStatus": "partial",
+    "finding": "If toilets can't flush (sewer or water failure, flooding, an earthquake, or a well pump without power), you'll need an emergency toilet; none recorded.",
+    "action": "Make a twin-bucket toilet kit: two 5-gallon buckets with lids, 3–5 mil bags, sawdust or shredded paper, gloves and hand sanitizer.",
+    "status": "draft",
+    "sources": [
+      "osu-sanitation",
+      "cdc-septic-floods"
+    ]
+  },
+  {
+    "id": "tornado-plan",
+    "type": "check",
+    "area": "Plan",
+    "kind": "plan",
+    "guidance": "tornado.shelter",
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "tornado",
+        "hurricane"
+      ]
+    },
+    "failStatus": "unknown",
+    "finding": "Tornadoes give little warning, and hurricanes can spawn them far inland.",
+    "action": "Pick your shelter spot now: a basement or a small interior, windowless room on the lowest floor. Practice getting everyone there quickly, pets included.",
+    "status": "draft",
+    "sources": [
+      "ready-gov-tornadoes",
+      "ready-gov-hurricanes"
+    ]
+  },
+  {
+    "id": "tornado-mobile-home",
+    "type": "check",
+    "area": "Plan",
+    "kind": "plan",
+    "guidance": "tornado.shelter",
+    "when": {
+      "all": [
+        {
+          "fact": "scenario",
+          "in": [
+            "tornado",
+            "hurricane"
+          ]
+        },
+        {
+          "fact": "home.type",
+          "in": [
+            "mobile-home",
+            "rv"
+          ]
+        }
+      ]
+    },
+    "failStatus": "unknown",
+    "finding": "A mobile home or RV needs a tornado plan that doesn't rely on sheltering inside it.",
+    "action": "Ask local emergency management where the nearest sturdy shelter is, and how much warning you'd need to get there.",
+    "status": "draft",
+    "sources": [
+      "ready-gov-tornadoes"
+    ],
+    "notes": "Ready.gov's tornado page doesn't address mobile homes; NWS guidance on mobile homes still to research."
+  },
+  {
+    "id": "hurricane-plan",
+    "type": "check",
+    "area": "Plan",
+    "kind": "plan",
+    "guidance": "hurricane.inland",
+    "when": {
+      "fact": "scenario",
+      "equals": "hurricane"
+    },
+    "failStatus": "unknown",
+    "finding": "Inland, rain flooding now causes most US hurricane deaths, and it can last days after the storm.",
+    "action": "Check whether your home is in a floodplain or evacuation zone, sign up for local emergency alerts, and plan where you'd go.",
+    "status": "draft",
+    "sources": [
+      "ready-gov-hurricanes",
+      "noaa-inland-flooding",
+      "mecklenburg-hurricane"
     ]
   }
 ]

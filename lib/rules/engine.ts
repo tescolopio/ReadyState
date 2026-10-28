@@ -11,6 +11,7 @@ import {
   type Need,
   type Person,
 } from "@/lib/household";
+import guidanceJson from "@/data/rules/guidance.json";
 import type { Condition, InventoryRule } from "@/lib/rules/schema";
 
 export type FactValue = string | number | boolean | string[] | undefined;
@@ -33,6 +34,14 @@ export const PROFILE_FACTS: Record<string, string> = {
   scenario: "The chosen emergency id",
   "supplies.have": "Ids of the supply items checked",
   "water.daysPerPerson": "Stored gallons divided by headcount",
+  "water.gallonsPerDay": "Daily water need: 1 gallon per person plus pets' drinking water",
+  "water.days": "Stored gallons divided by the daily need, pets included",
+  "pets.waterGallonsPerDay": 'Pets\' daily drinking water in gallons, formatted ("2.1"), when their weights are known',
+  "pets.kcalPerDay": 'Pets\' daily calories, formatted ("5,040"), when their weights are known',
+  "pets.weightsMissing": "True when a dog or cat has no weight recorded",
+  "household.kcalPerDay": 'People\'s estimated daily calories, formatted ("4,400"); infants excluded',
+  "household.kcal3Days": "People's calories for 3 days, formatted",
+  "household.kcal14Days": "People's calories for 2 weeks, formatted",
   "food.days": "Days of food",
   "petFood.days": "Days of pet food",
   "water.daysHotWeather": 'Stored water in days at 2 gallons per person per day, formatted ("1.5 days")',
@@ -50,13 +59,45 @@ export const NEED_FACTS: Record<string, string> = {
   "need.daysSupply": "Days of supply on hand",
   "need.watts": "Device power draw in watts",
   "need.kwhPerDay": "Device energy per day in kWh, from its watts",
+  "need.backupHours": "Hours the recorded battery (Wh) runs the device, at 85% inverter efficiency",
 };
 
 const fuelHeating = ["gas-furnace", "propane", "oil", "wood"];
 
+/** A number from data/rules/guidance.json, so the math uses the same sourced values as the rules. */
+const guidanceValue = (id: string, key: string): number => {
+  const records = guidanceJson as unknown as Array<{ id: string; values: Record<string, number> }>;
+  const value = records.find((r) => r.id === id)?.values[key];
+  if (value === undefined) throw new Error(`guidance ${id} has no value ${key}`);
+  return value;
+};
+
+const thousands = (value: number) => Math.round(value).toLocaleString("en-US");
+const KG_PER_LB = 0.45359237;
+
+/** Maintenance calories for a dog or cat (Pet Nutrition Alliance): 70 × kg^0.75 × a neutered-adult factor. */
+export const petKcalPerDay = (kind: string, weightLb: number) => {
+  const rer = guidanceValue("calories.pets", "rerFactor") * (weightLb * KG_PER_LB) ** guidanceValue("calories.pets", "rerExponent");
+  return rer * guidanceValue("calories.pets", kind === "cat" ? "catNeutered" : "dogNeutered");
+};
+
+/** Calories and water are estimated for dogs and cats only; other animals vary too widely. */
+const COUNTED_PETS = ["dog", "cat"];
+
 export function profileFacts(profile: HouseholdProfile): Facts {
   const { people, pets, home, supplies } = profile;
   const headcount = Math.max(1, people.length);
+
+  const counted = pets.filter((pet) => COUNTED_PETS.includes(pet.kind));
+  const weighed = counted.filter((pet) => pet.weightLb);
+  const petKcal = weighed.reduce((sum, pet) => sum + petKcalPerDay(pet.kind, pet.weightLb!), 0);
+  // Dogs: about 1 ounce of water per pound a day. Cats are counted the same way here.
+  const petWater = weighed.reduce((sum, pet) => sum + (pet.weightLb! * guidanceValue("water.pets", "ouncesPerPoundPerDay")) / 128, 0);
+  const waterPerDay = headcount * guidanceValue("water.supply", "gallonsPerPersonPerDay") + petWater;
+
+  const kcalByAge = (age?: string) => (age && age !== "infant" ? guidanceValue("calories.people", age) : age === "infant" ? 0 : guidanceValue("calories.people", "adult"));
+  const peopleKcal = people.reduce((sum, person) => sum + kcalByAge(person.ageRange), 0);
+
   return {
     "people.count": people.length,
     headcount,
@@ -76,6 +117,14 @@ export function profileFacts(profile: HouseholdProfile): Facts {
     scenario: profile.scenario,
     "supplies.have": supplies.have,
     "water.daysPerPerson": supplies.waterGallons === undefined ? undefined : supplies.waterGallons / headcount,
+    "water.gallonsPerDay": Math.round(waterPerDay * 10) / 10,
+    "water.days": supplies.waterGallons === undefined ? undefined : supplies.waterGallons / waterPerDay,
+    "pets.waterGallonsPerDay": weighed.length ? (Math.round(petWater * 10) / 10).toFixed(1) : undefined,
+    "pets.kcalPerDay": weighed.length ? thousands(petKcal) : undefined,
+    "pets.weightsMissing": counted.length > weighed.length || undefined,
+    "household.kcalPerDay": peopleKcal ? thousands(peopleKcal) : undefined,
+    "household.kcal3Days": peopleKcal ? thousands(peopleKcal * 3) : undefined,
+    "household.kcal14Days": peopleKcal ? thousands(peopleKcal * 14) : undefined,
     "food.days": supplies.foodDays,
     "petFood.days": supplies.petFoodDays,
     "water.daysHotWeather":
@@ -97,6 +146,14 @@ export function needFacts(person: Person, index: number, need: Need): Facts {
     "need.watts": need.watts,
     "need.kwhPerDay": need.watts ? ((need.watts * 24) / 1000).toFixed(1) : undefined,
   };
+}
+
+/** Per-need facts that also depend on the home, such as battery runtime for a device. */
+export function needHomeFacts(profile: HouseholdProfile, need: Need): Facts {
+  const { backupWh } = profile.home;
+  if (!need.watts || !backupWh) return {};
+  // Inverters lose some energy; 85% is a common planning figure.
+  return { "need.backupHours": Math.round(((backupWh * 0.85) / need.watts) * 10) / 10 };
 }
 
 export function evaluate(condition: Condition, facts: Facts): boolean {
@@ -173,7 +230,7 @@ function applyRule(rule: InventoryRule, facts: Facts): Finding | undefined {
         ...facts,
         days: days(value),
         shortBy: days(shortBy),
-        shortByGallons: Math.ceil((target - value) * Number(facts.headcount ?? 1)),
+        shortByGallons: Math.ceil((target - value) * Number(facts["water.gallonsPerDay"] ?? facts.headcount ?? 1)),
       };
       const message = status === "short" ? rule.messages.short : rule.messages.partial!;
       const action = status === "short" ? rule.actions.short : rule.actions.partial!;
@@ -212,7 +269,7 @@ export function runInventoryRules(rules: InventoryRule[], profile: HouseholdProf
     if (rule.forEach === "need") {
       profile.people.forEach((person, index) => {
         for (const need of person.needs) {
-          const finding = applyRule(rule, { ...facts, ...needFacts(person, index, need) });
+          const finding = applyRule(rule, { ...facts, ...needFacts(person, index, need), ...needHomeFacts(profile, need) });
           if (finding) findings.push(finding);
         }
       });

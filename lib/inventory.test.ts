@@ -13,7 +13,7 @@ describe("assessInventory", () => {
     expect(byId(assessInventory(household("sam")), "water")).toMatchObject({
       status: "short",
       finding: "Stored water covers about 2 days, below the 3-day minimum.",
-      action: "Store about 4 more gallons (1 gallon per person per day, plus extra for pets).",
+      action: "Store about 4 more gallons: the household uses about 4 gallons a day (1 gallon per person); add your pets' weights to include their water.",
     });
     // Morgan: 20 gallons for 3 people is 6.7 days.
     expect(byId(assessInventory(household("morgan")), "water")?.status).toBe("partial");
@@ -75,5 +75,45 @@ describe("engineBaseline", () => {
     const text = engineBaseline(household("sam"));
     expect(text).toContain("Gaps found by the inventory check (test these in the exercise): Stored water covers about 2 days");
     expect(describeGaps(assessInventory(household("minimal")))).not.toContain("not recorded");
+  });
+});
+
+describe("inventory math", () => {
+  const charlotte = assessInventory(household("charlotte"));
+
+  it("adds pets' water to the household's daily need", () => {
+    // 2 people × 1 gal + (140 + 120 lb) × 1 oz/lb ÷ 128 oz/gal ≈ 4.0 gal/day; 10 gal ≈ 2.5 days.
+    expect(byId(charlotte, "water")).toMatchObject({
+      status: "short",
+      finding: "Stored water covers about 2.5 days, below the 3-day minimum.",
+      action: "Store about 3 more gallons: the household uses about 4 gallons a day (1 gallon per person, plus about 2.0 for pets).",
+    });
+  });
+
+  it("estimates people's and pets' calories", () => {
+    // Adults 2 × 2,200; Great Danes 70 × kg^0.75 × 1.6: 140 lb ≈ 2,520, 120 lb ≈ 2,245.
+    expect(byId(charlotte, "calorie-needs")?.finding).toBe(
+      "The household needs about 4,400 kcal a day: about 13,200 for 3 days and 61,600 for 2 weeks, plus about 4,764 kcal a day for the pets.",
+    );
+    expect(byId(charlotte, "pet-food")?.action).toContain("Your pets need about 4,764 kcal a day");
+  });
+
+  it("works out how long the battery runs a medical device", () => {
+    // 2,048 Wh × 85% ÷ 60 W ≈ 29 hours.
+    expect(byId(charlotte, "charlotte-2-device-power")).toMatchObject({
+      status: "partial",
+      finding: "Person 2 (adult): medical device that needs power: the recorded battery runs it for about 29 hours.",
+    });
+  });
+
+  it("plans for toilets, tornadoes and inland flooding in a hurricane", () => {
+    expect(byId(charlotte, "toilet-plan")?.status).toBe("partial");
+    expect(byId(charlotte, "tornado-plan")?.kind).toBe("plan");
+    expect(byId(charlotte, "hurricane-plan")?.finding).toContain("rain flooding now causes most US hurricane deaths");
+  });
+
+  it("asks for pet weights when they're missing", () => {
+    expect(byId(assessInventory(household("sam")), "pet-weights")?.status).toBe("unknown");
+    expect(byId(charlotte, "pet-weights")).toBeUndefined();
   });
 });

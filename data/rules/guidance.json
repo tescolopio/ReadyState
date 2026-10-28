@@ -576,5 +576,219 @@
     "sources": [
       "cdc-power-outage"
     ]
+  },
+  {
+    "id": "tornado.shelter",
+    "topic": "Tornado",
+    "statement": "Under a tornado warning, go immediately to a safe room or storm shelter if you have one; otherwise to a small, interior, windowless room or basement on the lowest level of a sturdy building, away from doors, windows and outside walls, covering your head and neck. A car offers no safe option, only less dangerous ones.",
+    "brief": "Tornado: lowest floor, small interior windowless room or basement; cover head and neck; cars have no safe option.",
+    "quote": "The next best protection is a small, interior, windowless room or basement on the lowest level of a sturdy building.",
+    "values": {},
+    "prompt": true,
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "tornado",
+        "hurricane",
+        "surprise"
+      ]
+    },
+    "status": "draft",
+    "sources": [
+      "ready-gov-tornadoes"
+    ],
+    "notes": "Ready.gov's tornado page doesn't address mobile homes; that guidance is still to research."
+  },
+  {
+    "id": "tornado.after",
+    "topic": "Tornado",
+    "statement": "After a tornado: stay clear of fallen power and utility lines, text rather than call, and wear thick-soled shoes, long pants and work gloves for cleanup.",
+    "values": {},
+    "status": "draft",
+    "sources": [
+      "ready-gov-tornadoes"
+    ]
+  },
+  {
+    "id": "hurricane.inland",
+    "topic": "Hurricane",
+    "statement": "Hurricanes aren't only a coastal problem: rain, wind and tornadoes reach far inland, and freshwater flooding from rain now causes most US hurricane deaths (57% over the last 10 years, NOAA). Inland flooding can last days after the storm passes.",
+    "brief": "Hurricanes reach far inland: rain flooding causes most US hurricane deaths now; flooding can last days.",
+    "quote": "Hurricanes are not just a coastal problem.",
+    "values": {
+      "freshwaterDeathPercent": 57
+    },
+    "prompt": true,
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "hurricane",
+        "flood",
+        "surprise"
+      ]
+    },
+    "status": "draft",
+    "sources": [
+      "ready-gov-hurricanes",
+      "noaa-inland-flooding",
+      "nhc-2025-season-lessons",
+      "mecklenburg-hurricane"
+    ],
+    "notes": "NHC: 53% of US direct tropical cyclone deaths 2013-2024 were freshwater flooding. Hurricane Helene (2024) caused flash flooding in Mecklenburg County."
+  },
+  {
+    "id": "hurricane.evacuate-shelter",
+    "topic": "Hurricane",
+    "statement": "Know whether you're in an evacuation zone or floodplain; if officials tell you to evacuate, go immediately and never drive around barricades. For wind, shelter in an interior room; if trapped by flooding, go to the highest level but not into a closed attic.",
+    "brief": "Evacuate immediately when told; never drive around barricades; wind: interior room; flooding: highest level, not a closed attic.",
+    "quote": "If you live in a mandatory evacuation zone and local officials tell you to evacuate, do so immediately.",
+    "values": {},
+    "prompt": true,
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "hurricane",
+        "flood"
+      ]
+    },
+    "status": "draft",
+    "sources": [
+      "ready-gov-hurricanes",
+      "mecklenburg-hurricane"
+    ]
+  },
+  {
+    "id": "calories.people",
+    "topic": "Food",
+    "statement": "Planning estimates of daily calories at low activity, rounded: child (2–12) about 1,400; teen about 2,200; adult about 2,200; older adult about 1,800. Individual needs vary with sex, size and activity; infants rely on breast milk or formula.",
+    "brief": "Calories per day (low activity): child ~1,400, teen ~2,200, adult ~2,200, older adult ~1,800.",
+    "values": {
+      "child": 1400,
+      "teen": 2200,
+      "adult": 2200,
+      "older-adult": 1800
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "dga-2010-calories",
+      "dga-2020-food-pattern-modeling"
+    ],
+    "notes": "Midpoints of the sedentary estimates by sex: adults 19-50 about 1,800-2,600, 51+ about 1,600-2,000, 14-18 about 1,800-2,200, children 4-13 about 1,200-1,800 (DGA 2010; FPM 2020 Table 1.1). Simplified to one figure per age range because the profile doesn't record sex."
+  },
+  {
+    "id": "calories.pets",
+    "topic": "Pets",
+    "statement": "A pet's resting energy need is 70 × body weight in kg^0.75 kcal a day; multiply by about 1.6 for a neutered adult dog (1.8 intact) or 1.2 for a neutered adult cat (1.4 intact). Individuals vary by up to 50%; check the food bag's calorie content to convert to cups.",
+    "brief": "Pet calories: 70 × kg^0.75 × 1.6 (neutered dog) or 1.2 (neutered cat) kcal/day; individuals vary ±50%.",
+    "values": {
+      "rerFactor": 70,
+      "rerExponent": 0.75,
+      "dogNeutered": 1.6,
+      "dogIntact": 1.8,
+      "catNeutered": 1.2,
+      "catIntact": 1.4
+    },
+    "prompt": true,
+    "when": {
+      "fact": "pets.kcalPerDay",
+      "exists": true
+    },
+    "status": "draft",
+    "sources": [
+      "pna-calories"
+    ]
+  },
+  {
+    "id": "water.pets",
+    "topic": "Pets",
+    "statement": "Dogs need about 1 ounce of water per pound of body weight a day, more in heat or with activity: a 140-lb dog needs a little over a gallon.",
+    "brief": "Dogs drink about 1 oz of water per lb per day (140 lb ≈ 1.1 gal), more in heat.",
+    "values": {
+      "ouncesPerPoundPerDay": 1
+    },
+    "prompt": true,
+    "when": {
+      "fact": "pets.waterGallonsPerDay",
+      "exists": true
+    },
+    "status": "draft",
+    "sources": [
+      "akc-dog-water"
+    ],
+    "notes": "Merck and VCA give about 40-66 mL/kg/day, consistent with ~1 oz/lb."
+  },
+  {
+    "id": "sanitation.toilets",
+    "topic": "Sanitation",
+    "statement": "When toilets can't flush (sewer or water failure, flooding, earthquake), use an emergency toilet: the twin-bucket method separates urine (diluted and poured on the ground, moving location each time) from feces (in a 5-gallon bucket lined with a 3–5 mil bag, covered with about half a cup of sawdust or shredded paper after each use, filled no more than halfway, then double-bagged and stored away from food and water). Never bury waste within 100 feet of a water source, and wash hands after.",
+    "brief": "No flushing: twin-bucket toilet (urine separate; feces in a lined bucket, covered with sawdust, half full max, double-bagged); wash hands.",
+    "values": {
+      "bucketGallons": 5,
+      "bagMil": 3,
+      "coverCups": 0.5,
+      "buryDistanceFeet": 100
+    },
+    "prompt": true,
+    "when": {
+      "any": [
+        {
+          "fact": "scenario",
+          "in": [
+            "earthquake",
+            "flood",
+            "hurricane",
+            "boil-water",
+            "surprise"
+          ]
+        },
+        {
+          "fact": "home.water",
+          "equals": "well"
+        }
+      ]
+    },
+    "status": "draft",
+    "sources": [
+      "osu-sanitation",
+      "cdc-septic-floods"
+    ],
+    "notes": "The twin-bucket design comes from New Zealand's Wellington Region Emergency Management Office after the 2011 Christchurch earthquake; OSU Extension adapted it. WREMO advises planning to store waste for at least 30 days after a major earthquake."
+  },
+  {
+    "id": "sanitation.septic",
+    "topic": "Sanitation",
+    "statement": "During a flood, hurricane or earthquake, reduce water use and flush as little as possible, or use a temporary toilet; don't pump a septic tank more than halfway, or it may float out of the ground.",
+    "values": {},
+    "status": "draft",
+    "sources": [
+      "cdc-septic-floods"
+    ]
+  },
+  {
+    "id": "devices.power",
+    "topic": "Medical devices",
+    "statement": "Typical power draws: a CPAP about 56 W (73 W peak), more with a heated humidifier and tube; a stationary home oxygen concentrator about 350 W. Portable oxygen concentrator batteries last about 2–4 hours (most 3–4 at the lowest setting), up to about 12 with extra packs; higher settings shorten that. Always use your own device's rating.",
+    "brief": "Typical draw: CPAP ~56 W (more with humidifier); home oxygen concentrator ~350 W; portable concentrator battery 2–4 h (up to 12 with packs).",
+    "values": {
+      "cpapWatts": 56,
+      "cpapPeakWatts": 73,
+      "homeConcentratorWatts": 350,
+      "portableBatteryHoursMin": 2,
+      "portableBatteryHoursMax": 4,
+      "portableWithPacksHours": 12
+    },
+    "prompt": true,
+    "when": {
+      "fact": "needs.kinds",
+      "includes": "powered-device"
+    },
+    "status": "draft",
+    "sources": [
+      "cdc-electricity-dependent-2017",
+      "philips-everflo",
+      "resmed-airsense-11"
+    ],
+    "notes": "Device wattages are manufacturer figures for two common models (cite-only); runtimes are from the CDC-hosted study. Needs D6 review."
   }
 ]

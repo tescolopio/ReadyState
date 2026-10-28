@@ -30,6 +30,7 @@ import {
   type SupplyId,
 } from "@/lib/household";
 import { assessInventory, engineBaseline, type Finding, type FindingStatus } from "@/lib/inventory";
+import { GUIDANCE } from "@/lib/rules";
 import { TEST_HOUSEHOLDS } from "@/lib/test-households";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
@@ -55,6 +56,13 @@ const WHY: Record<Step, string> = {
   Review:
     "The inventory check compares what you have with Ready.gov and CDC guidance. Its gaps go into the exercise, so you can practice handling them. Below that is exactly what the scenario engine receives.",
 };
+
+/** Typical draws from data/rules/guidance.json ("devices.power"), for people who don't know their device's rating. */
+const DEVICE_POWER = GUIDANCE.find((record) => record.id === "devices.power")?.values ?? {};
+const TYPICAL_DEVICES = [
+  { label: "CPAP", watts: DEVICE_POWER.cpapWatts },
+  { label: "home oxygen concentrator", watts: DEVICE_POWER.homeConcentratorWatts },
+].filter((device): device is { label: string; watts: number } => device.watts !== undefined);
 
 /** Parses a number field, keeping blank as "unknown" rather than 0. */
 const toNumber = (value: string) => (value.trim() === "" ? undefined : Math.max(0, Number(value)));
@@ -425,6 +433,13 @@ export function HouseholdWizard({
                 value={pet.size}
                 onChange={(size) => setPet(pet.id, { size })}
               />
+              {(pet.kind === "dog" || pet.kind === "cat") && (
+                <NumberField
+                  label="Weight (lb), for food and water math"
+                  value={pet.weightLb}
+                  onChange={(weightLb) => setPet(pet.id, { weightLb })}
+                />
+              )}
               <Field label="Needs or behavior (optional)">
                 {(id) => (
                   <Input
@@ -527,9 +542,16 @@ export function HouseholdWizard({
           />
           {profile.home.backupPower && profile.home.backupPower !== "none" && (
             <NumberField
-              label="Backup capacity (watts)"
+              label="Backup output (watts)"
               value={profile.home.backupWatts}
               onChange={(backupWatts) => update({ ...profile, home: { ...profile.home, backupWatts } })}
+            />
+          )}
+          {(profile.home.backupPower === "battery" || profile.home.backupPower === "solar") && (
+            <NumberField
+              label="Battery capacity (Wh), for runtime math"
+              value={profile.home.backupWh}
+              onChange={(backupWh) => update({ ...profile, home: { ...profile.home, backupWh } })}
             />
           )}
           <div className="sm:col-span-2">
@@ -592,11 +614,28 @@ export function HouseholdWizard({
                             onChange={(daysSupply) => setNeed(person, kind, { daysSupply })}
                           />
                         ) : (
-                          <NumberField
-                            label="Power draw (watts, if known)"
-                            value={need.watts}
-                            onChange={(watts) => setNeed(person, kind, { watts })}
-                          />
+                          <div className="space-y-1">
+                            <NumberField
+                              label="Power draw (watts, from the label)"
+                              value={need.watts}
+                              onChange={(watts) => setNeed(person, kind, { watts })}
+                            />
+                            {need.watts === undefined && (
+                              <div className="flex flex-wrap gap-1 text-xs text-zinc-400">
+                                <span>Not sure? Typical:</span>
+                                {TYPICAL_DEVICES.map((device) => (
+                                  <button
+                                    key={device.label}
+                                    type="button"
+                                    className="underline hover:text-zinc-200"
+                                    onClick={() => setNeed(person, kind, { watts: device.watts })}
+                                  >
+                                    {device.label} (~{device.watts} W)
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}

@@ -16,6 +16,7 @@ These play the app against a real model, so they need a running server and a pro
 | `priya` | Priya, the busy caregiver | Heat wave | An older parent on a 300 W oxygen concentrator with 6 days of medication; a 1000 W power station |
 | `morgan` | Morgan, the community organiser | Hurricane | A generator and radios that neighbours will rely on; elderly neighbours living alone |
 | `jordan` | Jordan, the experienced practitioner | Wildfire | Well supplied, but with two horses to evacuate down a one-way dirt road |
+| `charlotte` | Regional case | Hurricane | Inland Carolinas: rain flooding, wind, tornadoes and a long outage; two Great Danes (calorie and water math) and a CPAP on a 2,048 Wh power station |
 | `minimal` | Edge case | Surprise | Almost nothing provided: the engine must treat the rest as unknown |
 | `privacy` | Edge case | Earthquake | Names, an address and a phone number typed into free-text notes |
 
