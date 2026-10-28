@@ -34,6 +34,7 @@ const turnInput = {
   new_inject: "[Person 1] reports the furnace is silent.",
   critical_alerts: ["Heat source offline"],
   suggested_actions: [],
+  response_options: [],
   scenario_status: "ongoing",
 };
 
@@ -217,7 +218,7 @@ describe("POST /api/ttx", () => {
       toolName: "after_action_report",
     });
     // Decision D8: a review of decisions, not a grade.
-    expect(systemText(model)).toContain("Don't grade or score the participant.");
+    expect(systemText(model)).toContain("Don't grade, score or give a verdict.");
   });
 });
 

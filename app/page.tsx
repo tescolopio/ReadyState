@@ -7,20 +7,30 @@ import {
   AlertTriangle,
   ClipboardCheck,
   Clock,
+  Home,
   Loader2,
+  Play,
   RotateCcw,
   Send,
   ShieldCheck,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from "react";
 
 import { AlwaysMaskCard } from "@/components/always-mask";
+import { HouseholdWizard } from "@/components/household-wizard";
 import { ProviderSettingsCard } from "@/components/provider-settings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { describeHousehold, hasProfile } from "@/lib/household";
 import {
   TARGET_DURATION_HOURS,
   deriveTtxState,
@@ -31,6 +41,7 @@ import {
   type TurnOutput,
 } from "@/lib/ttx";
 import type { ServerConfig } from "@/lib/providers";
+import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { maskInput, unmaskOutput } from "@/utils/obfuscator";
@@ -38,8 +49,8 @@ import { maskInput, unmaskOutput } from "@/utils/obfuscator";
 const PHASE_LABELS: Record<TtxPhase, string> = {
   baseline: "PHASE 1 // BASELINE",
   loop: "PHASE 2 // ACTION & INJECT",
-  ended: "PHASE 3 // END CONDITION",
-  aar: "PHASE 4 // AFTER-ACTION REPORT",
+  ended: "PHASE 3 // EXERCISE COMPLETE",
+  aar: "PHASE 4 // DEBRIEF",
 };
 
 const PLACEHOLDERS: Record<TtxPhase, string> = {
@@ -50,7 +61,7 @@ const PLACEHOLDERS: Record<TtxPhase, string> = {
   aar: "Exercise complete — reset to run a new scenario.",
 };
 
-const AAR_REQUEST = "Exercise ended. Generate the After-Action Report.";
+const AAR_REQUEST = "The exercise is over. Please prepare the debrief.";
 
 /** API errors arrive as the raw response body, usually `{ "error": "..." }`. */
 const errorText = (error: Error) => {
@@ -101,14 +112,37 @@ export default function TtxDashboard() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Wraps submission so raw text is sanitized before it reaches chat state / the API.
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const household = useHouseholdStore((state) => state.profile);
+  // The household profile lives in localStorage, which the server render can't see.
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sanitizes raw text before it reaches chat state / the API.
+  const submitText = (raw: string) => {
+    const text = raw.trim();
+    if (!text || inputLocked) return;
+    setInput("");
+    void sendMessage({ text: maskInput(text) });
+  };
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const raw = input.trim();
-    if (!raw || inputLocked) return;
-    setInput("");
-    void sendMessage({ text: maskInput(raw) });
+    submitText(input);
   };
+  const startWithHousehold = (baseline: string) => {
+    setWizardOpen(false);
+    submitText(baseline);
+  };
+  // Guided responses fill the box rather than sending, so the participant can edit them.
+  const chooseOption = (option: string) => {
+    setInput(unmaskOutput(option));
+    inputRef.current?.focus();
+  };
+  const options = ttx.phase === "loop" && !busy ? (ttx.latestTurn?.response_options ?? []) : [];
 
   const requestAfterActionReport = () => {
     if (busy) return;
@@ -135,7 +169,7 @@ export default function TtxDashboard() {
           <Activity className="h-5 w-5 text-emerald-400" aria-hidden />
           <h1 className="font-mono text-sm font-semibold tracking-widest">
             READYSTATE{" "}
-            <span className="text-zinc-500">{"// TTX CONTROL PLANE"}</span>
+            <span className="text-zinc-500">{"// PRACTICE EXERCISE"}</span>
           </h1>
           <Badge variant="outline" className="font-mono">
             {PHASE_LABELS[ttx.phase]}
@@ -169,20 +203,40 @@ export default function TtxDashboard() {
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col p-0">
             <ScrollArea className="h-[60vh] flex-1 px-4 py-4 lg:h-[calc(100vh-15rem)]">
-              {messages.length === 0 && (
-                <div className="rounded-lg border border-dashed border-zinc-800 p-6 text-sm text-zinc-400">
-                  <p className="font-mono text-xs uppercase tracking-widest text-zinc-500">
-                    Awaiting baseline parameters
-                  </p>
-                  <p className="mt-2">
-                    Describe your household, supplies, and constraints. Names,
-                    pets, places, addresses and contact details are replaced
-                    with tags like{" "}
-                    <code className="text-zinc-200">[Person 1]</code> before
-                    anything leaves your browser.
-                  </p>
-                </div>
-              )}
+              {messages.length === 0 &&
+                (wizardOpen ? (
+                  <HouseholdWizard onStart={startWithHousehold} onClose={() => setWizardOpen(false)} />
+                ) : (
+                  <div className="space-y-3 rounded-lg border border-dashed border-zinc-800 p-6 text-sm text-zinc-400">
+                    <p className="font-mono text-xs uppercase tracking-widest text-zinc-500">
+                      Awaiting baseline parameters
+                    </p>
+                    <p>
+                      Set up your household step by step, as briefly or in as much detail as
+                      you like, or describe it in your own words below. Names, pets, places,
+                      addresses and contact details are replaced with tags like{" "}
+                      <code className="text-zinc-200">[Person 1]</code> before anything leaves
+                      your browser.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" onClick={() => setWizardOpen(true)}>
+                        <Home className="h-4 w-4" aria-hidden />
+                        {hydrated && hasProfile(household) ? "Review my household" : "Set up my household"}
+                      </Button>
+                      {hydrated && hasProfile(household) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => startWithHousehold(describeHousehold(household))}
+                          disabled={inputLocked}
+                        >
+                          <Play className="h-4 w-4" aria-hidden />
+                          Start with my saved household
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               <div className="space-y-4">
                 {messages.map((message) => (
                   <MessageBubble key={message.id} message={message} />
@@ -210,21 +264,52 @@ export default function TtxDashboard() {
                   disabled={busy}
                 >
                   <ClipboardCheck className="h-4 w-4" aria-hidden />
-                  Review the exercise
+                  Debrief: what we learned
                 </Button>
               ) : (
-                <form onSubmit={handleSubmit} className="flex gap-2">
-                  <Input
-                    value={input}
-                    onChange={(event) => setInput(event.target.value)}
-                    placeholder={PLACEHOLDERS[ttx.phase]}
-                    disabled={inputLocked}
-                    aria-label="Exercise input"
-                  />
-                  <Button type="submit" disabled={inputLocked || !input.trim()}>
-                    <Send className="h-4 w-4" aria-hidden />
-                    Submit response
-                  </Button>
+                <form onSubmit={handleSubmit} className="space-y-2">
+                  {options.length > 0 && (
+                    <fieldset>
+                      <legend className="mb-2 font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+                        Choose a response to start from, or write your own
+                      </legend>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {options.map((option, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => chooseOption(option)}
+                            className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-left text-sm text-zinc-200 hover:border-sky-600 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                          >
+                            {unmaskOutput(option)}
+                          </button>
+                        ))}
+                      </div>
+                    </fieldset>
+                  )}
+                  <div className="flex gap-2">
+                    <textarea
+                      ref={inputRef}
+                      value={input}
+                      rows={3}
+                      onChange={(event) => setInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        // Enter adds a line; Ctrl/Cmd+Enter sends.
+                        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                          event.preventDefault();
+                          submitText(input);
+                        }
+                      }}
+                      placeholder={PLACEHOLDERS[ttx.phase]}
+                      disabled={inputLocked}
+                      aria-label="Your response"
+                      className="min-h-[4.5rem] w-full resize-y rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                    <Button type="submit" className="self-end" disabled={inputLocked || !input.trim()}>
+                      <Send className="h-4 w-4" aria-hidden />
+                      Submit response
+                    </Button>
+                  </div>
                 </form>
               )}
             </div>
@@ -234,20 +319,21 @@ export default function TtxDashboard() {
         <aside className="flex flex-col gap-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-red-400">
+              <CardTitle className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-amber-400">
                 <AlertTriangle className="h-4 w-4" aria-hidden />
-                Critical Alerts
+                Needs attention
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
               {alerts.length === 0 ? (
-                <p className="text-sm text-zinc-500">No active alerts.</p>
+                <p className="text-sm text-zinc-500">Nothing needs attention right now.</p>
               ) : (
+                // Steady, not pulsing: exercise events shouldn't look like live alarms.
                 alerts.map((alert, index) => (
                   <Badge
                     key={`${alert}-${index}`}
-                    variant="destructive"
-                    className="animate-pulse whitespace-normal text-left"
+                    variant="outline"
+                    className="whitespace-normal border-amber-700 text-left text-amber-200"
                   >
                     {unmaskOutput(alert)}
                   </Badge>
@@ -445,11 +531,11 @@ function ReportView({ report }: { report?: DeepPartial<AfterActionReport> }) {
   if (!report) return null;
   return (
     <div className="space-y-3">
-      <p className="font-mono text-xs uppercase tracking-widest text-zinc-300">Exercise review</p>
+      <p className="font-mono text-xs uppercase tracking-widest text-zinc-300">Debrief</p>
       {report.summary && <p className="text-sm">{unmaskOutput(report.summary)}</p>}
-      <ItemList title="What went well" items={report.strengths} />
-      <ItemList title="Gaps revealed" items={report.supply_gaps} />
-      <ItemList title="Your action plan" items={report.recommendations} />
+      <ItemList title="What you need to know" items={report.need_to_know} />
+      <ItemList title="What you can do better" items={report.do_better} />
+      <ItemList title="What went well" items={report.went_well} />
       <p className="text-xs text-zinc-500">
         Completing an exercise is practice, not proof of real-world readiness.
       </p>

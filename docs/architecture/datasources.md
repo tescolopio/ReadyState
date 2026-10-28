@@ -17,7 +17,7 @@ To generate realistic inciting incidents and weather-related injects, the LLM mu
 
 ## 2. Household logistics and supply baselines
 
-The system needs a standard checklist to grade the user's initial supply stash and calculate daily consumption rates.
+The system needs a standard checklist to compare against the household's supplies and calculate daily consumption rates.
 
 - **FEMA / Ready.gov Basic Emergency Supply Kit:** the federal baseline for per-person water (1 gallon per day), food, first aid components and shelter-in-place tools (for example N95 masks and utility shutoff tools).
   - Data source: [Ready.gov Build a Kit](https://www.ready.gov/kit)
@@ -62,14 +62,14 @@ Many chronic illnesses require hardware that depends on continuous electricity.
 
 ### 5.3 Off-grid triage and minor illness protocols
 
-To grade a user's response to injuries and illness (like a bee sting or a stomach bug), the AI needs clinical standards for delayed-care environments.
+To give sound feedback on a response to injuries and illness (like a bee sting or a stomach bug), the AI needs clinical standards for delayed-care environments.
 
 - **Data source:** Wilderness Medical Society (WMS) clinical practice guidelines, and American Red Cross wilderness first aid material. Both are copyrighted: cite and paraphrase, don't copy.
 - **Application in ReadyState:** these sources describe how to manage conditions when emergency services are unavailable. If the AI injects a severe allergic reaction and the user treats it with an over-the-counter antihistamine instead of an epinephrine auto-injector, the AI escalates the respiratory condition on the next turn.
 
 ### 5.4 Prescription stockpile baselines
 
-The AI needs to know what a realistic medication stockpile looks like to grade the user's preparations.
+The AI needs to know what a realistic medication stockpile looks like to compare with the household's preparations.
 
 - **Data source:** CDC emergency continuity-of-care guidelines.
 - **Application in ReadyState:** guidance generally recommends keeping at least a one- to two-week emergency supply of essential daily medications, to bridge sudden-onset disasters that disrupt pharmacies. The AI can ask how many days of buffer the household actually keeps. If they have a 3-day supply and a blizzard traps them for a week, the AI plays out the consequences of running out.

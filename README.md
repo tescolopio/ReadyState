@@ -34,6 +34,7 @@ Scripts: `npm run dev`, `npm run build`, `npm start`, `npm run lint`, `npm run t
 | Path | Purpose |
 | --- | --- |
 | `store/usePrivacyStore.ts` | In-memory Zustand ledger (`entityMap`: tag → real value) and the always-mask name list. |
+| `lib/household.ts` / `store/useHouseholdStore.ts` | Structured household profile from the setup wizard (`components/household-wizard.tsx`), saved in this browser only. `describeHousehold` turns it into the attribute summary the engine sees: needs as functional tags, no names or medication names, and skipped sections marked unknown. |
 | `store/useSettingsStore.ts` | Self-hosted provider choice and API key, persisted to this browser's `localStorage`. |
 | `utils/obfuscator.ts` | `maskInput` replaces people, pets, places, street addresses, postcodes, phones, emails, URLs and ID numbers with tags (`[Person 1]`, `[Pet 1]`, `[Phone 1]`, …) using patterns, context rules ("my wife Priya", "our dog Max"), compromise NLP and the user's always-mask list. `unmaskOutput` restores them. Tested against `utils/masking-corpus.ts`. |
 | `lib/ttx.ts` | Zod schemas for the `generate_turn` and `after_action_report` tools, `deriveTtxState` (the TTX state machine) and `buildExercisePrompt` (compact per-call briefing). |
@@ -58,8 +59,8 @@ Further reading:
 
 1. **Baseline** – sanitized household parameters → inciting incident.
 2. **Action & Inject** – each action returns `{ narrative_response, time_elapsed, hours_elapsed, new_inject, critical_alerts, scenario_status }`, and the clock advances.
-3. **End condition** – the model reports `failed`, or the participant survives `TARGET_DURATION_HOURS` (72).
-4. **After-Action Report** – structured grade, strengths, supply gaps and recommendations.
+3. **Exercise complete** – after `TARGET_DURATION_HOURS` (72) in-game hours. There's no win or lose: setbacks are things to respond to, and feedback on each response says what you covered, what to consider and why it matters.
+4. **Debrief** – what you need to know about your situation, what you can do better, and what went well. No grade.
 
 Real names and places never leave the browser: only the masked text is sent to `/api/ttx`, and tags are restored client-side before rendering.
 
