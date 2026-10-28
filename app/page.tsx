@@ -49,8 +49,8 @@ import { maskInput, unmaskOutput } from "@/utils/obfuscator";
 const PHASE_LABELS: Record<TtxPhase, string> = {
   baseline: "PHASE 1 // BASELINE",
   loop: "PHASE 2 // ACTION & INJECT",
-  ended: "PHASE 3 // END CONDITION",
-  aar: "PHASE 4 // AFTER-ACTION REPORT",
+  ended: "PHASE 3 // EXERCISE COMPLETE",
+  aar: "PHASE 4 // DEBRIEF",
 };
 
 const PLACEHOLDERS: Record<TtxPhase, string> = {
@@ -61,7 +61,7 @@ const PLACEHOLDERS: Record<TtxPhase, string> = {
   aar: "Exercise complete — reset to run a new scenario.",
 };
 
-const AAR_REQUEST = "Exercise ended. Generate the After-Action Report.";
+const AAR_REQUEST = "The exercise is over. Please prepare the debrief.";
 
 /** API errors arrive as the raw response body, usually `{ "error": "..." }`. */
 const errorText = (error: Error) => {
@@ -169,7 +169,7 @@ export default function TtxDashboard() {
           <Activity className="h-5 w-5 text-emerald-400" aria-hidden />
           <h1 className="font-mono text-sm font-semibold tracking-widest">
             READYSTATE{" "}
-            <span className="text-zinc-500">{"// TTX CONTROL PLANE"}</span>
+            <span className="text-zinc-500">{"// PRACTICE EXERCISE"}</span>
           </h1>
           <Badge variant="outline" className="font-mono">
             {PHASE_LABELS[ttx.phase]}
@@ -264,7 +264,7 @@ export default function TtxDashboard() {
                   disabled={busy}
                 >
                   <ClipboardCheck className="h-4 w-4" aria-hidden />
-                  Review the exercise
+                  Debrief: what we learned
                 </Button>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-2">
@@ -319,20 +319,21 @@ export default function TtxDashboard() {
         <aside className="flex flex-col gap-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-red-400">
+              <CardTitle className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-amber-400">
                 <AlertTriangle className="h-4 w-4" aria-hidden />
-                Critical Alerts
+                Needs attention
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
               {alerts.length === 0 ? (
-                <p className="text-sm text-zinc-500">No active alerts.</p>
+                <p className="text-sm text-zinc-500">Nothing needs attention right now.</p>
               ) : (
+                // Steady, not pulsing: exercise events shouldn't look like live alarms.
                 alerts.map((alert, index) => (
                   <Badge
                     key={`${alert}-${index}`}
-                    variant="destructive"
-                    className="animate-pulse whitespace-normal text-left"
+                    variant="outline"
+                    className="whitespace-normal border-amber-700 text-left text-amber-200"
                   >
                     {unmaskOutput(alert)}
                   </Badge>
@@ -530,11 +531,11 @@ function ReportView({ report }: { report?: DeepPartial<AfterActionReport> }) {
   if (!report) return null;
   return (
     <div className="space-y-3">
-      <p className="font-mono text-xs uppercase tracking-widest text-zinc-300">Exercise review</p>
+      <p className="font-mono text-xs uppercase tracking-widest text-zinc-300">Debrief</p>
       {report.summary && <p className="text-sm">{unmaskOutput(report.summary)}</p>}
-      <ItemList title="What went well" items={report.strengths} />
-      <ItemList title="Gaps revealed" items={report.supply_gaps} />
-      <ItemList title="Your action plan" items={report.recommendations} />
+      <ItemList title="What you need to know" items={report.need_to_know} />
+      <ItemList title="What you can do better" items={report.do_better} />
+      <ItemList title="What went well" items={report.went_well} />
       <p className="text-xs text-zinc-500">
         Completing an exercise is practice, not proof of real-world readiness.
       </p>

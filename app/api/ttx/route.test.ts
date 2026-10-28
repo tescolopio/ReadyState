@@ -218,7 +218,7 @@ describe("POST /api/ttx", () => {
       toolName: "after_action_report",
     });
     // Decision D8: a review of decisions, not a grade.
-    expect(systemText(model)).toContain("Don't grade or score the participant.");
+    expect(systemText(model)).toContain("Don't grade, score or give a verdict.");
   });
 });
 
