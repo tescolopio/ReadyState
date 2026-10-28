@@ -7,20 +7,30 @@ import {
   AlertTriangle,
   ClipboardCheck,
   Clock,
+  Home,
   Loader2,
+  Play,
   RotateCcw,
   Send,
   ShieldCheck,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from "react";
 
 import { AlwaysMaskCard } from "@/components/always-mask";
+import { HouseholdWizard } from "@/components/household-wizard";
 import { ProviderSettingsCard } from "@/components/provider-settings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { describeHousehold, hasProfile } from "@/lib/household";
 import {
   TARGET_DURATION_HOURS,
   deriveTtxState,
@@ -31,6 +41,7 @@ import {
   type TurnOutput,
 } from "@/lib/ttx";
 import type { ServerConfig } from "@/lib/providers";
+import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { maskInput, unmaskOutput } from "@/utils/obfuscator";
@@ -101,14 +112,37 @@ export default function TtxDashboard() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Wraps submission so raw text is sanitized before it reaches chat state / the API.
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const household = useHouseholdStore((state) => state.profile);
+  // The household profile lives in localStorage, which the server render can't see.
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sanitizes raw text before it reaches chat state / the API.
+  const submitText = (raw: string) => {
+    const text = raw.trim();
+    if (!text || inputLocked) return;
+    setInput("");
+    void sendMessage({ text: maskInput(text) });
+  };
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const raw = input.trim();
-    if (!raw || inputLocked) return;
-    setInput("");
-    void sendMessage({ text: maskInput(raw) });
+    submitText(input);
   };
+  const startWithHousehold = (baseline: string) => {
+    setWizardOpen(false);
+    submitText(baseline);
+  };
+  // Guided responses fill the box rather than sending, so the participant can edit them.
+  const chooseOption = (option: string) => {
+    setInput(unmaskOutput(option));
+    inputRef.current?.focus();
+  };
+  const options = ttx.phase === "loop" && !busy ? (ttx.latestTurn?.response_options ?? []) : [];
 
   const requestAfterActionReport = () => {
     if (busy) return;
@@ -169,20 +203,40 @@ export default function TtxDashboard() {
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col p-0">
             <ScrollArea className="h-[60vh] flex-1 px-4 py-4 lg:h-[calc(100vh-15rem)]">
-              {messages.length === 0 && (
-                <div className="rounded-lg border border-dashed border-zinc-800 p-6 text-sm text-zinc-400">
-                  <p className="font-mono text-xs uppercase tracking-widest text-zinc-500">
-                    Awaiting baseline parameters
-                  </p>
-                  <p className="mt-2">
-                    Describe your household, supplies, and constraints. Names,
-                    pets, places, addresses and contact details are replaced
-                    with tags like{" "}
-                    <code className="text-zinc-200">[Person 1]</code> before
-                    anything leaves your browser.
-                  </p>
-                </div>
-              )}
+              {messages.length === 0 &&
+                (wizardOpen ? (
+                  <HouseholdWizard onStart={startWithHousehold} onClose={() => setWizardOpen(false)} />
+                ) : (
+                  <div className="space-y-3 rounded-lg border border-dashed border-zinc-800 p-6 text-sm text-zinc-400">
+                    <p className="font-mono text-xs uppercase tracking-widest text-zinc-500">
+                      Awaiting baseline parameters
+                    </p>
+                    <p>
+                      Set up your household step by step, as briefly or in as much detail as
+                      you like, or describe it in your own words below. Names, pets, places,
+                      addresses and contact details are replaced with tags like{" "}
+                      <code className="text-zinc-200">[Person 1]</code> before anything leaves
+                      your browser.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" onClick={() => setWizardOpen(true)}>
+                        <Home className="h-4 w-4" aria-hidden />
+                        {hydrated && hasProfile(household) ? "Review my household" : "Set up my household"}
+                      </Button>
+                      {hydrated && hasProfile(household) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => startWithHousehold(describeHousehold(household))}
+                          disabled={inputLocked}
+                        >
+                          <Play className="h-4 w-4" aria-hidden />
+                          Start with my saved household
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               <div className="space-y-4">
                 {messages.map((message) => (
                   <MessageBubble key={message.id} message={message} />
@@ -213,18 +267,49 @@ export default function TtxDashboard() {
                   Review the exercise
                 </Button>
               ) : (
-                <form onSubmit={handleSubmit} className="flex gap-2">
-                  <Input
-                    value={input}
-                    onChange={(event) => setInput(event.target.value)}
-                    placeholder={PLACEHOLDERS[ttx.phase]}
-                    disabled={inputLocked}
-                    aria-label="Exercise input"
-                  />
-                  <Button type="submit" disabled={inputLocked || !input.trim()}>
-                    <Send className="h-4 w-4" aria-hidden />
-                    Submit response
-                  </Button>
+                <form onSubmit={handleSubmit} className="space-y-2">
+                  {options.length > 0 && (
+                    <fieldset>
+                      <legend className="mb-2 font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+                        Choose a response to start from, or write your own
+                      </legend>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {options.map((option, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => chooseOption(option)}
+                            className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-left text-sm text-zinc-200 hover:border-sky-600 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                          >
+                            {unmaskOutput(option)}
+                          </button>
+                        ))}
+                      </div>
+                    </fieldset>
+                  )}
+                  <div className="flex gap-2">
+                    <textarea
+                      ref={inputRef}
+                      value={input}
+                      rows={3}
+                      onChange={(event) => setInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        // Enter adds a line; Ctrl/Cmd+Enter sends.
+                        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                          event.preventDefault();
+                          submitText(input);
+                        }
+                      }}
+                      placeholder={PLACEHOLDERS[ttx.phase]}
+                      disabled={inputLocked}
+                      aria-label="Your response"
+                      className="min-h-[4.5rem] w-full resize-y rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                    <Button type="submit" className="self-end" disabled={inputLocked || !input.trim()}>
+                      <Send className="h-4 w-4" aria-hidden />
+                      Submit response
+                    </Button>
+                  </div>
                 </form>
               )}
             </div>

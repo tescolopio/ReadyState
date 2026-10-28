@@ -398,6 +398,8 @@ const findTagFor = (realValue: string, entityMap: Record<string, string>) => {
 export interface MaskOptions {
   /** Names to mask wherever they appear, even when no detector catches them. */
   alwaysMask?: string[];
+  /** Return the masked text without recording anything in the ledger (for previews). */
+  dryRun?: boolean;
 }
 
 /**
@@ -428,6 +430,8 @@ export function maskInput(text: string, options: MaskOptions = {}): string {
     ...Object.values(initialMap).map((value) => ({ value, kind: "Person" as const })),
   );
 
+  // Work on a copy so a dry run (a preview) leaves the real ledger untouched.
+  const ledger = { ...initialMap };
   const replacements = new Map<string, string>();
   for (const { value, kind } of detected) {
     const realValue = cleanEntity(value);
@@ -435,11 +439,11 @@ export function maskInput(text: string, options: MaskOptions = {}): string {
     const key = realValue.toLowerCase();
     if (replacements.has(key)) continue;
 
-    const { entityMap, addMapping } = usePrivacyStore.getState();
-    let tag = findTagFor(realValue, entityMap);
+    let tag = findTagFor(realValue, ledger);
     if (!tag) {
-      tag = nextTag(kind, entityMap);
-      addMapping(realValue, tag);
+      tag = nextTag(kind, ledger);
+      ledger[tag] = realValue;
+      if (!options.dryRun) usePrivacyStore.getState().addMapping(realValue, tag);
     }
     replacements.set(key, tag);
   }

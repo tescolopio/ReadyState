@@ -64,6 +64,12 @@ describe("masking details", () => {
       "[Person 1] has the radio.",
     );
   });
+
+  it("previews masking without touching the ledger", () => {
+    maskInput("My wife Priya is diabetic.");
+    expect(maskInput("Priya and our dog Max.", { dryRun: true })).toBe("[Person 1] and our dog [Pet 1].");
+    expect(usePrivacyStore.getState().entityMap).toEqual({ "[Person 1]": "Priya" });
+  });
 });
 
 describe("obfuscator", () => {
