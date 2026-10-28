@@ -27,7 +27,7 @@ npm run dev                           # or: npm run build && npm start
 
 Then pick a provider and paste your API key in the app's **Model Provider** panel, or set keys in `.env.local`. Supported providers are Groq (default), Google Gemini, Cerebras, OpenRouter, Ollama (local, no key) and any OpenAI-compatible endpoint. Keep self-hosted instances on localhost or a trusted network; see the [security notes](docs/architecture/deployment-modes.md#security-notes).
 
-Scripts: `npm run dev`, `npm run build`, `npm start`, `npm run lint`, `npm test` (Vitest).
+Scripts: `npm run dev`, `npm run build`, `npm start`, `npm run lint`, `npm run typecheck`, `npm test` (Vitest). CI (`.github/workflows/ci.yml`) runs all of these plus a Docker smoke test on every PR.
 
 ## Architecture
 
