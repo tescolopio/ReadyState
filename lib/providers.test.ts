@@ -76,6 +76,18 @@ describe("resolveModel", () => {
     ).toMatchObject({ ok: true, provider: "custom" });
   });
 
+  it("never sends the server's key to a base URL chosen in the browser", () => {
+    vi.stubEnv("CUSTOM_API_KEY", "server-key");
+    vi.stubEnv("READYSTATE_BASE_URL", "");
+    const resolved = resolveModel("self-hosted", {
+      provider: "custom",
+      model: "m",
+      baseURL: "http://attacker.example/v1",
+    });
+    const sent = new Headers((modelOf(resolved) as unknown as { config: { headers: () => HeadersInit } }).config.headers());
+    expect(sent.get("authorization")).toBe("Bearer not-needed");
+  });
+
   it("does not let settings override fixed provider endpoints", () => {
     vi.stubEnv("GROQ_API_KEY", "server-key");
     const resolved = resolveModel("self-hosted", {

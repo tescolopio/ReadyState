@@ -59,10 +59,15 @@ const mockToolCallModel = (toolName: string, input: unknown) =>
     }),
   });
 
-const post = (messages: unknown, settings?: unknown) =>
+const post = (
+  messages: unknown,
+  settings?: unknown,
+  headers: Record<string, string> = { "content-type": "application/json" },
+) =>
   POST(
     new Request("http://localhost/api/ttx", {
       method: "POST",
+      headers,
       body: JSON.stringify({ messages, settings }),
     }),
   );
@@ -99,6 +104,27 @@ describe("POST /api/ttx", () => {
     env.model = mockToolCallModel("generate_turn", turnInput);
     const res = await post([userMessage], { provider: "nope" });
     expect(res.status).toBe(400);
+  });
+
+  it("rejects requests that could come from another website", async () => {
+    // A cross-site form or no-cors fetch can only send "simple" content types.
+    expect((await post([], undefined, { "content-type": "text/plain" })).status).toBe(415);
+    const crossOrigin = await post([], undefined, {
+      "content-type": "application/json",
+      host: "localhost:3000",
+      origin: "https://attacker.example",
+    });
+    expect(crossOrigin.status).toBe(403);
+    expect(env.resolveCalls).toEqual([]);
+  });
+
+  it("accepts same-origin requests from the app's page", async () => {
+    const response = await post([], undefined, {
+      "content-type": "application/json",
+      host: "localhost:3000",
+      origin: "http://localhost:3000",
+    });
+    expect(response.status).toBe(400); // past the guard, then the empty payload is rejected
   });
 
   it("rejects invalid payloads", async () => {
