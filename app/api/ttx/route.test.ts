@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TtxUIMessage } from "@/lib/ttx";
 
 import type { HostedServices } from "@/lib/hosted";
+import { SAFETY_RULES } from "@/lib/rules";
 
 const env = vi.hoisted(() => ({
   model: null as unknown,
@@ -173,6 +174,8 @@ describe("POST /api/ttx", () => {
     });
     expect(model.doStreamCalls[0].reasoning).toBe("medium");
     expect(systemText(model)).toContain("There is no game over");
+    // Every safety rule in data/rules/safety.json reaches the model.
+    for (const rule of SAFETY_RULES) expect(systemText(model)).toContain(rule.prompt);
     const sent = model.doStreamCalls[0].prompt.filter((m) => m.role !== "system");
     expect(sent).toEqual([
       {

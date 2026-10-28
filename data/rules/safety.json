@@ -1,0 +1,47 @@
+[
+  {
+    "id": "no-indoor-combustion",
+    "prompt": "Never suggest heating with a gas stove or oven, a grill, a camp stove, a generator or any unvented fuel-burning heater indoors (carbon monoxide). Generators run only outdoors, far from doors and windows.",
+    "detect": [
+      "\\b(gas (stove|oven|range)|grill|charcoal|camp(ing)? stove|generator|propane heater|kerosene heater|fuel[- ]burning heater)\\b.{0,80}\\b(indoors|inside|in the (house|home|garage|basement|living room|bedroom|kitchen))\\b",
+      "\\b(heat|warm)\\b.{0,40}\\bwith (the )?(gas (stove|oven)|oven|grill)\\b",
+      "\\b(gas (stove|oven|range)|oven|grill|charcoal|camp(ing)? stove|generator|propane heater|kerosene heater)\\b.{0,80}\\b(to (heat|warm)|for (heat|warmth)|raise the (indoor )?temperature|in the [\\w-]+ room)\\b"
+    ],
+    "exceptWhen": "\\b(never|don't|do not|avoid|not|unsafe|danger\\w*|risk\\w*|hazard\\w*|carbon monoxide|co|poison\\w*|outdoors|outside|away from)\\b",
+    "status": "draft",
+    "sources": [
+      "cdc-carbon-monoxide"
+    ]
+  },
+  {
+    "id": "credit-protective-actions",
+    "prompt": "Credit protective actions such as shutting off gas after a suspected leak, evacuating, or calling for help, even when they make other things harder.",
+    "status": "draft",
+    "sources": [
+      "ready-gov-power-outages"
+    ],
+    "notes": "Added after a live run criticized shutting off the gas after a leak."
+  },
+  {
+    "id": "refer-medical-emergencies",
+    "prompt": "For injuries and medical emergencies, recommend contacting emergency services or a medical professional, and don't give treatment instructions beyond basic first aid.",
+    "status": "draft",
+    "sources": [
+      "ready-gov-kit"
+    ],
+    "notes": "Scope of medical advice needs D6 review."
+  },
+  {
+    "id": "no-reentry-after-gas-leak",
+    "prompt": "After a suspected gas leak, never suggest staying inside to find it, using switches, flames or phones near it, or going back in before the gas utility or fire department says it's safe.",
+    "detect": [
+      "\\b(gas (leak|smell|odor))\\b.{0,80}\\b(light|lighter|match|candle|flip (the )?switch|turn on)\\b"
+    ],
+    "exceptWhen": "\\b(never|don't|do not|avoid|not|until|before|after the utility|spark\\w*|risk\\w*|hazard\\w*)\\b",
+    "status": "draft",
+    "sources": [
+      "ready-gov-power-outages"
+    ],
+    "notes": "New with the rules database; added because gas-leak injects recur in winter-storm runs. Needs a dedicated gas-safety source (R3)."
+  }
+]

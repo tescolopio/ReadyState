@@ -19,7 +19,7 @@ Each turn ───────► 2. Look-fors for this stage ──┤
 
 ## 1. Inventory check (built)
 
-`lib/inventory.ts` compares the household profile with published guidance, without the model:
+`lib/inventory.ts` compares the household profile with published guidance, without the model. The checks are rules in `data/rules/inventory.json` ([Rules database](rules.md)):
 - Water and food against 3 days and 2 weeks.
 - Pet food, and pet-friendly shelter planning.
 - Medication against 7 days, plus a cold chain for refrigerated medication.
@@ -47,7 +47,7 @@ A *look-for* is something a sound response should cover at a given stage of a gi
 | First day | 6–24 | Supplies, communication, checking on others |
 | Days 2–3 | 24–72 | Sustaining people, pets and medication, sanitation, morale, deciding when to leave |
 
-**A look-for record:**
+**A look-for record.** A first draft library for power outages and winter storms is in `data/rules/look-fors.json` (see [Rules database](rules.md)):
 
 ```ts
 interface LookFor {

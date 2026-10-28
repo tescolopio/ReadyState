@@ -1,0 +1,186 @@
+[
+  {
+    "id": "outage.warning.stay-informed",
+    "scenarios": ["power-outage", "winter-storm", "heat-wave"],
+    "stage": "warning",
+    "task": "Has a way to get official updates without power: a battery or hand-crank radio, a charged phone, or alerts turned on.",
+    "why": "Warnings, warming or cooling centers and restoration times come through official channels.",
+    "status": "draft",
+    "sources": ["ready-gov-power-outages"]
+  },
+  {
+    "id": "outage.warning.charge-and-fill",
+    "scenarios": ["power-outage", "winter-storm"],
+    "stage": "warning",
+    "task": "Uses the warning time: charges phones and batteries, fills water containers, and gets cash and fuel if a long outage is likely.",
+    "why": "Power, water pressure and card payments can all fail once the outage starts.",
+    "status": "draft",
+    "sources": ["ready-gov-power-outages"]
+  },
+  {
+    "id": "outage.first-hours.safe-light-heat",
+    "scenarios": ["power-outage", "winter-storm"],
+    "stage": "first-hours",
+    "task": "Uses flashlights rather than candles, and keeps warm without any fuel-burning heater, stove or generator indoors.",
+    "why": "Candles cause house fires during outages, and indoor combustion causes carbon monoxide poisoning.",
+    "status": "draft",
+    "sources": ["ready-gov-power-outages", "cdc-carbon-monoxide"]
+  },
+  {
+    "id": "outage.first-hours.generator-outdoors",
+    "scenarios": ["power-outage", "winter-storm", "hurricane"],
+    "stage": "first-hours",
+    "when": { "fact": "home.backupPower", "in": ["generator", "standby"] },
+    "task": "Runs the generator only outdoors, well away from doors, windows and vents, and never in a garage.",
+    "why": "Generator exhaust kills quickly, even in a garage with the door open.",
+    "status": "draft",
+    "sources": ["cdc-carbon-monoxide"]
+  },
+  {
+    "id": "outage.first-hours.co-detector",
+    "scenarios": ["power-outage", "winter-storm"],
+    "stage": "first-hours",
+    "when": { "fact": "home.burnsFuel", "equals": true },
+    "task": "Checks that a battery carbon monoxide detector is working, and knows the symptoms (headache, dizziness, nausea).",
+    "why": "Carbon monoxide has no smell, and outages are when people improvise heat.",
+    "status": "draft",
+    "sources": ["cdc-carbon-monoxide"]
+  },
+  {
+    "id": "outage.first-hours.fridge-closed",
+    "scenarios": ["power-outage", "winter-storm", "heat-wave"],
+    "stage": "first-hours",
+    "task": "Keeps the refrigerator and freezer closed, and knows when perishable food must be thrown out.",
+    "why": "A closed refrigerator keeps food cold for about 4 hours; food held above 40 °F for more than 2 hours isn't safe.",
+    "status": "draft",
+    "sources": ["usda-power-outage-food"]
+  },
+  {
+    "id": "outage.first-hours.cold-medication",
+    "scenarios": ["power-outage", "winter-storm", "heat-wave"],
+    "stage": "first-hours",
+    "when": { "fact": "needs.kinds", "includes": "refrigerated-medication" },
+    "task": "Moves refrigerated medication into a cooler with ice packs, keeps it from freezing, and checks its temperature.",
+    "why": "Many refrigerated medications lose potency outside their storage range, whether too warm or frozen.",
+    "status": "draft",
+    "sources": ["cdc-disability-kit"],
+    "notes": "Needs D6 medical review."
+  },
+  {
+    "id": "outage.first-hours.powered-device",
+    "scenarios": ["power-outage", "winter-storm", "heat-wave", "hurricane"],
+    "stage": "first-hours",
+    "when": { "fact": "needs.kinds", "includes": "powered-device" },
+    "task": "Works out how long the medical device can run on backup power, and decides early where to go before it runs out.",
+    "why": "Waiting until the battery is nearly empty leaves no time to travel safely.",
+    "status": "draft",
+    "sources": ["cdc-disability-kit", "ready-gov-disabilities"],
+    "notes": "Needs D6 medical review."
+  },
+  {
+    "id": "winter.first-hours.one-warm-room",
+    "scenarios": ["winter-storm"],
+    "stage": "first-hours",
+    "task": "Gathers everyone in one room, closes it off, covers windows and dresses in layers.",
+    "why": "Heating less space keeps people warmer for longer without any heat source.",
+    "status": "draft",
+    "sources": ["ready-gov-winter"]
+  },
+  {
+    "id": "winter.first-hours.pipes",
+    "scenarios": ["winter-storm"],
+    "stage": "first-hours",
+    "when": { "fact": "home.type", "in": ["house", "townhouse", "mobile-home"] },
+    "task": "Protects pipes (dripping taps, open cabinet doors) and knows where the main water shutoff is.",
+    "why": "A burst pipe floods the home and cuts off water just when it's hardest to get help.",
+    "status": "draft",
+    "sources": ["ready-gov-winter"]
+  },
+  {
+    "id": "outage.first-day.water",
+    "scenarios": ["power-outage", "winter-storm", "heat-wave"],
+    "stage": "first-day",
+    "task": "Tracks stored water against 1 gallon per person per day, and has a plan if it runs low.",
+    "why": "Water runs out faster than people expect, and pumps and treatment can fail in long outages.",
+    "status": "draft",
+    "sources": ["ready-gov-kit"]
+  },
+  {
+    "id": "outage.first-day.check-on-others",
+    "scenarios": ["power-outage", "winter-storm", "heat-wave"],
+    "stage": "first-day",
+    "task": "Checks on neighbors, especially older people living alone, without putting the household at risk.",
+    "why": "Isolated older adults are among those most at risk in extended outages.",
+    "status": "draft",
+    "sources": ["ready-gov-power-outages"]
+  },
+  {
+    "id": "outage.first-day.communication",
+    "scenarios": ["power-outage", "winter-storm", "heat-wave"],
+    "stage": "first-day",
+    "task": "Saves phone battery and agrees how the household will stay in touch with family if networks fail.",
+    "why": "Cell networks overload or lose power; a written contact list and a check-in plan still work.",
+    "status": "draft",
+    "sources": ["ready-gov-kit"]
+  },
+  {
+    "id": "outage.first-day.pets",
+    "scenarios": ["power-outage", "winter-storm", "heat-wave"],
+    "stage": "first-day",
+    "when": { "fact": "pets.count", "gt": 0 },
+    "task": "Keeps pets warm or cool, fed and watered, and limits time outdoors in extreme weather.",
+    "why": "Animals are vulnerable to the same temperature extremes, and stressed pets may bolt.",
+    "status": "draft",
+    "sources": ["ready-gov-pets"]
+  },
+  {
+    "id": "outage.first-day.breathing",
+    "scenarios": ["power-outage", "winter-storm", "heat-wave"],
+    "stage": "first-day",
+    "when": { "fact": "needs.kinds", "includes": "air-quality" },
+    "task": "Plans for the person with a breathing condition: enough inhalers or medication, and avoiding cold air, smoke or heat triggers.",
+    "why": "Cold air, smoke and heat are common triggers, and pharmacies may be closed.",
+    "status": "draft",
+    "sources": ["cdc-disability-kit"],
+    "notes": "Needs D6 medical review."
+  },
+  {
+    "id": "outage.days-2-3.leave-point",
+    "scenarios": ["power-outage", "winter-storm", "heat-wave"],
+    "stage": "days-2-3",
+    "task": "Sets a clear point at which the household will leave (indoor temperature, supplies, health), and where it will go.",
+    "why": "Deciding in advance avoids leaving too late, when travel is harder and people are weaker.",
+    "status": "draft",
+    "sources": ["ready-gov-power-outages"]
+  },
+  {
+    "id": "outage.days-2-3.sanitation",
+    "scenarios": ["power-outage", "winter-storm"],
+    "stage": "days-2-3",
+    "task": "Has a plan for hygiene and toilets if water stops, and keeps hands and food areas clean.",
+    "why": "Sanitation failures cause illness in long outages.",
+    "status": "draft",
+    "sources": ["ready-gov-kit"]
+  },
+  {
+    "id": "outage.days-2-3.medication-supply",
+    "scenarios": ["power-outage", "winter-storm", "heat-wave"],
+    "stage": "days-2-3",
+    "when": { "fact": "needs.kinds", "includesAny": ["daily-medication", "refrigerated-medication"] },
+    "task": "Counts remaining medication against how long the emergency may last, and contacts a pharmacy or prescriber before running out.",
+    "why": "Running out of daily medication mid-emergency can quickly become a medical emergency.",
+    "status": "draft",
+    "sources": ["cdc-disability-kit"],
+    "notes": "Needs D6 medical review."
+  },
+  {
+    "id": "outage.days-2-3.wellbeing",
+    "scenarios": ["power-outage", "winter-storm", "heat-wave"],
+    "stage": "days-2-3",
+    "when": { "fact": "people.ageRanges", "includesAny": ["infant", "child", "teen"] },
+    "task": "Keeps routines and reassurance going for children, and explains what's happening at their level.",
+    "why": "Children cope better with structure and honest, calm explanations.",
+    "status": "draft",
+    "sources": ["ready-gov-kit"]
+  }
+]

@@ -1,0 +1,74 @@
+[
+  {
+    "id": "ready-gov-kit",
+    "title": "Build a Kit",
+    "publisher": "FEMA / Ready.gov",
+    "url": "https://www.ready.gov/kit",
+    "license": "public-domain",
+    "verified": null
+  },
+  {
+    "id": "ready-gov-pets",
+    "title": "Prepare Your Pets for Disasters",
+    "publisher": "FEMA / Ready.gov",
+    "url": "https://www.ready.gov/pets",
+    "license": "public-domain",
+    "verified": null
+  },
+  {
+    "id": "ready-gov-power-outages",
+    "title": "Power Outages",
+    "publisher": "FEMA / Ready.gov",
+    "url": "https://www.ready.gov/power-outages",
+    "license": "public-domain",
+    "verified": null
+  },
+  {
+    "id": "ready-gov-winter",
+    "title": "Winter Weather",
+    "publisher": "FEMA / Ready.gov",
+    "url": "https://www.ready.gov/winter-weather",
+    "license": "public-domain",
+    "verified": null
+  },
+  {
+    "id": "ready-gov-disabilities",
+    "title": "People with Disabilities",
+    "publisher": "FEMA / Ready.gov",
+    "url": "https://www.ready.gov/disability",
+    "license": "public-domain",
+    "verified": null
+  },
+  {
+    "id": "cdc-disability-kit",
+    "title": "Build a Kit (people with disabilities)",
+    "publisher": "CDC",
+    "url": "https://www.cdc.gov/disability-emergency-preparedness/people-with-disabilities/build-a-kit.html",
+    "license": "public-domain",
+    "verified": null
+  },
+  {
+    "id": "cdc-carbon-monoxide",
+    "title": "Carbon Monoxide Poisoning",
+    "publisher": "CDC",
+    "url": "https://www.cdc.gov/carbon-monoxide/",
+    "license": "public-domain",
+    "verified": null
+  },
+  {
+    "id": "usda-power-outage-food",
+    "title": "Food Safety During a Power Outage",
+    "publisher": "FoodSafety.gov (USDA)",
+    "url": "https://www.foodsafety.gov/food-safety-charts/food-safety-during-power-outage",
+    "license": "public-domain",
+    "verified": null
+  },
+  {
+    "id": "fema-hseep",
+    "title": "Homeland Security Exercise and Evaluation Program (HSEEP)",
+    "publisher": "FEMA",
+    "url": "https://www.fema.gov/emergency-managers/national-preparedness/exercises/hseep",
+    "license": "public-domain",
+    "verified": null
+  }
+]

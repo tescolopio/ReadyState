@@ -53,6 +53,7 @@ Further reading:
 - [Work breakdown](docs/roadmap/work-breakdown.md): the roadmap by team, traced to the brief.
 - [Deployment modes](docs/architecture/deployment-modes.md): self-hosted vs hosted, providers, desktop and mobile plans.
 - [Groq models](docs/architecture/groq-models.md): benchmarks and rate limits.
+- [Rules database](docs/architecture/rules.md): inventory checks, safety rules and look-fors as sourced, reviewable data in `data/rules/`.
 - [Data sources](docs/architecture/datasources.md) and [Dataset bridging](docs/architecture/dataset_bridging.md): official guidance to ground scenarios, and how medical needs become functional constraints.
 
 ### Game loop
