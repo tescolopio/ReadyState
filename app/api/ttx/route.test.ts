@@ -27,11 +27,13 @@ vi.mock("@/lib/hosted", () => ({ getHostedServices: () => env.hosted }));
 const { POST } = await import("./route");
 
 const turnInput = {
+  feedback: null,
   narrative_response: "A blizzard cuts power to [Location 1].",
   time_elapsed: "Hour 0",
   hours_elapsed: 0,
   new_inject: "[Person 1] reports the furnace is silent.",
   critical_alerts: ["Heat source offline"],
+  suggested_actions: [],
   scenario_status: "ongoing",
 };
 
@@ -71,6 +73,12 @@ const post = (
       body: JSON.stringify({ messages, settings }),
     }),
   );
+
+const systemText = (model: MockLanguageModelV4) =>
+  model.doStreamCalls[0].prompt
+    .filter((m) => m.role === "system")
+    .map((m) => m.content)
+    .join("\n");
 
 const userMessage: TtxUIMessage = {
   id: "u1",
@@ -163,6 +171,7 @@ describe("POST /api/ttx", () => {
       toolName: "generate_turn",
     });
     expect(model.doStreamCalls[0].reasoning).toBe("medium");
+    expect(systemText(model)).toContain("There is no game over");
     const sent = model.doStreamCalls[0].prompt.filter((m) => m.role !== "system");
     expect(sent).toEqual([
       {
@@ -182,7 +191,7 @@ describe("POST /api/ttx", () => {
   it("forces the after_action_report tool once the exercise has ended", async () => {
     const model = mockToolCallModel("after_action_report", {});
     env.model = model;
-    const ended = { ...turnInput, hours_elapsed: 72, scenario_status: "survived" };
+    const ended = { ...turnInput, hours_elapsed: 72, scenario_status: "complete" };
 
     const res = await post([
       userMessage,
@@ -207,6 +216,8 @@ describe("POST /api/ttx", () => {
       type: "tool",
       toolName: "after_action_report",
     });
+    // Decision D8: a review of decisions, not a grade.
+    expect(systemText(model)).toContain("Don't grade or score the participant.");
   });
 });
 

@@ -27,6 +27,7 @@ import {
   type AfterActionReport,
   type TtxPhase,
   type TtxUIMessage,
+  type TurnFeedback,
   type TurnOutput,
 } from "@/lib/ttx";
 import type { ServerConfig } from "@/lib/providers";
@@ -44,8 +45,8 @@ const PHASE_LABELS: Record<TtxPhase, string> = {
 const PLACEHOLDERS: Record<TtxPhase, string> = {
   baseline:
     "Describe your household: e.g. 2 adults, a large dog, insulin that requires refrigeration, winter storm in Denver…",
-  loop: "Declare your next action…",
-  ended: "Exercise complete — generate the After-Action Report.",
+  loop: "What would you do next?",
+  ended: "Exercise complete — review your decisions.",
   aar: "Exercise complete — reset to run a new scenario.",
 };
 
@@ -209,8 +210,7 @@ export default function TtxDashboard() {
                   disabled={busy}
                 >
                   <ClipboardCheck className="h-4 w-4" aria-hidden />
-                  Generate After-Action Report (
-                  {ttx.outcome === "failed" ? "Failed" : "Survived"})
+                  Review the exercise
                 </Button>
               ) : (
                 <form onSubmit={handleSubmit} className="flex gap-2">
@@ -223,7 +223,7 @@ export default function TtxDashboard() {
                   />
                   <Button type="submit" disabled={inputLocked || !input.trim()}>
                     <Send className="h-4 w-4" aria-hidden />
-                    Transmit
+                    Submit response
                   </Button>
                 </form>
               )}
@@ -296,9 +296,9 @@ export default function TtxDashboard() {
                 </span>
               </p>
               <p>
-                Outcome:{" "}
+                Status:{" "}
                 <span className="text-zinc-100">
-                  {ttx.outcome ? ttx.outcome.toUpperCase() : "IN PROGRESS"}
+                  {ttx.phase === "ended" || ttx.phase === "aar" ? "COMPLETE" : "IN PROGRESS"}
                 </span>
               </p>
             </CardContent>
@@ -367,10 +367,58 @@ function MessageBubble({ message }: { message: TtxUIMessage }) {
   );
 }
 
+/** A labeled list that renders nothing until the model has streamed an item. */
+function ItemList({
+  title,
+  items,
+  className,
+}: {
+  title: string;
+  items?: (string | undefined)[];
+  className?: string;
+}) {
+  const present = items?.filter((item): item is string => Boolean(item));
+  if (!present?.length) return null;
+  return (
+    <div>
+      <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">{title}</p>
+      <ul className={`mt-1 list-disc space-y-1 pl-5 text-sm ${className ?? ""}`}>
+        {present.map((item, index) => (
+          <li key={index}>{unmaskOutput(item)}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Feedback on the participant's response, in the design brief's three parts. */
+function FeedbackView({ feedback }: { feedback?: DeepPartial<TurnFeedback> | null }) {
+  if (!feedback) return null;
+  return (
+    <section
+      aria-label="Feedback on your response"
+      className="space-y-3 rounded-md border border-emerald-900/70 bg-emerald-950/30 p-3"
+    >
+      <ItemList title="What you covered" items={feedback.covered} />
+      <ItemList title="What to consider" items={feedback.consider} />
+      {feedback.why && (
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+            Why it matters
+          </p>
+          <p className="mt-1 text-sm">{unmaskOutput(feedback.why)}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function TurnView({ turn }: { turn?: DeepPartial<TurnOutput> }) {
   if (!turn) return null;
   return (
     <div className="space-y-3">
+      <FeedbackView feedback={turn.feedback} />
+      <ItemList title="Next steps for your real plan" items={turn.suggested_actions} />
       {turn.time_elapsed && (
         <p className="font-mono text-xs text-zinc-400">[{turn.time_elapsed}]</p>
       )}
@@ -395,44 +443,16 @@ function TurnView({ turn }: { turn?: DeepPartial<TurnOutput> }) {
 
 function ReportView({ report }: { report?: DeepPartial<AfterActionReport> }) {
   if (!report) return null;
-  const sections: Array<[string, (string | undefined)[] | undefined]> = [
-    ["Strengths", report.strengths],
-    ["Supply Gaps", report.supply_gaps],
-    ["Recommendations", report.recommendations],
-  ];
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <span className="font-mono text-3xl font-bold text-zinc-100">
-          {report.overall_grade ?? "…"}
-        </span>
-        <div className="font-mono text-xs text-zinc-400">
-          {report.score !== undefined && <p>SCORE {report.score}/100</p>}
-          {report.outcome && <p>OUTCOME {report.outcome.toUpperCase()}</p>}
-        </div>
-      </div>
+      <p className="font-mono text-xs uppercase tracking-widest text-zinc-300">Exercise review</p>
       {report.summary && <p className="text-sm">{unmaskOutput(report.summary)}</p>}
-      {sections.map(([title, items]) =>
-        items?.length ? (
-          <div key={title}>
-            <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-              {title}
-            </p>
-            <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
-              {items.map((item, index) =>
-                item ? (
-                  <li
-                    key={index}
-                    className={title === "Supply Gaps" ? "text-red-300" : undefined}
-                  >
-                    {unmaskOutput(item)}
-                  </li>
-                ) : null,
-              )}
-            </ul>
-          </div>
-        ) : null,
-      )}
+      <ItemList title="What went well" items={report.strengths} />
+      <ItemList title="Gaps revealed" items={report.supply_gaps} />
+      <ItemList title="Your action plan" items={report.recommendations} />
+      <p className="text-xs text-zinc-500">
+        Completing an exercise is practice, not proof of real-world readiness.
+      </p>
     </div>
   );
 }
