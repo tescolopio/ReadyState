@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { SimulationLabel, Wordmark } from "@/components/brand";
 import { SiteFooter } from "@/components/site-footer";
-import { SCENARIOS } from "@/lib/household";
+import { SCENARIOS, SCENARIO_SUMMARIES, type ScenarioId } from "@/lib/household";
 
 /**
  * The public website (design brief §3 "Sample experience", Modern treatment
@@ -35,7 +35,7 @@ export default function HomePage() {
             <a href="#run-it" className="rounded-control px-2 py-2 text-ink-2 hover:text-ink">
               Run it yourself
             </a>
-            <Link href="/exercise" className="rounded-control border border-line-strong px-3 py-2 text-ink hover:bg-action-soft">
+            <Link href="/journal" className="rounded-control border border-line-strong px-3 py-2 text-ink hover:bg-action-soft">
               Open the app
             </Link>
           </div>
@@ -92,12 +92,13 @@ export default function HomePage() {
         <section id="exercises" className="mx-auto max-w-6xl px-4 py-14">
           <h2 className="text-3xl font-semibold">Exercises</h2>
           <p className="mt-3 max-w-prose text-ink-2">Pick an emergency, or let ReadyState choose one that fits your region and season.</p>
-          <ul className="mt-6 flex flex-wrap gap-2">
-            {Object.entries(SCENARIOS)
-              .filter(([id]) => id !== "surprise")
-              .map(([id, label]) => (
-                <li key={id} className="rounded-full border border-line-strong bg-surface px-4 py-2 text-sm font-semibold">
-                  {label}
+          <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {(Object.keys(SCENARIOS) as ScenarioId[])
+              .filter((id) => id !== "surprise")
+              .map((id) => (
+                <li key={id} className="rounded-panel border border-line bg-surface p-5">
+                  <h3 className="text-lg font-semibold">{SCENARIOS[id]}</h3>
+                  <p className="mt-2 text-ink-2">{SCENARIO_SUMMARIES[id]}</p>
                 </li>
               ))}
           </ul>

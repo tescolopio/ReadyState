@@ -63,6 +63,27 @@ To re-check, compute the ratios for the pairs in the table, for example with any
 | Route | What |
 | --- | --- |
 | `/` | Public website: hero, how it works, exercises, the household and privacy, family (planned), run it yourself or hosted (in development) |
-| `/exercise` | The app |
-| `/exercise?sample=alex` | The fictional sample exercise from "Try a sample exercise" (any test household id works) |
+| `/journal` | Journal home: resume the exercise in progress, open actions |
+| `/exercises` | Exercise library: one card per emergency, the household it runs for |
+| `/exercise` | The active exercise. `?start=1` starts with the saved household |
+| `/exercise?sample=alex` | The fictional sample exercise from "Try a sample exercise" (any test household id works); its debrief ends in "Make this mine" |
 | `/exercise?preview=1` | A recorded three-turn exercise for design review, with no model calls (`data/fixtures/preview-exercise.json`) |
+| `/household` | My household: saved details, inventory check, what the scenario engine sees. `?setup=1` opens setup |
+| `/plan` | Action plan: kept steps with Open, In progress and Done, plus household-check suggestions |
+| `/settings` | Privacy, model provider (self-hosted only), style, and deleting data on this device |
+
+## App shell
+
+The app routes share `components/app-shell.tsx` (work item F13):
+- **Wide screens (`lg`, 1024 px and up):** a sidebar with the five destinations and the active household.
+- **Narrower screens:** a top bar with the active household and labeled bottom navigation. The current page is marked by weight and an underline, not color alone.
+- **Household context:** a sample is always labeled "Sample household (fictional)", so it's never mistaken for your own.
+
+The exercise in progress lives in `lib/exercise-session.ts`, outside any page, so moving between destinations doesn't end it. Like the privacy ledger, it's in memory only: a reload ends it. Saved exercises are work item F3.
+
+## Exercise screen
+
+- **The current moment leads:** your latest response, its feedback, then "What's happening now" and the response area.
+- **Earlier turns** fold into "Earlier in this exercise", one click away.
+- **Next steps** each have "Keep in my plan", as do the debrief's "What you can do better". Nothing is added unless the person chooses it. Samples and previews can't add to your plan.
+- **Leaving:** "Pause and leave" goes to the Journal. "Start over" asks for confirmation inline, not in a browser dialog.

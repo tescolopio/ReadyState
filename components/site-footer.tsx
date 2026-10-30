@@ -10,7 +10,7 @@ const subscribe = (onChange: () => void) => {
 const currentStyle = () => document.documentElement.dataset.style ?? "a";
 
 /** Switches between the two visual treatments for design review (A/B test, work item F14). */
-function StyleSwitcher() {
+export function StyleSwitcher() {
   const style = useSyncExternalStore(subscribe, currentStyle, () => "a");
   const choose = (next: "a" | "b") => {
     document.documentElement.setAttribute("data-style", next);

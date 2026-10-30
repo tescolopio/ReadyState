@@ -25,7 +25,7 @@ cp .env.example .env.local            # optional: set provider keys here
 npm run dev                           # or: npm run build && npm start
 ```
 
-Open http://localhost:3000 for the website, or http://localhost:3000/exercise for the app. Then pick a provider and paste your API key in the app's **Model Provider** panel, or set keys in `.env.local`. Supported providers are Groq (default), Google Gemini, Cerebras, OpenRouter, Ollama (local, no key) and any OpenAI-compatible endpoint. Keep self-hosted instances on localhost or a trusted network; see the [security notes](docs/architecture/deployment-modes.md#security-notes).
+Open http://localhost:3000 for the website, or http://localhost:3000/journal for the app. Then pick a provider and paste your API key in the app's **Settings**, or set keys in `.env.local`. Supported providers are Groq (default), Google Gemini, Cerebras, OpenRouter, Ollama (local, no key) and any OpenAI-compatible endpoint. Keep self-hosted instances on localhost or a trusted network; see the [security notes](docs/architecture/deployment-modes.md#security-notes).
 
 Scripts: `npm run dev`, `npm run build`, `npm start`, `npm run lint`, `npm run typecheck`, `npm test` (Vitest). CI (`.github/workflows/ci.yml`) runs all of these plus a Docker smoke test on every PR.
 
@@ -43,7 +43,7 @@ Scripts: `npm run dev`, `npm run build`, `npm start`, `npm run lint`, `npm run t
 | `app/api/ttx/route.ts` | `streamText` route that **forces** the tool matching the current phase, so every response is structured JSON. |
 | `app/api/config/route.ts` | Key-free description of the server's setup (mode, providers) for the UI. |
 | `app/page.tsx` | The public website. |
-| `app/exercise/page.tsx` | The app: household setup, the exercise with response options and feedback, the decision path, needs-attention items, privacy and provider settings, and the debrief. |
+| `app/(app)/` | The app, inside a shared navigation shell (`components/app-shell.tsx`): Journal, Exercises, the active exercise (`exercise/page.tsx`: response options, feedback, keeping steps in your plan, the decision path and the debrief), My household, Action plan and Settings. |
 | `components/ui/*` | Minimal shadcn/ui-compatible `Button`, `Input`, `Card`, `ScrollArea`, `Badge`. Replace with the real ones via `npx shadcn@latest add button input scroll-area card badge --overwrite`. |
 | `supabase/migrations/*` | `sim_logs`, `subscriptions` and `usage_events` with Row Level Security. |
 

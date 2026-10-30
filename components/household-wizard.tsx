@@ -157,7 +157,7 @@ const STATUS_LABELS: Record<FindingStatus, { text: string; className: string }> 
 };
 
 /** The inventory check's findings, gaps first, each with what to do about it. */
-function InventoryCheck({ findings }: { findings: Finding[] }) {
+export function InventoryCheck({ findings }: { findings: Finding[] }) {
   const open = findings.filter((finding) => finding.status !== "ok");
   const covered = findings.length - open.length;
   return (
