@@ -96,6 +96,22 @@ describe("Alex's 2026-10-30 defects are caught", () => {
     expect(untracedDebriefPoints(wrongHour, alexTurns)).toEqual([expect.stringContaining("Hour 30, which never happened")]);
   });
 
+  it("accepts the citation styles the model used in the 2026-10-30 rerun", () => {
+    const rerun = {
+      ...alexDebrief,
+      need_to_know: [
+        "A space heater can trip the breaker, leaving you without power when you need it most (observed at Hour 66).",
+        "Your refrigerator keeps food safe for only about 4 hours without power (CDC/FEMA guidance applied to the extended outage scenario).",
+        "Central heating may take hours to recover (experienced at Hours 48‑66).",
+      ],
+      do_better: ["Increase stored water to 3 gallons, derived from the baseline water shortage."],
+    };
+    expect(untracedDebriefPoints(rerun, alexTurns)).toEqual([]);
+    // Guidance alone doesn't trace an improvement to what happened.
+    const guidanceOnly = { ...rerun, do_better: ["Store 3 gallons of water, per CDC guidance."] };
+    expect(untracedDebriefPoints(guidanceOnly, alexTurns)).toHaveLength(1);
+  });
+
   it("flags more than three improvements, and a checklist posing as one", () => {
     const problems = unsuitableDebrief(alexDebrief);
     expect(problems[0]).toBe("Debrief lists 5 improvements (at most 3)");
@@ -109,6 +125,18 @@ describe("Alex's 2026-10-30 defects are caught", () => {
       ),
     );
     expect([...categories].sort()).toEqual(["continuity", "safety", "suitability"]);
+  });
+
+  it("doesn't re-judge turns replayed from an earlier run, but still checks the new debrief", () => {
+    const findings = contentFindings({
+      baseline: alexBaseline,
+      turns: alexTurns,
+      participantText: [],
+      report: alexDebrief,
+      replayedTurns: alexTurns.length,
+    });
+    expect(findings.some((f) => f.text.includes("space heater\" appears"))).toBe(false);
+    expect(findings.some((f) => f.category === "safety")).toBe(true); // the debrief's battery-powered heater
   });
 
   it.todo("flags physically wrong explanations such as 'water intrusion can raise floor temperature' (needs the model judge, G11)");

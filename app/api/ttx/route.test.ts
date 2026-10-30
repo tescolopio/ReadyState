@@ -225,7 +225,7 @@ describe("POST /api/ttx", () => {
     const part = last?.parts.find((p) => p.type === "tool-generate_turn");
     expect(part).toMatchObject({ state: "output-available", output: turnInput });
     // The eval reads actual usage and the number of provider calls from the metadata.
-    expect(last?.metadata).toEqual({ usage: { inputTokens: 1, outputTokens: 1 }, modelCalls: 1 });
+    expect(last?.metadata).toEqual({ usage: { inputTokens: 1, outputTokens: 1 }, providerCalls: 1, schemaRetries: 0 });
   });
 
   it("retries once when the provider rejects a malformed turn before any output", async () => {
@@ -236,7 +236,7 @@ describe("POST /api/ttx", () => {
 
     const last = await lastMessage(await post([userMessage]));
     expect(model.doStreamCalls).toHaveLength(2);
-    expect(last?.metadata?.modelCalls).toBe(2);
+    expect(last?.metadata).toMatchObject({ providerCalls: 2, schemaRetries: 1 });
     expect(last?.parts.find((p) => p.type === "tool-generate_turn")).toMatchObject({
       state: "output-available",
       output: turnInput,
@@ -261,11 +261,28 @@ describe("POST /api/ttx", () => {
 
     const last = await lastMessage(await post([userMessage]));
     expect(model.doStreamCalls).toHaveLength(2);
-    expect(last?.metadata?.modelCalls).toBe(2);
+    expect(last?.metadata).toMatchObject({ providerCalls: 2, schemaRetries: 1 });
     expect(last?.parts.find((p) => p.type === "tool-generate_turn")).toMatchObject({
       state: "output-available",
       output: turnInput,
     });
+  });
+
+  it("counts the SDK's rate-limit retries as provider calls, not schema retries", async () => {
+    const model = failingOnce(mockToolCallModel("generate_turn", turnInput), async () => {
+      throw new APICallError({
+        message: "Rate limit reached on tokens per minute (TPM). Please try again in 1ms.",
+        url: "https://api.groq.com/openai/v1/chat/completions",
+        requestBodyValues: {},
+        statusCode: 429,
+        responseHeaders: { "retry-after-ms": "1" },
+        isRetryable: true,
+      });
+    });
+    env.model = model;
+
+    const last = await lastMessage(await post([userMessage]));
+    expect(last?.metadata).toMatchObject({ providerCalls: 2, schemaRetries: 0 });
   });
 
   it("explains a malformed turn that fails twice instead of retrying again", async () => {

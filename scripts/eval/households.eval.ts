@@ -52,8 +52,10 @@ interface CallRecord {
   waitedMs: number;
   /** Requests the eval made for this call (more than 1 after a wait or resubmit). */
   attempts: number;
-  /** Provider calls the server made for the final request (2 after a retried malformed turn). */
-  modelCalls?: number;
+  /** Provider calls the server made for the final request, including the SDK's rate-limit retries. */
+  providerCalls?: number;
+  /** Of those, retries after a malformed tool call. */
+  schemaRetries?: number;
   inputTokens?: number;
   outputTokens?: number;
   turn?: TurnOutput;
@@ -177,7 +179,8 @@ async function play(household: TestHousehold): Promise<Result> {
       requestMs: outcome.requestMs,
       waitedMs: outcome.waitedMs,
       attempts: outcome.attempts,
-      modelCalls: metadata?.modelCalls,
+      providerCalls: metadata?.providerCalls,
+      schemaRetries: metadata?.schemaRetries,
       inputTokens: metadata?.usage?.inputTokens,
       outputTokens: metadata?.usage?.outputTokens,
     };
@@ -247,18 +250,20 @@ function check(result: Result, messages: TtxUIMessage[]) {
   }
 
   // Continuity, safety, suitability (scripts/eval/checks.ts).
-  findings.push(...contentFindings({ baseline: result.baseline, turns, participantText, report: result.report }));
+  const replayedTurns = result.turns.filter((record) => record.replayed).length;
+  findings.push(...contentFindings({ baseline: result.baseline, turns, participantText, report: result.report, replayedTurns }));
 
   const calls = [...result.turns, ...(result.debrief ? [result.debrief] : [])].filter((call) => !call.replayed && !call.error);
   const inputs = calls.flatMap((call) => (call.inputTokens !== undefined ? [call.inputTokens] : []));
   const outputs = calls.flatMap((call) => (call.outputTokens !== undefined ? [call.outputTokens] : []));
   const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
-  const serverRetries = calls.filter((call) => (call.modelCalls ?? 1) > 1).length;
+  const schemaRetries = sum(calls.map((call) => call.schemaRetries ?? 0));
+  const rateLimitRetries = sum(calls.map((call) => (call.providerCalls ?? 1) - 1 - (call.schemaRetries ?? 0)));
   result.notes.push(
     `${turns.length} turns, reached ${turns.at(-1)?.time_elapsed ?? "Hour 0"}${result.report ? ", debrief written" : ""}`,
     `Input tokens per call: max ${inputs.length ? Math.max(...inputs) : "n/a"}, average ${inputs.length ? Math.round(sum(inputs) / inputs.length) : "n/a"}; output tokens total ${sum(outputs)}`,
     `Average request time ${calls.length ? Math.round(sum(calls.map((c) => c.requestMs)) / calls.length) : 0} ms; waited ${Math.round(sum(calls.map((c) => c.waitedMs)) / 1000)} s for rate limits`,
-    `Server retried a malformed turn on ${serverRetries} of ${calls.length} calls`,
+    `Server retries over ${calls.length} calls: ${schemaRetries} after a malformed turn, ${rateLimitRetries} after a rate limit`,
   );
 }
 
@@ -276,7 +281,7 @@ const byCategory = (findings: Finding[], category: CheckCategory) => findings.fi
 const callLine = (call: CallRecord) =>
   call.replayed
     ? "_Replayed from an earlier run._"
-    : `_Request ${call.requestMs} ms, waited ${Math.round(call.waitedMs / 1000)} s, ${call.attempts} request(s), ${call.modelCalls ?? "?"} model call(s), ${call.inputTokens ?? "?"} input / ${call.outputTokens ?? "?"} output tokens._`;
+    : `_Request ${call.requestMs} ms, waited ${Math.round(call.waitedMs / 1000)} s, ${call.attempts} request(s), ${call.providerCalls ?? "?"} provider call(s) (${call.schemaRetries ?? 0} schema retries), ${call.inputTokens ?? "?"} input / ${call.outputTokens ?? "?"} output tokens._`;
 
 function reportMarkdown({ household, baseline, turns, debrief, report, findings, notes }: Result) {
   const out = [

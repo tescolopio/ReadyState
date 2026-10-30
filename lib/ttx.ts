@@ -110,13 +110,16 @@ export const ttxTools = {
 };
 
 /**
- * What the server reports about the model call behind a response, for the
- * eval: actual token usage and how many provider calls it took (1, or 2
- * after a retried malformed turn). Never shown to participants.
+ * What the server reports about the model calls behind a response, for the
+ * eval. Never shown to participants.
  */
 export interface TtxMetadata {
+  /** Actual tokens, as the provider reported them. */
   usage?: { inputTokens?: number; outputTokens?: number };
-  modelCalls?: number;
+  /** Every provider call, including the SDK's silent retries after a rate limit. */
+  providerCalls?: number;
+  /** Retries after a malformed tool call (work item G4). */
+  schemaRetries?: number;
 }
 
 export type TtxUIMessage = UIMessage<

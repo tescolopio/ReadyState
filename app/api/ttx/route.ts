@@ -55,22 +55,31 @@ Advice must work in the conditions this emergency creates. In a power outage, re
 Keep do_better to at most three, most important first, suited to the household's experience: a household with few supplies needs the first basic steps, not everything at once.`,
 };
 
+interface CallCounts {
+  /** Every provider call, including the SDK's own retries after a rate limit. */
+  providerCalls: number;
+  /** Retries after a malformed tool call. */
+  schemaRetries: number;
+}
+
 /**
  * Retries a call once when the provider rejects the model's tool call before
- * any output (work item G4), and counts provider calls for the response's
- * metadata. A rejection after output has started streaming is retried by
- * `streamText`'s `onError` instead.
+ * any output (work item G4), and counts calls for the response's metadata.
+ * The SDK's rate-limit retries also pass through here, so they are counted
+ * as provider calls but not as schema retries. A rejection after output has
+ * started streaming is retried by `streamText`'s `onError` instead.
  */
-const retrySchemaSlipOnce = (calls: { count: number }): LanguageModelMiddleware => ({
+const retrySchemaSlipOnce = (counts: CallCounts): LanguageModelMiddleware => ({
   specificationVersion: "v4",
   wrapStream: async ({ doStream }) => {
-    calls.count++;
+    counts.providerCalls++;
     try {
       return await doStream();
     } catch (error) {
       if (!isSchemaSlip(error)) throw error;
       console.warn("[ttx] retrying after a malformed tool call");
-      calls.count++;
+      counts.providerCalls++;
+      counts.schemaRetries++;
       return doStream();
     }
   },
@@ -141,10 +150,10 @@ export async function POST(req: Request) {
   }
 
   const toolName = phase === "ended" ? "after_action_report" : "generate_turn";
-  const modelCalls = { count: 0 };
+  const counts: CallCounts = { providerCalls: 0, schemaRetries: 0 };
 
   const result = streamText({
-    model: typeof resolved.model === "string" ? resolved.model : wrapLanguageModel({ model: resolved.model, middleware: retrySchemaSlipOnce(modelCalls) }),
+    model: typeof resolved.model === "string" ? resolved.model : wrapLanguageModel({ model: resolved.model, middleware: retrySchemaSlipOnce(counts) }),
     instructions: `${SYSTEM_PROMPT}\n\n${PHASE_INSTRUCTIONS[phase]}`,
     // A single compact briefing instead of the replayed chat keeps each call
     // well under Groq's per-minute token limit (docs/architecture/groq-models.md).
@@ -159,6 +168,7 @@ export async function POST(req: Request) {
     onError: ({ error }) => {
       if (!isSchemaSlip(error)) return;
       console.warn("[ttx] retrying after a malformed tool call");
+      counts.schemaRetries++;
       return { retry: true as const };
     },
     onFinish: async ({ usage }) => {
@@ -179,7 +189,8 @@ export async function POST(req: Request) {
         part.type === "finish"
           ? {
               usage: { inputTokens: part.totalUsage.inputTokens, outputTokens: part.totalUsage.outputTokens },
-              modelCalls: modelCalls.count,
+              providerCalls: counts.providerCalls,
+              schemaRetries: counts.schemaRetries,
             }
           : undefined,
       onError: (error) => {

@@ -94,18 +94,25 @@ export function introducedEquipment(baseline: string, turns: TurnOutput[], parti
   return [...flagged.values()];
 }
 
-const CITATION = /\(from ([^)]*)\)/i;
+/** A moment in the exercise ("Hour 18", "Hours 48–66") or a household fact. */
+const TRACED = /\bHours? \d+|\b(baseline|household profile|your profile|inventory check|at the start)\b/i;
+/** For facts to know, official guidance is also a source; improvements must trace to what happened. */
+const GUIDANCE = /\b(guidance|CDC|FEMA|Ready\.gov|Red Cross|USDA|NWS)\b/;
 
 /** Debrief points that don't say what they come from, or cite an hour that never happened. */
 export function untracedDebriefPoints(report: AfterActionReport, turns: TurnOutput[]): string[] {
   const hours = new Set(turns.map((turn) => turn.hours_elapsed));
-  return [...report.need_to_know, ...report.do_better].flatMap((point) => {
-    const cited = point.match(CITATION);
-    if (!cited) return [`Debrief point doesn't say what it comes from: "${point}"`];
-    const hour = cited[1].match(/\bHour (\d+)/i);
-    if (hour && !hours.has(Number(hour[1]))) return [`Debrief cites Hour ${hour[1]}, which never happened: "${point}"`];
-    return [];
-  });
+  const check = (point: string, allowGuidance: boolean) => {
+    if (!TRACED.test(point) && !(allowGuidance && GUIDANCE.test(point))) {
+      return [`Debrief point doesn't say what it comes from: "${point}"`];
+    }
+    // Ranges ("Hours 48–66") name a span, so only single hours are checked.
+    const missing = [...point.matchAll(/\bHour (\d+)\b(?![\s]*[-–‑]\s*\d)/gi)]
+      .map((match) => Number(match[1]))
+      .filter((hour) => !hours.has(hour));
+    return missing.length ? [`Debrief cites Hour ${missing.join(", Hour ")}, which never happened: "${point}"`] : [];
+  };
+  return [...report.need_to_know.flatMap((point) => check(point, true)), ...report.do_better.flatMap((point) => check(point, false))];
 }
 
 /** Grading language the debrief must avoid (decision D8). */
@@ -130,13 +137,16 @@ export interface RunForChecks {
   turns: TurnOutput[];
   participantText: string[];
   report?: AfterActionReport;
+  /** Leading turns copied from an earlier run (EVAL_REPLAY): already judged, so only their hours are used. */
+  replayedTurns?: number;
 }
 
 /** Continuity, safety, suitability and debrief completion findings for one run. */
-export function contentFindings({ baseline, turns, participantText, report }: RunForChecks): Finding[] {
+export function contentFindings({ baseline, turns, participantText, report, replayedTurns = 0 }: RunForChecks): Finding[] {
   const out: Finding[] = [];
-  out.push(...introducedEquipment(baseline, turns, participantText).map(finding("continuity")));
-  out.push(...unsafeAdvice(adviceTexts(turns, report)).map((text) => finding("safety")(`(review) ${text}`)));
+  const fresh = turns.slice(replayedTurns);
+  out.push(...introducedEquipment(baseline, fresh, participantText).map(finding("continuity")));
+  out.push(...unsafeAdvice(adviceTexts(fresh, report)).map((text) => finding("safety")(`(review) ${text}`)));
   if (report) {
     if (!report.need_to_know.length) out.push(finding("completion")("Debrief has no 'what you need to know'"));
     if (!report.do_better.length) out.push(finding("completion")("Debrief has no 'what you can do better'"));
