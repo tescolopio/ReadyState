@@ -1,6 +1,6 @@
 # Scenario sets and severity
 
-**Status:** proposed, 2026-10-29. Work items G5 and G14; builds on R2, R6 and R7.
+**Status:** proposed, 2026-10-29. Work items G5 and G14; builds on R2, R6 and R7. Every scenario mapped across the levels, and how the household changes it: [Scenario catalog](scenario-catalog.md).
 
 ## 1. Two settings, not one scale
 
