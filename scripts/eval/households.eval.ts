@@ -5,24 +5,21 @@
  * readable report per household and a summary of automatic checks to
  * eval-results/<timestamp>/. See scripts/eval/README.md for options.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { readUIMessageStream, type UIMessageChunk } from "ai";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { privateTerms } from "@/lib/household";
-import { SAFETY_RULES } from "@/lib/rules";
 import { engineBaseline } from "@/lib/inventory";
 import { PRIVACY_LEAKS, TEST_HOUSEHOLDS, type TestHousehold } from "@/lib/test-households";
-import {
-  deriveTtxState,
-  type AfterActionReport,
-  type TtxUIMessage,
-  type TurnOutput,
-} from "@/lib/ttx";
+import { deriveTtxState, type AfterActionReport, type TtxUIMessage, type TurnOutput } from "@/lib/ttx";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { maskInput } from "@/utils/obfuscator";
+
+import { CHECK_CATEGORIES, contentFindings, type CheckCategory, type Finding } from "./checks";
+import { sendWithRetries, type SendOutcome } from "./retry";
 
 const BASE_URL = process.env.EVAL_BASE_URL ?? "http://localhost:3000";
 const ONLY = process.env.EVAL_ONLY?.split(",").map((id) => id.trim());
@@ -32,51 +29,46 @@ const MAX_TURNS = Number(process.env.EVAL_TURNS ?? 14);
 const DELAY_MS = Number(process.env.EVAL_DELAY_MS ?? 8000);
 /** Which offered response to pick: "cycle" (1st, 2nd, 3rd, …), "first" or "last". */
 const CHOOSE = process.env.EVAL_CHOOSE ?? "cycle";
+/**
+ * A previous run's folder. Each household replays that run's successful turns
+ * without calling the model, then continues: a failed call is resent, and a
+ * finished exercise goes straight to the debrief. For targeted reruns.
+ */
+const REPLAY = process.env.EVAL_REPLAY;
 const DEBRIEF_REQUEST = "The exercise is over. Please prepare the debrief.";
 
 const outDir = path.join("eval-results", new Date().toISOString().replace(/[:.]/g, "-"));
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const containsWord = (text: string, word: string) =>
   new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(word)}(?![\\p{L}\\p{N}])`, "iu").test(text);
 
-/**
- * Advice that breaks a safety rule, using each rule's `detect` patterns from
- * data/rules/safety.json. Sentences matching the rule's `exceptWhen` are
- * warnings about the hazard, not advice. A heuristic for review, not a
- * guarantee: the model-judge version is work item G11.
- */
-const DETECTORS = SAFETY_RULES.filter((rule) => rule.detect).map((rule) => ({
-  id: rule.id,
-  patterns: rule.detect!.map((pattern) => new RegExp(pattern, "i")),
-  except: rule.exceptWhen ? new RegExp(rule.exceptWhen, "i") : undefined,
-}));
-const unsafeAdvice = (texts: string[]) =>
-  texts
-    .flatMap((text) => text.split(/(?<=[.!?])\s+/))
-    .flatMap((sentence) =>
-      DETECTORS.filter(
-        (rule) => rule.patterns.some((pattern) => pattern.test(sentence)) && !rule.except?.test(sentence),
-      ).map((rule) => `${rule.id}: "${sentence}"`),
-    );
-
-/** Grading language the debrief must avoid (decision D8). */
-const VERDICT = /\b(grade|score|scored|passed|failed|you (won|lost)|verdict)\b/i;
-
-interface TurnRecord {
+interface CallRecord {
   sent: string;
-  ms: number;
+  /** The final request alone, without waits. */
+  requestMs: number;
+  /** Time spent waiting out rate limits. */
+  waitedMs: number;
+  /** Requests the eval made for this call (more than 1 after a wait or resubmit). */
+  attempts: number;
+  /** Provider calls the server made for the final request (2 after a retried malformed turn). */
+  modelCalls?: number;
+  inputTokens?: number;
+  outputTokens?: number;
   turn?: TurnOutput;
   error?: string;
+  /** Copied from EVAL_REPLAY without calling the model. */
+  replayed?: boolean;
 }
 
 interface Result {
   household: TestHousehold;
   baseline: string;
-  turns: TurnRecord[];
+  turns: CallRecord[];
+  debrief?: CallRecord;
   report?: AfterActionReport;
-  problems: string[];
+  findings: Finding[];
   notes: string[];
 }
 
@@ -104,7 +96,7 @@ const SETTINGS =
     ? { provider: process.env.EVAL_PROVIDER ?? "groq", model: process.env.EVAL_MODEL }
     : undefined;
 
-async function send(messages: TtxUIMessage[]): Promise<{ message?: TtxUIMessage; error?: string }> {
+async function send(messages: TtxUIMessage[]): Promise<SendOutcome<TtxUIMessage>> {
   const res = await fetch(`${BASE_URL}/api/ttx`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -124,50 +116,33 @@ async function send(messages: TtxUIMessage[]): Promise<{ message?: TtxUIMessage;
   return { message: last };
 }
 
-/**
- * The wait the app tells participants, in ms: "about 12 seconds", "about 2
- * minutes", "a few seconds", or "a little while" when the provider gave none.
- */
-const rateLimitWait = (error: string) => {
-  if (!/limiting requests/i.test(error)) return undefined;
-  const match = error.match(/about (\d+) (second|minute)/i);
-  if (match) return Number(match[1]) * (match[2].toLowerCase() === "minute" ? 60_000 : 1000) + 1000;
-  return /a few seconds/i.test(error) ? 5000 : 30_000;
-};
-const MAX_RATE_LIMIT_WAITS = 3;
-
-/**
- * Sends like a patient participant: waits out a per-minute limit and submits
- * again, and resubmits once after an incomplete turn (which the server has
- * already retried once). Each retry is noted so the report shows it.
- */
-async function sendWithRetries(messages: TtxUIMessage[], notes: string[], label: string) {
-  let waits = 0;
-  let resubmitted = false;
-  while (true) {
-    const result = await send(messages);
-    if (!result.error) return result;
-    const wait = rateLimitWait(result.error);
-    if (wait !== undefined && waits < MAX_RATE_LIMIT_WAITS) {
-      waits++;
-      notes.push(`${label}: rate limited, waited ${Math.round(wait / 1000)} s`);
-      await sleep(wait);
-      continue;
-    }
-    if (/incomplete turn/i.test(result.error) && !resubmitted) {
-      resubmitted = true;
-      notes.push(`${label}: incomplete turn after the server's retry; resubmitted`);
-      continue;
-    }
-    return result;
-  }
-}
-
 const pick = (options: string[], turnIndex: number) => {
   if (CHOOSE === "first") return options[0];
   if (CHOOSE === "last") return options.at(-1)!;
   return options[turnIndex % options.length];
 };
+
+const userMessage = (id: string, text: string): TtxUIMessage => ({ id, role: "user", parts: [{ type: "text", text }] });
+
+/** A saved turn as the assistant message the app would hold. */
+const turnMessage = (id: string, turn: TurnOutput): TtxUIMessage => ({
+  id,
+  role: "assistant",
+  parts: [{ type: "tool-generate_turn", toolCallId: `replay-${id}`, state: "output-available", input: turn, output: turn }],
+});
+
+/** The successful turns of a household's previous run, and the call that failed after them, if any. */
+function loadReplay(householdId: string) {
+  if (!REPLAY) return undefined;
+  const saved = (JSON.parse(readFileSync(path.join(REPLAY, "results.json"), "utf8")) as Array<{
+    household: { id: string };
+    turns: Array<{ sent: string; turn?: TurnOutput; error?: string }>;
+  }>).find((r) => r.household.id === householdId);
+  if (!saved) return undefined;
+  const succeeded = saved.turns.filter((record) => record.turn);
+  const failed = saved.turns.find((record) => record.error);
+  return { succeeded, resend: failed?.sent };
+}
 
 async function play(household: TestHousehold): Promise<Result> {
   usePrivacyStore.getState().clearMappings();
@@ -176,34 +151,55 @@ async function play(household: TestHousehold): Promise<Result> {
   const mask = (text: string) => maskInput(text, { alwaysMask });
 
   const baseline = engineBaseline(profile, mask);
-  const result: Result = { household, baseline, turns: [], problems: [], notes: [] };
+  const result: Result = { household, baseline, turns: [], findings: [], notes: [] };
   const messages: TtxUIMessage[] = [];
   let next = baseline;
+  let start = 0;
 
-  for (let i = 0; i <= MAX_TURNS; i++) {
-    messages.push({ id: `u${i}`, role: "user", parts: [{ type: "text", text: next }] });
-    const started = performance.now();
-    const { message, error } = await sendWithRetries(messages, result.notes, `Call ${i + 1}`);
-    const ms = Math.round(performance.now() - started);
-    if (error || !message) {
-      result.turns.push({ sent: next, ms, error });
-      result.problems.push(`Call ${i + 1} failed: ${error}`);
+  const replay = loadReplay(household.id);
+  if (replay?.succeeded.length) {
+    replay.succeeded.forEach((record, i) => {
+      messages.push(userMessage(`u${i}`, record.sent), turnMessage(`a${i}`, record.turn!));
+      result.turns.push({ sent: record.sent, requestMs: 0, waitedMs: 0, attempts: 0, turn: record.turn, replayed: true });
+    });
+    start = replay.succeeded.length;
+    const state = deriveTtxState(messages);
+    next = replay.resend ?? (state.phase === "ended" ? DEBRIEF_REQUEST : mask(pick(state.latestTurn!.response_options, start - 1)));
+    result.notes.push(`Replayed ${start} turns from ${REPLAY}${replay.resend ? "; resent the failed call" : ""}`);
+  }
+
+  for (let i = start; i <= MAX_TURNS; i++) {
+    messages.push(userMessage(`u${i}`, next));
+    const outcome = await sendWithRetries(() => send(messages), { sleep, notes: result.notes, label: `Call ${i + 1}` });
+    const metadata = outcome.message?.metadata;
+    const record: CallRecord = {
+      sent: next,
+      requestMs: outcome.requestMs,
+      waitedMs: outcome.waitedMs,
+      attempts: outcome.attempts,
+      modelCalls: metadata?.modelCalls,
+      inputTokens: metadata?.usage?.inputTokens,
+      outputTokens: metadata?.usage?.outputTokens,
+    };
+    if (outcome.error || !outcome.message) {
+      result.turns.push({ ...record, error: outcome.error });
+      result.findings.push({ category: "completion", text: `Call ${i + 1} failed: ${outcome.error}` });
       break;
     }
-    messages.push({ ...message, id: `a${i}` });
+    messages.push({ ...outcome.message, id: `a${i}` });
     const state = deriveTtxState(messages);
 
     if (state.report) {
       result.report = state.report;
-      result.notes.push(`Debrief took ${ms} ms`);
+      result.debrief = record;
       break;
     }
-    result.turns.push({ sent: next, ms, turn: state.latestTurn });
+    result.turns.push({ ...record, turn: state.latestTurn });
     if (state.phase === "ended") next = DEBRIEF_REQUEST;
     else {
       const options = state.latestTurn?.response_options ?? [];
       if (!options.length) {
-        result.problems.push(`${state.latestTurn?.time_elapsed}: no response options offered`);
+        result.findings.push({ category: "structure", text: `${state.latestTurn?.time_elapsed}: no response options offered` });
         break;
       }
       // Options come back masked; the app shows them unmasked and re-masks on
@@ -218,69 +214,82 @@ async function play(household: TestHousehold): Promise<Result> {
 }
 
 function check(result: Result, messages: TtxUIMessage[]) {
-  const { problems } = result;
+  const { findings } = result;
+  const add = (category: CheckCategory, text: string) => findings.push({ category, text });
   const turns = result.turns.flatMap((record) => (record.turn ? [record.turn] : []));
+  const participantText = messages
+    .filter((m) => m.role === "user")
+    .flatMap((m) => m.parts.map((p) => (p.type === "text" ? p.text : "")));
 
   // Privacy: nothing private in anything sent.
-  const sent = messages
-    .filter((m) => m.role === "user")
-    .flatMap((m) => m.parts.map((p) => (p.type === "text" ? p.text : "")))
-    .join("\n");
+  const sent = participantText.join("\n");
   const secrets = [...privateTerms(result.household.profile), ...(result.household.id === "privacy" ? PRIVACY_LEAKS : [])];
   const leaked = secrets.filter((secret) => containsWord(sent, secret));
-  if (leaked.length) problems.push(`PRIVACY: sent ${leaked.map((s) => `"${s}"`).join(", ")}`);
+  if (leaked.length) add("privacy", `Sent ${leaked.map((s) => `"${s}"`).join(", ")}`);
 
-  // Structure: feedback after every response, options on every ongoing turn.
+  // Structure: feedback after every response, options on every ongoing turn, a clock that moves.
   turns.slice(1).forEach((turn) => {
-    if (!turn.feedback) problems.push(`${turn.time_elapsed}: no feedback on the response`);
+    if (!turn.feedback) add("structure", `${turn.time_elapsed}: no feedback on the response`);
   });
   turns.forEach((turn) => {
     const count = turn.response_options?.length ?? 0;
     if (turn.scenario_status === "ongoing" && (count < 3 || count > 4)) {
-      problems.push(`${turn.time_elapsed}: ${count} response options (expected 3–4)`);
+      add("structure", `${turn.time_elapsed}: ${count} response options (expected 3–4)`);
     }
   });
-  if (turns.length > 1 && turns.every((turn, i) => i === 0 || turn.hours_elapsed > turns[i - 1].hours_elapsed) === false) {
-    problems.push("Clock did not move forward every turn");
+  if (turns.some((turn, i) => i > 0 && turn.hours_elapsed <= turns[i - 1].hours_elapsed)) {
+    add("structure", "Clock did not move forward every turn");
   }
 
-  // Safety: no indoor fuel-burning heat or generators in advice.
-  const advice = turns.flatMap((turn) => [
-    ...(turn.feedback ? [...turn.feedback.covered, ...turn.feedback.consider, turn.feedback.why] : []),
-    ...turn.suggested_actions,
-  ]);
-  if (result.report) advice.push(...result.report.do_better);
-  for (const flagged of unsafeAdvice(advice)) problems.push(`SAFETY (review) ${flagged}`);
-
-  // Debrief: present, answers the two questions, no verdict.
-  if (result.report) {
-    if (!result.report.need_to_know.length) problems.push("Debrief has no 'what you need to know'");
-    if (!result.report.do_better.length) problems.push("Debrief has no 'what you can do better'");
-    const text = [result.report.summary, ...result.report.need_to_know, ...result.report.do_better, ...result.report.went_well].join(" ");
-    if (VERDICT.test(text)) problems.push(`Debrief uses grading language: "${text.match(VERDICT)![0]}"`);
-  } else if (turns.at(-1)?.scenario_status !== "complete") {
-    result.notes.push(`Stopped at ${turns.at(-1)?.time_elapsed ?? "the start"} (EVAL_TURNS=${MAX_TURNS}); no debrief`);
+  // Completion: the exercise reached its end and the debrief.
+  if (!result.report && !findings.some((f) => f.category === "completion")) {
+    add("completion", `Stopped at ${turns.at(-1)?.time_elapsed ?? "the start"} (EVAL_TURNS=${MAX_TURNS}); no debrief`);
   }
 
-  const alerts = turns.flatMap((turn) => turn.critical_alerts);
+  // Continuity, safety, suitability (scripts/eval/checks.ts).
+  findings.push(...contentFindings({ baseline: result.baseline, turns, participantText, report: result.report }));
+
+  const calls = [...result.turns, ...(result.debrief ? [result.debrief] : [])].filter((call) => !call.replayed && !call.error);
+  const inputs = calls.flatMap((call) => (call.inputTokens !== undefined ? [call.inputTokens] : []));
+  const outputs = calls.flatMap((call) => (call.outputTokens !== undefined ? [call.outputTokens] : []));
+  const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+  const serverRetries = calls.filter((call) => (call.modelCalls ?? 1) > 1).length;
   result.notes.push(
-    `${turns.length} turns, reached ${turns.at(-1)?.time_elapsed ?? "Hour 0"}, ${alerts.length} attention items`,
-    `Average turn latency ${Math.round(result.turns.reduce((sum, t) => sum + t.ms, 0) / Math.max(1, result.turns.length))} ms`,
+    `${turns.length} turns, reached ${turns.at(-1)?.time_elapsed ?? "Hour 0"}${result.report ? ", debrief written" : ""}`,
+    `Input tokens per call: max ${inputs.length ? Math.max(...inputs) : "n/a"}, average ${inputs.length ? Math.round(sum(inputs) / inputs.length) : "n/a"}; output tokens total ${sum(outputs)}`,
+    `Average request time ${calls.length ? Math.round(sum(calls.map((c) => c.requestMs)) / calls.length) : 0} ms; waited ${Math.round(sum(calls.map((c) => c.waitedMs)) / 1000)} s for rate limits`,
+    `Server retried a malformed turn on ${serverRetries} of ${calls.length} calls`,
   );
 }
 
 const list = (items: string[]) => (items.length ? items.map((item) => `- ${item}`).join("\n") : "- (none)");
+const CATEGORY_LABELS: Record<CheckCategory, string> = {
+  privacy: "Privacy",
+  completion: "Completion",
+  structure: "Structure",
+  continuity: "Continuity",
+  safety: "Safety",
+  suitability: "Suitability for the household",
+};
+const byCategory = (findings: Finding[], category: CheckCategory) => findings.filter((f) => f.category === category);
 
-function reportMarkdown({ household, baseline, turns, report, problems, notes }: Result) {
+const callLine = (call: CallRecord) =>
+  call.replayed
+    ? "_Replayed from an earlier run._"
+    : `_Request ${call.requestMs} ms, waited ${Math.round(call.waitedMs / 1000)} s, ${call.attempts} request(s), ${call.modelCalls ?? "?"} model call(s), ${call.inputTokens ?? "?"} input / ${call.outputTokens ?? "?"} output tokens._`;
+
+function reportMarkdown({ household, baseline, turns, debrief, report, findings, notes }: Result) {
   const out = [
     `# ${household.persona}`,
     "",
     `**What this household tests:** ${household.tests}`,
     "",
-    `## Checks`,
+    "## Checks",
     "",
-    problems.length ? list(problems.map((p) => `❌ ${p}`)) : "- ✅ All automatic checks passed",
-    "",
+    ...CHECK_CATEGORIES.flatMap((category) => {
+      const found = byCategory(findings, category);
+      return [`**${CATEGORY_LABELS[category]}:** ${found.length ? `❌ ${found.length}` : "✅"}`, ...(found.length ? [list(found.map((f) => f.text)), ""] : [""])];
+    }),
     list(notes),
     "",
     "## What the scenario engine received",
@@ -289,8 +298,9 @@ function reportMarkdown({ household, baseline, turns, report, problems, notes }:
     baseline,
     "```",
   ];
-  turns.forEach(({ sent, turn, error }, index) => {
-    out.push("", `## ${turn?.time_elapsed ?? `Call ${index + 1}`}`, "");
+  turns.forEach((call, index) => {
+    const { sent, turn, error } = call;
+    out.push("", `## ${turn?.time_elapsed ?? `Call ${index + 1}`}`, "", callLine(call), "");
     if (index > 0) out.push(`**Response sent:** ${sent}`, "");
     if (error) {
       out.push(`**Error:** ${error}`);
@@ -319,6 +329,7 @@ function reportMarkdown({ household, baseline, turns, report, problems, notes }:
       "",
       "## Debrief",
       "",
+      ...(debrief ? [callLine(debrief), ""] : []),
       report.summary,
       "",
       "**What you need to know**",
@@ -329,6 +340,9 @@ function reportMarkdown({ household, baseline, turns, report, problems, notes }:
       "",
       "**What went well**",
       list(report.went_well),
+      "",
+      "**Supply checklist (optional)**",
+      list(report.supply_checklist ?? []),
     );
   }
   return out.join("\n") + "\n";
@@ -340,22 +354,29 @@ const results: Result[] = [];
 describe(`test households against ${BASE_URL}`, () => {
   afterAll(() => {
     if (!results.length) return;
+    const cell = (r: Result, category: CheckCategory) => {
+      const count = byCategory(r.findings, category).length;
+      return count ? `❌ ${count}` : "✅";
+    };
     const rows = results.map(
-      (r) => `| [${r.household.persona}](${r.household.id}.md) | ${r.problems.length ? `❌ ${r.problems.length}` : "✅"} | ${r.notes.join("; ")} |`,
+      (r) =>
+        `| [${r.household.persona}](${r.household.id}.md) | ${CHECK_CATEGORIES.map((c) => cell(r, c)).join(" | ")} | ${r.notes.join("; ")} |`,
     );
-    const problems = results.flatMap((r) => r.problems.map((p) => `- **${r.household.id}:** ${p}`));
+    const problems = results.flatMap((r) => r.findings.map((f) => `- **${r.household.id}** (${f.category}): ${f.text}`));
     writeFileSync(
       path.join(outDir, "summary.md"),
       [
         `# Household evaluation, ${new Date().toISOString()}`,
         "",
-        `Server ${BASE_URL}; model ${SETTINGS ? `${SETTINGS.provider}/${SETTINGS.model ?? "default"}` : "server default"}; up to ${MAX_TURNS} turns; responses chosen "${CHOOSE}".`,
+        `Server ${BASE_URL}; model ${SETTINGS ? `${SETTINGS.provider}/${SETTINGS.model ?? "default"}` : "server default"}; up to ${MAX_TURNS} turns; responses chosen "${CHOOSE}"${REPLAY ? `; replaying ${REPLAY}` : ""}.`,
         "",
-        "| Household | Checks | Notes |",
-        "| --- | --- | --- |",
+        "Completing an exercise is reported separately from its content: a run can finish and still have continuity, safety or suitability problems. Content checks are heuristics for review.",
+        "",
+        `| Household | ${CHECK_CATEGORIES.map((c) => CATEGORY_LABELS[c]).join(" | ")} | Notes |`,
+        `| --- | ${CHECK_CATEGORIES.map(() => "---").join(" | ")} | --- |`,
         ...rows,
         "",
-        "## Problems",
+        "## Findings",
         "",
         problems.length ? problems.join("\n") : "None.",
         "",
@@ -371,6 +392,6 @@ describe(`test households against ${BASE_URL}`, () => {
     results.push(result);
     writeFileSync(path.join(outDir, `${household.id}.md`), reportMarkdown(result));
     // Privacy leaks and failed calls fail the run; other findings are for review.
-    expect(result.problems.filter((p) => p.startsWith("PRIVACY") || p.includes("failed"))).toEqual([]);
+    expect(result.findings.filter((f) => f.category === "privacy" || f.text.includes("failed"))).toEqual([]);
   });
 });

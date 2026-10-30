@@ -47,6 +47,7 @@ const report: AfterActionReport = {
   went_well: ["Water storage"],
   need_to_know: ["The furnace needs power to run"],
   do_better: ["Plan a safe backup heat source"],
+  supply_checklist: [],
 };
 
 describe("deriveTtxState", () => {

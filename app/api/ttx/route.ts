@@ -17,6 +17,7 @@ import {
   buildExercisePrompt,
   deriveTtxState,
   ttxTools,
+  type TtxMetadata,
   type TtxPhase,
   type TtxUIMessage,
 } from "@/lib/ttx";
@@ -32,10 +33,12 @@ Rules:
 - Exercise context arrives as a compact briefing: the household baseline, a condensed log of earlier turns, the latest turn in full, and the participant's pending action. Treat it as the complete record and keep continuity with it: preserve elapsed time, resources and established events, and don't contradict earlier choices without an explicit new development.
 - The exercise is practice, not a test, and runs for ${TARGET_DURATION_HOURS} in-game hours. There is no game over: an unmet critical need (water, heat, shelter, medication, medical care) causes a realistic setback the participant must respond to, such as illness, lost supplies or a forced move.
 - Keep weather and physics consistent with the scenario: in sub-freezing weather, snow and ice outdoors stay frozen and indoor temperatures fall gradually.
+- Keep the world's state consistent. Once the power is out it stays out until an inject explicitly restores it, and while it's out nothing on the grid runs, sparks or shorts. Don't introduce building systems, such as a backup generator, that the baseline or an earlier turn hasn't established. Physical events must fit the home: an upper-floor apartment doesn't fill with standing water.
+- Stay on the chosen emergency: complications come from it and its real knock-on effects, not from turning it into a different disaster.
 - Safety rules for feedback, suggested actions and narratives. These override everything else, because participants may act on what you suggest:
 ${safetyPrompt()}
 - The household baseline may be a structured profile. Use the facts it gives, including stored supplies and backup power, and treat anything it lists as "not provided" as unknown: ask about it through injects rather than assuming it.
-- Never give the household resources it doesn't have. A generator, heater, vehicle, pet or supply exists only if the baseline lists it or the participant says they have or obtained it. Narratives and response_options may use other resources only by obtaining them in the story, such as borrowing from a neighbor or buying at a store, and that should cost time or effort.
+- Never give the household resources it doesn't have. A generator, heater, vehicle, pet or supply exists only if the baseline lists it or the participant says they have or obtained it. Narratives and response_options may use other resources only by obtaining them in the story, such as borrowing from a neighbor or buying at a store, and that should cost time or effort. Never have the participant find or locate equipment that wasn't established.
 - Hazards must fit the home's actual systems: no gas leak or gas-appliance carbon monoxide in a home whose heating and cooking are electric, no burst well pump on municipal water, no basement flooding without a basement. If a system isn't listed, don't assume it exists. Gas leaks are overused; prefer the household's real weak points.
 - Use the inventory check's gaps: build injects that test them, so the household discovers what it's missing.
 - Vary the developments: don't repeat a hazard that has already been resolved, and move through different parts of the emergency (utilities, health, supplies, communication, neighbors, travel, deciding whether to stay or go).
@@ -46,26 +49,32 @@ const FEEDBACK_RULES = `Feedback on the latest response goes in feedback: "cover
 const PHASE_INSTRUCTIONS: Record<Exclude<TtxPhase, "aar">, string> = {
   baseline: `Phase 1 - Baseline Generation: the participant just provided their sanitized household parameters. Set feedback to null and suggested_actions to []. Generate the inciting incident in narrative_response, set time_elapsed to "Hour 0" and hours_elapsed to 0, describe the first inject in new_inject, offer response_options for it, and set scenario_status to "ongoing".`,
   loop: `Phase 2 - Response, Feedback & Inject: ${FEEDBACK_RULES} Then report the result of the action in narrative_response, advance the clock by 6 to 12 hours (so the exercise takes about 8 to 10 turns; use shorter steps only for a fast-moving crisis), and add a new development in new_inject that follows from the participant's choices, with response_options for it. The participant may pick one of your earlier options or write their own; evaluate either the same way. Set scenario_status to "complete" if hours_elapsed reaches ${TARGET_DURATION_HOURS}, otherwise "ongoing".`,
-  ended: `Phase 4 - Debrief: the exercise is over. There is no win or lose. Help the household answer two questions from everything that happened: what do we need to know about our situation, and what can we do better? Note what went well, too. Don't grade, score or give a verdict.`,
+  ended: `Phase 4 - Debrief: the exercise is over. There is no win or lose. Help the household answer two questions from everything that happened: what do we need to know about our situation, and what can we do better? Note what went well, too. Don't grade, score or give a verdict.
+Trace every point to something that actually happened: an event in the log, a decision the participant made, or a fact in the household baseline, and say which. Never criticize something that didn't happen.
+Advice must work in the conditions this emergency creates. In a power outage, recommend warmth, light, cooling and cooking that work without grid power. Only recommend equipment a household can realistically buy, and only state figures you are sure of; leave out a number rather than guess.
+Keep do_better to at most three, most important first, suited to the household's experience: a household with few supplies needs the first basic steps, not everything at once.`,
 };
 
 /**
  * Retries a call once when the provider rejects the model's tool call before
- * any output (work item G4). A rejection after output has started streaming is
- * retried by `streamText`'s `onError` instead.
+ * any output (work item G4), and counts provider calls for the response's
+ * metadata. A rejection after output has started streaming is retried by
+ * `streamText`'s `onError` instead.
  */
-const retrySchemaSlipOnce: LanguageModelMiddleware = {
+const retrySchemaSlipOnce = (calls: { count: number }): LanguageModelMiddleware => ({
   specificationVersion: "v4",
   wrapStream: async ({ doStream }) => {
+    calls.count++;
     try {
       return await doStream();
     } catch (error) {
       if (!isSchemaSlip(error)) throw error;
       console.warn("[ttx] retrying after a malformed tool call");
+      calls.count++;
       return doStream();
     }
   },
-};
+});
 
 const errorResponse = (status: number, error: string) =>
   Response.json({ error }, { status });
@@ -132,9 +141,10 @@ export async function POST(req: Request) {
   }
 
   const toolName = phase === "ended" ? "after_action_report" : "generate_turn";
+  const modelCalls = { count: 0 };
 
   const result = streamText({
-    model: typeof resolved.model === "string" ? resolved.model : wrapLanguageModel({ model: resolved.model, middleware: retrySchemaSlipOnce }),
+    model: typeof resolved.model === "string" ? resolved.model : wrapLanguageModel({ model: resolved.model, middleware: retrySchemaSlipOnce(modelCalls) }),
     instructions: `${SYSTEM_PROMPT}\n\n${PHASE_INSTRUCTIONS[phase]}`,
     // A single compact briefing instead of the replayed chat keeps each call
     // well under Groq's per-minute token limit (docs/architecture/groq-models.md).
@@ -163,8 +173,15 @@ export async function POST(req: Request) {
   });
 
   return createUIMessageStreamResponse({
-    stream: toUIMessageStream({
+    stream: toUIMessageStream<typeof ttxTools, TtxUIMessage>({
       stream: result.stream,
+      messageMetadata: ({ part }): TtxMetadata | undefined =>
+        part.type === "finish"
+          ? {
+              usage: { inputTokens: part.totalUsage.inputTokens, outputTokens: part.totalUsage.outputTokens },
+              modelCalls: modelCalls.count,
+            }
+          : undefined,
       onError: (error) => {
         console.error("[ttx] model call failed", error);
         return describeProviderError(error, mode);

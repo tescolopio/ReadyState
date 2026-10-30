@@ -40,30 +40,39 @@ PowerShell: `$env:EVAL_ONLY="alex"; npm run eval`.
 | `EVAL_ONLY` | all | Comma-separated household ids |
 | `EVAL_TURNS` | `14` | Stop after this many turns. The debrief only runs if the exercise ended (72 in-game hours usually takes 8–12 turns). |
 | `EVAL_DELAY_MS` | `8000` | Pause between calls. Groq's free tier allows 8,000 tokens per minute; lower this on a paid tier. |
-
-The eval retries like a patient participant: when the app says the provider is limiting requests, it waits the stated time and submits again (up to 3 times per call), and after an incomplete turn it resubmits once. The server has already retried that turn once itself. Each retry is listed in the household's notes.
 | `EVAL_CHOOSE` | `cycle` | Which offered response to pick: `cycle` (1st, 2nd, 3rd…), `first` or `last` |
 | `EVAL_PROVIDER`, `EVAL_MODEL` | server default | Send these as the app's provider settings, to test another provider or model (for example `EVAL_MODEL=openai/gpt-oss-20b`, which has its own Groq quota) |
+| `EVAL_REPLAY` | none | A previous run's folder, for targeted reruns. Each household replays that run's successful turns without calling the model, then continues: a failed call is resent, and a finished exercise goes straight to the debrief. |
 
-A full run of all seven households takes about 15–20 minutes and **about a day's free Groq quota**: Groq's free tier allows 200,000 tokens per day per model, and a full run makes 60 or more calls of 2,500–4,000 tokens each. Use `EVAL_ONLY` and `EVAL_TURNS`, split runs across days, or point `EVAL_MODEL` at a second model. Playing the app yourself uses the same quota.
+```bash
+# Rerun only the debrief, and resume an interrupted exercise, from an earlier run
+EVAL_REPLAY=eval-results/2026-10-30T11-14-00-286Z EVAL_ONLY=alex,charlotte npm run eval
+```
+
+**Rate limits.** The eval retries like a patient participant: when the app says the provider is limiting requests, it waits the stated time ("a few seconds" is 5 s; no time given is 30 s) and sends the identical request again, up to 3 times per call. After an incomplete turn it resubmits once; the server has already retried that turn once itself. Each retry is listed in the household's notes. The logic is in `retry.ts`, with tests.
+
+A full run of all seven households takes about 15–20 minutes and **about a day's free Groq quota**: Groq's free tier allows 200,000 tokens per day per model, and a full run makes 60 or more calls of 2,500–6,000 tokens each. Use `EVAL_ONLY`, `EVAL_TURNS` and `EVAL_REPLAY`, split runs across days, or point `EVAL_MODEL` at a second model. Playing the app yourself uses the same quota.
 
 ## Results
 
 Each run writes `eval-results/<timestamp>/` (git-ignored):
-- `summary.md`: a check result per household and a list of problems.
-- `<household>.md`: what the engine received, every turn (feedback, outcome, inject, options, the response chosen) and the debrief. Read these to judge quality.
-- `results.json`: everything, for comparing runs.
+- `summary.md`: results per check category for each household, and every finding.
+- `<household>.md`: what the engine received, every turn (feedback, outcome, inject, options, the response chosen) and the debrief, each with its timing and token usage. Read these to judge quality.
+- `results.json`: everything, for comparing runs and for `EVAL_REPLAY`.
 
-**Automatic checks:**
+**Measurements, per call:** actual input and output tokens as the provider reported them (from the response's metadata), the request time without waits, time spent waiting out limits, the requests the eval made, and the provider calls the server made (2 means it retried a malformed turn). Provider limit estimates, such as Groq's "Requested" figure in a 429, appear only in the server log and are a different quantity.
 
-| Check | What it looks for |
+**Automatic checks, by category.** Finishing an exercise is reported separately from its content: a run can complete and still have content defects.
+
+| Category | What it looks for |
 | --- | --- |
 | Privacy | No name, medication or device name, or planted detail in anything sent. **Fails the run.** |
-| Call errors | A failed call. **Fails the run.** |
-| Feedback | Present after every response. |
-| Options | 3–4 options on every ongoing turn. |
-| Clock | Moves forward every turn. |
-| Safety | A heuristic for advice to run fuel-burning heat or generators indoors. Flagged sentences need human review; the model-judge version is work item G11. |
-| Debrief | Has "what you need to know" and "what you can do better", with no grading language. |
+| Completion | Every call succeeded (**a failed call fails the run**), the exercise reached its end, and the debrief answers both questions. |
+| Structure | Feedback after every response, 3–4 options on every ongoing turn, a clock that moves forward. |
+| Continuity | Equipment that appears without being in the baseline or obtained in the story; debrief points that don't say what they come from, or cite an hour that never happened. |
+| Safety | Each rule's `detect` patterns in `data/rules/safety.json`: fuel-burning heat indoors, electric or battery heaters for outages. Flagged sentences need human review; the model-judge version is work item G11. |
+| Suitability | At most three improvements in the debrief, none a checklist in disguise, no grading language. |
 
-Everything except privacy and call errors is reported for review rather than failing the run, because model output varies between runs.
+Content checks are heuristics in `checks.ts`. Defects found by reading a run become regression examples in `checks.test.ts`, so a check that missed them once is shown to catch them. Some defects, such as physically wrong explanations, still need the model judge.
+
+Everything except privacy and failed calls is reported for review rather than failing the run, because model output varies between runs.

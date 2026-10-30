@@ -685,6 +685,14 @@ function DebriefView({ report, source, ready }: { report?: DeepPartial<AfterActi
         ready={ready}
       />
       <ItemList title="What went well" items={report.went_well} />
+      {report.supply_checklist?.some(Boolean) && (
+        <details className="rounded-control border border-line p-3">
+          <summary className="cursor-pointer text-sm font-semibold">Fuller supply checklist (optional)</summary>
+          <div className="mt-2">
+            <ItemList title="Worth gathering over time" items={report.supply_checklist} />
+          </div>
+        </details>
+      )}
       <p className="text-sm text-ink-3">Completing an exercise is practice, not proof of real-world readiness.</p>
     </div>
   );

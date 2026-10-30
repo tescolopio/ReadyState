@@ -224,6 +224,8 @@ describe("POST /api/ttx", () => {
     ]);
     const part = last?.parts.find((p) => p.type === "tool-generate_turn");
     expect(part).toMatchObject({ state: "output-available", output: turnInput });
+    // The eval reads actual usage and the number of provider calls from the metadata.
+    expect(last?.metadata).toEqual({ usage: { inputTokens: 1, outputTokens: 1 }, modelCalls: 1 });
   });
 
   it("retries once when the provider rejects a malformed turn before any output", async () => {
@@ -234,6 +236,7 @@ describe("POST /api/ttx", () => {
 
     const last = await lastMessage(await post([userMessage]));
     expect(model.doStreamCalls).toHaveLength(2);
+    expect(last?.metadata?.modelCalls).toBe(2);
     expect(last?.parts.find((p) => p.type === "tool-generate_turn")).toMatchObject({
       state: "output-available",
       output: turnInput,
@@ -258,6 +261,7 @@ describe("POST /api/ttx", () => {
 
     const last = await lastMessage(await post([userMessage]));
     expect(model.doStreamCalls).toHaveLength(2);
+    expect(last?.metadata?.modelCalls).toBe(2);
     expect(last?.parts.find((p) => p.type === "tool-generate_turn")).toMatchObject({
       state: "output-available",
       output: turnInput,

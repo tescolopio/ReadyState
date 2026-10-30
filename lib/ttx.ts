@@ -73,13 +73,16 @@ export const afterActionReportSchema = z.object({
   need_to_know: z
     .array(z.string())
     .describe(
-      'What this household needs to know about its own situation, learned from the exercise: dependencies, timings and risks, stated factually (e.g. "Without power, your cooler keeps the insulin in range for about a day if the ice is replaced").',
+      'What this household needs to know about its own situation, learned from the exercise: dependencies, timings and risks, stated factually. End each with where it comes from, e.g. "Without power, your cooler keeps the insulin in range for about a day if the ice is replaced (from Hour 18: the cooler warming)".',
     ),
   do_better: z
     .array(z.string())
     .describe(
-      'What the household can do better: concrete changes to plans, skills or supplies, most important first, phrased as actions (e.g. "Freeze water jugs to use as ice and drinking water").',
+      'One to three improvements, most important first. Each is one sentence naming the improvement and one concrete next action, ending with where it comes from, e.g. "Freeze two water jugs this week to use as ice and drinking water (from Hour 18: the cooler warming)". Put longer supply lists in supply_checklist instead.',
     ),
+  supply_checklist: z
+    .array(z.string())
+    .describe("Optional: individual supplies worth gathering, one per item, for a household that wants a fuller list. Empty if the improvements cover it."),
 });
 
 export type TurnOutput = z.infer<typeof turnSchema>;
@@ -106,8 +109,18 @@ export const ttxTools = {
   }),
 };
 
+/**
+ * What the server reports about the model call behind a response, for the
+ * eval: actual token usage and how many provider calls it took (1, or 2
+ * after a retried malformed turn). Never shown to participants.
+ */
+export interface TtxMetadata {
+  usage?: { inputTokens?: number; outputTokens?: number };
+  modelCalls?: number;
+}
+
 export type TtxUIMessage = UIMessage<
-  never,
+  TtxMetadata,
   UIDataTypes,
   InferUITools<typeof ttxTools>
 >;
