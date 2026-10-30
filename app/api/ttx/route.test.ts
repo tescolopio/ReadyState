@@ -9,7 +9,7 @@ import {
 import { MockLanguageModelV4 } from "ai/test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { TtxUIMessage } from "@/lib/ttx";
+import type { AfterActionReport, TtxUIMessage } from "@/lib/ttx";
 
 import type { HostedServices } from "@/lib/hosted";
 import { SAFETY_RULES } from "@/lib/rules";
@@ -298,36 +298,130 @@ describe("POST /api/ttx", () => {
     expect(body).toContain("The model returned an incomplete turn.");
   });
 
-  it("forces the after_action_report tool once the exercise has ended", async () => {
-    const model = mockToolCallModel("after_action_report", {});
-    env.model = model;
-    const ended = { ...turnInput, hours_elapsed: 72, scenario_status: "complete" };
+});
 
-    const res = await post([
-      userMessage,
-      {
-        id: "a1",
-        role: "assistant",
-        parts: [
-          {
-            type: "tool-generate_turn",
-            toolCallId: "c1",
-            state: "output-available",
-            input: ended,
-            output: ended,
+describe("POST /api/ttx: the debrief", () => {
+  const ended = { ...turnInput, hours_elapsed: 72, time_elapsed: "Hour 72", scenario_status: "complete" as const };
+  const endedExercise: TtxUIMessage[] = [
+    userMessage,
+    {
+      id: "a1",
+      role: "assistant",
+      parts: [{ type: "tool-generate_turn", toolCallId: "c1", state: "output-available", input: ended, output: ended }],
+    },
+    { id: "u2", role: "user", parts: [{ type: "text", text: "The exercise is over. Please prepare the debrief." }] },
+  ];
+
+  const passing: AfterActionReport = {
+    summary: "Heat was the weak point.",
+    went_well: ["You layered clothes early."],
+    need_to_know: ["Your furnace needs power to run (from your household profile: gas furnace)."],
+    do_better: ["Put a sleeping bag on this week's shopping list (from Hour 72: the cold apartment)."],
+    supply_checklist: [],
+  };
+  /** Alex's embedded kit list (eval finding 16): fails the one-action check. */
+  const kitList: AfterActionReport = {
+    ...passing,
+    do_better: [
+      "Assemble a basic emergency kit that includes a sleeping bag or warm blanket, a battery‑powered NOAA radio, first‑aid supplies, a manual can opener, extra batteries, dust masks, plastic sheeting, duct tape, a whistle, and hand sanitizer (from Hour 72).",
+    ],
+  };
+
+  /** Answers each debrief call with the next report, and records what it was asked. */
+  const debriefModel = (reports: AfterActionReport[], onCall?: (call: number) => void) => {
+    let call = 0;
+    return new MockLanguageModelV4({
+      doGenerate: async () => {
+        onCall?.(call);
+        const report = reports[Math.min(call++, reports.length - 1)];
+        return {
+          content: [{ type: "tool-call", toolCallId: `call-${call}`, toolName: "after_action_report", input: JSON.stringify(report) }],
+          finishReason: { unified: "tool-calls", raw: undefined },
+          usage: {
+            inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+            outputTokens: { total: 5, text: 5, reasoning: undefined },
           },
-        ],
+          warnings: [],
+        };
       },
-      { id: "u2", role: "user", parts: [{ type: "text", text: "Generate the AAR" }] },
-    ]);
-    await res.text();
-
-    expect(model.doStreamCalls[0].toolChoice).toEqual({
-      type: "tool",
-      toolName: "after_action_report",
     });
+  };
+  const promptText = (model: MockLanguageModelV4, call: number) =>
+    JSON.stringify(model.doGenerateCalls[call].prompt.filter((m) => m.role === "user"));
+
+  it("checks a debrief and returns it when it passes the implemented checks", async () => {
+    const model = debriefModel([passing]);
+    env.model = model;
+
+    const last = await lastMessage(await post(endedExercise));
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(model.doGenerateCalls[0].toolChoice).toEqual({ type: "tool", toolName: "after_action_report" });
     // Decision D8: a review of decisions, not a grade.
-    expect(systemText(model)).toContain("Don't grade, score or give a verdict.");
+    expect(JSON.stringify(model.doGenerateCalls[0].prompt)).toContain("Don't grade, score or give a verdict.");
+    expect(last?.parts.find((p) => p.type === "tool-after_action_report")).toMatchObject({ state: "output-available", output: passing });
+    expect(last?.metadata).toEqual({
+      usage: { inputTokens: 10, outputTokens: 5 },
+      providerCalls: 1,
+      schemaRetries: 0,
+      debriefRepairs: 0,
+      debriefChecks: { passedImplementedChecks: true, failedFirst: [] },
+    });
+  });
+
+  it("repairs a failing debrief once, telling the model exactly which checks failed", async () => {
+    const model = debriefModel([kitList, passing]);
+    env.model = model;
+
+    const last = await lastMessage(await post(endedExercise));
+    expect(model.doGenerateCalls).toHaveLength(2);
+    expect(promptText(model, 0)).not.toContain("failed these checks");
+    const repair = promptText(model, 1);
+    expect(repair).toContain("Your debrief failed these checks");
+    expect(repair).toContain("Improvement is a list rather than one action");
+    expect(repair).toContain("YOUR PREVIOUS DEBRIEF (JSON)");
+    expect(last?.parts.find((p) => p.type === "tool-after_action_report")).toMatchObject({ output: passing });
+    expect(last?.metadata).toMatchObject({
+      usage: { inputTokens: 20, outputTokens: 10 },
+      providerCalls: 2,
+      schemaRetries: 0,
+      debriefRepairs: 1,
+      debriefChecks: { passedImplementedChecks: true, failedFirst: [expect.stringContaining("Improvement is a list")] },
+    });
+  });
+
+  it("returns a recoverable error, not the debrief, when the repair still fails", async () => {
+    const model = debriefModel([kitList, kitList]);
+    env.model = model;
+
+    const res = await post(endedExercise);
+    const body = await res.text();
+    expect(model.doGenerateCalls).toHaveLength(2);
+    expect(body).toContain("didn't pass ReadyState's checks, even after one repair");
+    expect(body).not.toContain("tool-output-available");
+  });
+
+  it("skips the repair when too little of the time budget is left", async () => {
+    const start = Date.now();
+    const now = vi.spyOn(Date, "now").mockReturnValue(start);
+    // The first attempt takes 40 of the 55 seconds.
+    const model = debriefModel([kitList], () => now.mockReturnValue(start + 40_000));
+    env.model = model;
+
+    const body = await (await post(endedExercise)).text();
+    now.mockRestore();
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(body).toContain("there wasn't time before the server's limit");
+    expect(body).not.toContain("tool-output-available");
+  });
+
+  it("explains a request that ran out of time", async () => {
+    env.model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      },
+    });
+    const body = await (await post(endedExercise)).text();
+    expect(body).toContain("took too long");
   });
 });
 

@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import type { AfterActionReport, TurnOutput } from "@/lib/ttx";
 
-import { contentFindings, introducedEquipment, unsafeAdvice, unsuitableDebrief, untracedDebriefPoints } from "./checks";
+import { contentFindings, introducedEquipment, unsafeAdvice } from "./checks";
 
 /**
  * Regression examples from Alex's run on 2026-10-30 (eval finding 16): it
  * passed every automatic check of the time despite these defects. Text is
- * quoted from the run, including the model's non-breaking hyphens.
+ * quoted from the run, including the model's non-breaking hyphens. Debrief
+ * regressions are in lib/debrief-checks.test.ts.
  */
 const alexBaseline = [
   "People: 1 adult.",
@@ -45,27 +46,19 @@ const alexTurns = [
       "I go back to my apartment alone right away, find an electric space heater in the unit, and try to heat the space despite the low temperature.",
       "I stay with my neighbor, who has a working heater, until the central heat returns.",
     ],
+    suggested_actions: ["Obtain a safe, UL‑listed portable electric heater for future power outages."],
   }),
 ];
 
-const alexDebrief: AfterActionReport = {
-  summary: "The exercise highlighted that the apartment's lack of sufficient water, food, and emergency supplies created risk.",
-  went_well: ["You recognized the hypothermia risk early."],
-  need_to_know: [
-    "Your electric space heater (1500 W) exceeds the capacity of a standard 15‑amp circuit and will trip the breaker repeatedly; a lower‑wattage, UL‑listed heater or a portable battery‑powered heater would be safer.",
-    "Water intrusion can raise floor temperature and cause hypothermia even in indoor spaces; wet clothing dramatically increases heat loss.",
-  ],
-  do_better: [
-    "Acquire a complete basic emergency kit, including a battery-powered or hand-crank NOAA weather radio, first aid kit, extra batteries, whistle, dust masks, plastic sheeting, duct tape, moist towelettes, garbage bags with ties, wrench or pliers for utilities, manual can opener, local maps, and hand sanitizer.",
-    "Increase stored water to at least 3 gallons per person (3 days) and add additional containers for emergencies.",
-    "Stock at least 3 days of non‑perishable, no‑cook food and a method to open canned goods without electricity.",
-    "Obtain a sleeping bag or warm blanket rated for near‑freezing temperatures for each household member.",
-    "Install battery‑backup smoke detectors and CO detectors in sleeping areas and test them regularly.",
-  ],
-  supply_checklist: [],
+const debrief: AfterActionReport = {
+  summary: "Water and warmth were the pressure points.",
+  went_well: ["You layered clothes early (Hour 0)."],
+  need_to_know: ["Stairs are your only way out without power (from Hour 0: the elevator stopping)"],
+  do_better: ["Store two more gallons of water this week (from your household profile: 1 gallon stored)"],
+  supply_checklist: ["Hand-crank radio", "Manual can opener"],
 };
 
-describe("Alex's 2026-10-30 defects are caught", () => {
+describe("Alex's 2026-10-30 turn defects are caught", () => {
   it("flags equipment the story introduced: the space heater and the building generator", () => {
     const flagged = introducedEquipment(alexBaseline, alexTurns, []);
     expect(flagged).toHaveLength(2);
@@ -78,82 +71,36 @@ describe("Alex's 2026-10-30 defects are caught", () => {
     expect(introducedEquipment(`${alexBaseline}\nHas: a space heater.`, [alexTurns[2]], [])).toEqual([]);
   });
 
-  it("flags the battery-powered heater, and an electric heater recommended for outages", () => {
-    expect(unsafeAdvice(alexDebrief.need_to_know)).toEqual([expect.stringContaining("outage-appropriate-heating")]);
+  it("flags an electric heater recommended for outages, but not a warning against one", () => {
     expect(unsafeAdvice(["Obtain a safe, UL‑listed portable electric heater for future power outages."])).toHaveLength(1);
     expect(unsafeAdvice(["An electric heater won't help in a power outage; use blankets and a sleeping bag."])).toEqual([]);
-  });
-
-  it("flags debrief points that don't trace to an event", () => {
-    expect(untracedDebriefPoints(alexDebrief, alexTurns)).toHaveLength(7);
-    const traced = {
-      ...alexDebrief,
-      need_to_know: ["Stairs are your only way out without power (from Hour 0: the elevator stopping)"],
-      do_better: ["Store two more gallons of water this week (from your household profile: 1 gallon stored)"],
-    };
-    expect(untracedDebriefPoints(traced, alexTurns)).toEqual([]);
-    const wrongHour = { ...traced, do_better: ["Buy a radio (from Hour 30: the alert you missed)"] };
-    expect(untracedDebriefPoints(wrongHour, alexTurns)).toEqual([expect.stringContaining("Hour 30, which never happened")]);
-  });
-
-  it("accepts the citation styles the model used in the 2026-10-30 rerun", () => {
-    const rerun = {
-      ...alexDebrief,
-      need_to_know: [
-        "A space heater can trip the breaker, leaving you without power when you need it most (observed at Hour 66).",
-        "Your refrigerator keeps food safe for only about 4 hours without power (CDC/FEMA guidance applied to the extended outage scenario).",
-        "Central heating may take hours to recover (experienced at Hours 48‑66).",
-      ],
-      do_better: ["Increase stored water to 3 gallons, derived from the baseline water shortage."],
-    };
-    expect(untracedDebriefPoints(rerun, alexTurns)).toEqual([]);
-    // Guidance alone doesn't trace an improvement to what happened.
-    const guidanceOnly = { ...rerun, do_better: ["Store 3 gallons of water, per CDC guidance."] };
-    expect(untracedDebriefPoints(guidanceOnly, alexTurns)).toHaveLength(1);
-  });
-
-  it("flags more than three improvements, and a checklist posing as one", () => {
-    const problems = unsuitableDebrief(alexDebrief);
-    expect(problems[0]).toBe("Debrief lists 5 improvements (at most 3)");
-    expect(problems[1]).toContain("reads like a checklist");
-  });
-
-  it("files each problem under its own category", () => {
-    const categories = new Set(
-      contentFindings({ baseline: alexBaseline, turns: alexTurns, participantText: [], report: alexDebrief }).map(
-        (f) => f.category,
-      ),
-    );
-    expect([...categories].sort()).toEqual(["continuity", "safety", "suitability"]);
-  });
-
-  it("doesn't re-judge turns replayed from an earlier run, but still checks the new debrief", () => {
-    const findings = contentFindings({
-      baseline: alexBaseline,
-      turns: alexTurns,
-      participantText: [],
-      report: alexDebrief,
-      replayedTurns: alexTurns.length,
-    });
-    expect(findings.some((f) => f.text.includes("space heater\" appears"))).toBe(false);
-    expect(findings.some((f) => f.category === "safety")).toBe(true); // the debrief's battery-powered heater
   });
 
   it.todo("flags physically wrong explanations such as 'water intrusion can raise floor temperature' (needs the model judge, G11)");
 });
 
-describe("a clean debrief", () => {
-  it("passes every content check", () => {
-    const clean: AfterActionReport = {
-      summary: "Water and warmth were the pressure points.",
-      went_well: ["You layered clothes early (Hour 0)."],
-      need_to_know: ["Stairs are your only way out without power (from Hour 0: the elevator stopping)"],
-      do_better: [
-        "Store two more gallons of water this week (from your household profile: 1 gallon stored)",
-        "Put a sleeping bag on your next shopping list (from Hour 0: the apartment cooling)",
-      ],
-      supply_checklist: ["Hand-crank radio", "Manual can opener"],
-    };
-    expect(contentFindings({ baseline: alexBaseline, turns: alexTurns.slice(0, 1), participantText: [], report: clean })).toEqual([]);
+describe("contentFindings", () => {
+  it("files new-output problems by category", () => {
+    const findings = contentFindings({ baseline: alexBaseline, turns: alexTurns, participantText: [], report: debrief });
+    expect([...new Set(findings.map((f) => f.category))].sort()).toEqual(["continuity", "safety"]);
+    expect(findings.every((f) => !f.replayed)).toBe(true);
+  });
+
+  it("keeps defects of replayed turns in the record, marked as known, and still checks the new debrief", () => {
+    const findings = contentFindings({
+      baseline: alexBaseline,
+      turns: alexTurns,
+      participantText: [],
+      report: { ...debrief, do_better: ["Store 3 gallons of water, per CDC guidance."] },
+      replayedTurns: alexTurns.length,
+    });
+    const known = findings.filter((f) => f.replayed);
+    expect(known.map((f) => f.category).sort()).toEqual(["continuity", "continuity", "safety"]);
+    // The new debrief's untraced improvement counts against new output.
+    expect(findings.filter((f) => !f.replayed).map((f) => f.category)).toEqual(["citation"]);
+  });
+
+  it("passes a clean run", () => {
+    expect(contentFindings({ baseline: alexBaseline, turns: alexTurns.slice(0, 1), participantText: [], report: debrief })).toEqual([]);
   });
 });

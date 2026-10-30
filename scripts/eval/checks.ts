@@ -1,51 +1,43 @@
 /**
  * Automatic checks for an eval run, reported in separate categories so that
- * finishing an exercise isn't mistaken for a good one. All are heuristics for
- * review, not guarantees: physically wrong explanations, for example, need the
- * model judge (work item G11). Regression examples live in checks.test.ts.
+ * finishing an exercise isn't mistaken for a good one. All are heuristics:
+ * passing means "passed the implemented checks", not verified safe or
+ * accurate. Debrief checks are shared with the server (lib/debrief-checks.ts).
+ * Regression examples live in checks.test.ts and lib/debrief-checks.test.ts.
  */
-import { SAFETY_RULES } from "@/lib/rules";
+import { checkDebrief, unsafeSentences, type DebriefCheckCategory } from "@/lib/debrief-checks";
 import type { AfterActionReport, TurnOutput } from "@/lib/ttx";
 
-export const CHECK_CATEGORIES = ["privacy", "completion", "structure", "continuity", "safety", "suitability"] as const;
+export const CHECK_CATEGORIES = [
+  "privacy",
+  "completion",
+  "structure",
+  "continuity",
+  "citation",
+  "accuracy",
+  "safety",
+  "suitability",
+] as const;
 export type CheckCategory = (typeof CHECK_CATEGORIES)[number];
 
 export interface Finding {
   category: CheckCategory;
   text: string;
+  /** From turns replayed out of an earlier run: a known defect, kept in the record but not counted against new output. */
+  replayed?: boolean;
 }
-
-const finding = (category: CheckCategory) => (text: string): Finding => ({ category, text });
 
 const sentences = (texts: string[]) => texts.flatMap((text) => text.split(/(?<=[.!?])\s+/));
 
-/**
- * Advice that breaks a safety rule, using each rule's `detect` patterns from
- * data/rules/safety.json. Sentences matching the rule's `exceptWhen` are
- * warnings about the hazard, not advice.
- */
-const DETECTORS = SAFETY_RULES.filter((rule) => rule.detect).map((rule) => ({
-  id: rule.id,
-  patterns: rule.detect!.map((pattern) => new RegExp(pattern, "i")),
-  except: rule.exceptWhen ? new RegExp(rule.exceptWhen, "i") : undefined,
-}));
+/** Unsafe advice in the given texts, as "rule: sentence". */
+export const unsafeAdvice = (texts: string[]) => unsafeSentences(texts).map(({ rule, sentence }) => `${rule}: "${sentence}"`);
 
-export const unsafeAdvice = (texts: string[]) =>
-  sentences(texts).flatMap((sentence) =>
-    DETECTORS.filter(
-      (rule) => rule.patterns.some((pattern) => pattern.test(sentence)) && !rule.except?.test(sentence),
-    ).map((rule) => `${rule.id}: "${sentence}"`),
-  );
-
-/** Everything the turns and debrief advise, for the safety check. */
-export function adviceTexts(turns: TurnOutput[], report?: AfterActionReport) {
-  return [
-    ...turns.flatMap((turn) => [
-      ...(turn.feedback ? [...turn.feedback.covered, ...turn.feedback.consider, turn.feedback.why] : []),
-      ...turn.suggested_actions,
-    ]),
-    ...(report ? [...report.need_to_know, ...report.do_better, ...(report.supply_checklist ?? [])] : []),
-  ];
+/** What the turns advise, for the safety check. */
+export function turnAdvice(turns: TurnOutput[]) {
+  return turns.flatMap((turn) => [
+    ...(turn.feedback ? [...turn.feedback.covered, ...turn.feedback.consider, turn.feedback.why] : []),
+    ...turn.suggested_actions,
+  ]);
 }
 
 /**
@@ -94,64 +86,43 @@ export function introducedEquipment(baseline: string, turns: TurnOutput[], parti
   return [...flagged.values()];
 }
 
-/** A moment in the exercise ("Hour 18", "Hours 48–66") or a household fact. */
-const TRACED = /\bHours? \d+|\b(baseline|household profile|your profile|inventory check|at the start)\b/i;
-/** For facts to know, official guidance is also a source; improvements must trace to what happened. */
-const GUIDANCE = /\b(guidance|CDC|FEMA|Ready\.gov|Red Cross|USDA|NWS)\b/;
-
-/** Debrief points that don't say what they come from, or cite an hour that never happened. */
-export function untracedDebriefPoints(report: AfterActionReport, turns: TurnOutput[]): string[] {
-  const hours = new Set(turns.map((turn) => turn.hours_elapsed));
-  const check = (point: string, allowGuidance: boolean) => {
-    if (!TRACED.test(point) && !(allowGuidance && GUIDANCE.test(point))) {
-      return [`Debrief point doesn't say what it comes from: "${point}"`];
-    }
-    // Ranges ("Hours 48–66") name a span, so only single hours are checked.
-    const missing = [...point.matchAll(/\bHour (\d+)\b(?![\s]*[-–‑]\s*\d)/gi)]
-      .map((match) => Number(match[1]))
-      .filter((hour) => !hours.has(hour));
-    return missing.length ? [`Debrief cites Hour ${missing.join(", Hour ")}, which never happened: "${point}"`] : [];
-  };
-  return [...report.need_to_know.flatMap((point) => check(point, true)), ...report.do_better.flatMap((point) => check(point, false))];
-}
-
-/** Grading language the debrief must avoid (decision D8). */
-const VERDICT = /\b(grade|score|scored|passed|failed|you (won|lost)|verdict)\b/i;
-
-/** Improvements beyond three, or one that is really a checklist (eval finding 16). */
-export function unsuitableDebrief(report: AfterActionReport): string[] {
-  const problems: string[] = [];
-  if (report.do_better.length > 3) problems.push(`Debrief lists ${report.do_better.length} improvements (at most 3)`);
-  for (const item of report.do_better) {
-    const commas = (item.match(/,/g) ?? []).length;
-    if (commas >= 5 || item.length > 260) problems.push(`Improvement reads like a checklist: "${item.slice(0, 120)}…"`);
-  }
-  const text = [report.summary, ...report.need_to_know, ...report.do_better, ...report.went_well].join(" ");
-  const verdict = text.match(VERDICT);
-  if (verdict) problems.push(`Debrief uses grading language: "${verdict[0]}"`);
-  return problems;
-}
+const DEBRIEF_CATEGORY: Record<DebriefCheckCategory, CheckCategory> = {
+  suitability: "suitability",
+  citation: "citation",
+  safety: "safety",
+  accuracy: "accuracy",
+};
 
 export interface RunForChecks {
   baseline: string;
   turns: TurnOutput[];
   participantText: string[];
   report?: AfterActionReport;
-  /** Leading turns copied from an earlier run (EVAL_REPLAY): already judged, so only their hours are used. */
+  /** Leading turns copied from an earlier run (EVAL_REPLAY). Their findings are marked `replayed`. */
   replayedTurns?: number;
 }
 
-/** Continuity, safety, suitability and debrief completion findings for one run. */
+/** Continuity, citation, accuracy, safety, suitability and debrief completion findings for one run. */
 export function contentFindings({ baseline, turns, participantText, report, replayedTurns = 0 }: RunForChecks): Finding[] {
   const out: Finding[] = [];
-  const fresh = turns.slice(replayedTurns);
-  out.push(...introducedEquipment(baseline, fresh, participantText).map(finding("continuity")));
-  out.push(...unsafeAdvice(adviceTexts(fresh, report)).map((text) => finding("safety")(`(review) ${text}`)));
+  const turnFindings = (slice: TurnOutput[], replayed: boolean) => {
+    const mark = (category: CheckCategory) => (text: string): Finding => ({ category, text, ...(replayed ? { replayed } : {}) });
+    out.push(...introducedEquipment(baseline, slice, participantText).map(mark("continuity")));
+    out.push(...unsafeAdvice(turnAdvice(slice)).map((text) => mark("safety")(`(review) ${text}`)));
+  };
+  turnFindings(turns.slice(0, replayedTurns), true);
+  turnFindings(turns.slice(replayedTurns), false);
+
   if (report) {
-    if (!report.need_to_know.length) out.push(finding("completion")("Debrief has no 'what you need to know'"));
-    if (!report.do_better.length) out.push(finding("completion")("Debrief has no 'what you can do better'"));
-    out.push(...untracedDebriefPoints(report, turns).map(finding("continuity")));
-    out.push(...unsuitableDebrief(report).map(finding("suitability")));
+    if (!report.need_to_know.length) out.push({ category: "completion", text: "Debrief has no 'what you need to know'" });
+    if (!report.do_better.length) out.push({ category: "completion", text: "Debrief has no 'what you can do better'" });
+    // Citations are checked against every hour, replayed or not.
+    out.push(...checkDebrief(report, turns).map((p) => ({ category: DEBRIEF_CATEGORY[p.category], text: p.problem })));
+    const verdict = [report.summary, ...report.need_to_know, ...report.do_better, ...report.went_well].join(" ").match(VERDICT);
+    if (verdict) out.push({ category: "suitability", text: `Debrief uses grading language: "${verdict[0]}"` });
   }
   return out;
 }
+
+/** Grading language the debrief must avoid (decision D8). */
+const VERDICT = /\b(grade|score|scored|passed|failed|you (won|lost)|verdict)\b/i;

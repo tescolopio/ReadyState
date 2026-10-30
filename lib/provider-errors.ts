@@ -47,6 +47,12 @@ const waitFor = (error: unknown) => {
   return `about ${Math.ceil(seconds / 3600)} hours`;
 };
 
+/** True when the request's time budget ran out (an AbortSignal timeout), possibly wrapped by the SDK. */
+const timedOut = (error: unknown): boolean =>
+  error instanceof Error || error instanceof DOMException
+    ? error.name === "TimeoutError" || ("cause" in error && timedOut(error.cause)) || (RetryError.isInstance(error) && timedOut(error.lastError))
+    : false;
+
 /**
  * True when the provider rejected the model's tool call for not matching the
  * schema, such as a missing field or `feedback.why` sent as an array (eval
@@ -64,6 +70,9 @@ export function isSchemaSlip(error: unknown): boolean {
  */
 export function describeProviderError(error: unknown, mode: AppMode): string {
   const settingsHint = mode === "self-hosted" ? " or choose another model or provider in Settings" : "";
+  if (timedOut(error)) {
+    return "The model took too long to respond, so ReadyState stopped waiting before the server's time limit. Your exercise is still here; submit again in a minute.";
+  }
   const failure = providerFailure(error);
   if (!failure) return "Something went wrong generating this turn. Please try again.";
 

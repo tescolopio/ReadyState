@@ -120,6 +120,14 @@ export interface TtxMetadata {
   providerCalls?: number;
   /** Retries after a malformed tool call (work item G4). */
   schemaRetries?: number;
+  /** Debrief repairs after failed content checks (0 or 1). */
+  debriefRepairs?: number;
+  /**
+   * Set on a debrief that passed lib/debrief-checks.ts: the implemented
+   * checks, not a verification of safety or accuracy. `failedFirst` lists
+   * what the first attempt failed, before its repair.
+   */
+  debriefChecks?: { passedImplementedChecks: true; failedFirst: string[] };
 }
 
 export type TtxUIMessage = UIMessage<

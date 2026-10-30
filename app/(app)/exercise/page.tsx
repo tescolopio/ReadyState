@@ -223,13 +223,17 @@ export default function ExercisePage() {
         {error && (
           <div className="space-y-2 rounded-panel border border-error bg-error-soft p-4 text-sm text-error" role="alert">
             <p>{errorText(error)}</p>
-            <p className="text-ink-2">
-              Your exercise so far is still here. Check the model provider in{" "}
-              <Link href="/settings" className="font-semibold text-ink underline underline-offset-2">
-                Settings
-              </Link>
-              , then send your response again.
-            </p>
+            {ttx.phase === "ended" ? (
+              <p className="text-ink-2">Your exercise is still here. Use the debrief button below to ask again.</p>
+            ) : (
+              <p className="text-ink-2">
+                Your exercise so far is still here. Check the model provider in{" "}
+                <Link href="/settings" className="font-semibold text-ink underline underline-offset-2">
+                  Settings
+                </Link>
+                , then send your response again.
+              </p>
+            )}
           </div>
         )}
 

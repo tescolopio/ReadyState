@@ -56,6 +56,10 @@ interface CallRecord {
   providerCalls?: number;
   /** Of those, retries after a malformed tool call. */
   schemaRetries?: number;
+  /** Debrief repairs after failed content checks. */
+  debriefRepairs?: number;
+  /** What the debrief's first attempt failed, before the server repaired it. */
+  failedFirst?: string[];
   inputTokens?: number;
   outputTokens?: number;
   turn?: TurnOutput;
@@ -181,6 +185,8 @@ async function play(household: TestHousehold): Promise<Result> {
       attempts: outcome.attempts,
       providerCalls: metadata?.providerCalls,
       schemaRetries: metadata?.schemaRetries,
+      debriefRepairs: metadata?.debriefRepairs,
+      failedFirst: metadata?.debriefChecks?.failedFirst,
       inputTokens: metadata?.usage?.inputTokens,
       outputTokens: metadata?.usage?.outputTokens,
     };
@@ -258,12 +264,20 @@ function check(result: Result, messages: TtxUIMessage[]) {
   const outputs = calls.flatMap((call) => (call.outputTokens !== undefined ? [call.outputTokens] : []));
   const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
   const schemaRetries = sum(calls.map((call) => call.schemaRetries ?? 0));
-  const rateLimitRetries = sum(calls.map((call) => (call.providerCalls ?? 1) - 1 - (call.schemaRetries ?? 0)));
+  // Provider calls beyond one per attempt: each repair is its own attempt.
+  const rateLimitRetries = sum(
+    calls.map((call) => (call.providerCalls ?? 1) - 1 - (call.schemaRetries ?? 0) - (call.debriefRepairs ?? 0)),
+  );
   result.notes.push(
     `${turns.length} turns, reached ${turns.at(-1)?.time_elapsed ?? "Hour 0"}${result.report ? ", debrief written" : ""}`,
     `Input tokens per call: max ${inputs.length ? Math.max(...inputs) : "n/a"}, average ${inputs.length ? Math.round(sum(inputs) / inputs.length) : "n/a"}; output tokens total ${sum(outputs)}`,
     `Average request time ${calls.length ? Math.round(sum(calls.map((c) => c.requestMs)) / calls.length) : 0} ms; waited ${Math.round(sum(calls.map((c) => c.waitedMs)) / 1000)} s for rate limits`,
-    `Server retries over ${calls.length} calls: ${schemaRetries} after a malformed turn, ${rateLimitRetries} after a rate limit`,
+    `Server retries over ${calls.length} calls: ${schemaRetries} after a malformed turn, ${rateLimitRetries} after a rate limit, ${result.debrief?.debriefRepairs ?? 0} debrief repair(s)`,
+    ...(result.debrief?.failedFirst?.length
+      ? [`Debrief passed the implemented checks after a repair; the first attempt failed: ${result.debrief.failedFirst.join(" / ")}`]
+      : result.debrief
+        ? ["Debrief passed the implemented checks on the first attempt"]
+        : []),
   );
 }
 
@@ -273,15 +287,19 @@ const CATEGORY_LABELS: Record<CheckCategory, string> = {
   completion: "Completion",
   structure: "Structure",
   continuity: "Continuity",
+  citation: "Citations",
+  accuracy: "Known inaccuracies",
   safety: "Safety",
   suitability: "Suitability for the household",
 };
-const byCategory = (findings: Finding[], category: CheckCategory) => findings.filter((f) => f.category === category);
+/** New-output findings in a category. Known defects of replayed turns are listed separately. */
+const byCategory = (findings: Finding[], category: CheckCategory) =>
+  findings.filter((f) => f.category === category && !f.replayed);
 
 const callLine = (call: CallRecord) =>
   call.replayed
     ? "_Replayed from an earlier run._"
-    : `_Request ${call.requestMs} ms, waited ${Math.round(call.waitedMs / 1000)} s, ${call.attempts} request(s), ${call.providerCalls ?? "?"} provider call(s) (${call.schemaRetries ?? 0} schema retries), ${call.inputTokens ?? "?"} input / ${call.outputTokens ?? "?"} output tokens._`;
+    : `_Request ${call.requestMs} ms, waited ${Math.round(call.waitedMs / 1000)} s, ${call.attempts} request(s), ${call.providerCalls ?? "?"} provider call(s) (${call.schemaRetries ?? 0} schema retries, ${call.debriefRepairs ?? 0} debrief repairs), ${call.inputTokens ?? "?"} input / ${call.outputTokens ?? "?"} output tokens._`;
 
 function reportMarkdown({ household, baseline, turns, debrief, report, findings, notes }: Result) {
   const out = [
@@ -295,6 +313,9 @@ function reportMarkdown({ household, baseline, turns, debrief, report, findings,
       const found = byCategory(findings, category);
       return [`**${CATEGORY_LABELS[category]}:** ${found.length ? `❌ ${found.length}` : "✅"}`, ...(found.length ? [list(found.map((f) => f.text)), ""] : [""])];
     }),
+    ...(findings.some((f) => f.replayed)
+      ? ["**Known from the replayed turns** (judged in the earlier run, not counted above):", list(findings.filter((f) => f.replayed).map((f) => `${f.category}: ${f.text}`)), ""]
+      : []),
     list(notes),
     "",
     "## What the scenario engine received",
@@ -367,7 +388,9 @@ describe(`test households against ${BASE_URL}`, () => {
       (r) =>
         `| [${r.household.persona}](${r.household.id}.md) | ${CHECK_CATEGORIES.map((c) => cell(r, c)).join(" | ")} | ${r.notes.join("; ")} |`,
     );
-    const problems = results.flatMap((r) => r.findings.map((f) => `- **${r.household.id}** (${f.category}): ${f.text}`));
+    const problems = results.flatMap((r) =>
+      r.findings.map((f) => `- **${r.household.id}** (${f.category}${f.replayed ? ", known from replayed turns" : ""}): ${f.text}`),
+    );
     writeFileSync(
       path.join(outDir, "summary.md"),
       [
@@ -375,7 +398,7 @@ describe(`test households against ${BASE_URL}`, () => {
         "",
         `Server ${BASE_URL}; model ${SETTINGS ? `${SETTINGS.provider}/${SETTINGS.model ?? "default"}` : "server default"}; up to ${MAX_TURNS} turns; responses chosen "${CHOOSE}"${REPLAY ? `; replaying ${REPLAY}` : ""}.`,
         "",
-        "Completing an exercise is reported separately from its content: a run can finish and still have continuity, safety or suitability problems. Content checks are heuristics for review.",
+        "Completing an exercise is reported separately from its content: a run can finish and still have continuity, safety or suitability problems. Content checks are heuristics: passing means \"passed the implemented checks\", not verified safe or accurate. A valid citation shows the cited event exists, not that the advice describes it correctly. Findings from replayed turns are listed but not counted.",
         "",
         `| Household | ${CHECK_CATEGORIES.map((c) => CATEGORY_LABELS[c]).join(" | ")} | Notes |`,
         `| --- | ${CHECK_CATEGORIES.map(() => "---").join(" | ")} | --- |`,

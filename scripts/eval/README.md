@@ -60,7 +60,7 @@ Each run writes `eval-results/<timestamp>/` (git-ignored):
 - `<household>.md`: what the engine received, every turn (feedback, outcome, inject, options, the response chosen) and the debrief, each with its timing and token usage. Read these to judge quality.
 - `results.json`: everything, for comparing runs and for `EVAL_REPLAY`.
 
-**Measurements, per call:** actual input and output tokens as the provider reported them (from the response's metadata), the request time without waits, time spent waiting out limits, the requests the eval made, and the provider calls the server made (2 means it retried a malformed turn). Provider limit estimates, such as Groq's "Requested" figure in a 429, appear only in the server log and are a different quantity.
+**Measurements, per call:** actual input and output tokens as the provider reported them (from the response's metadata), the request time without waits, time spent waiting out limits, the requests the eval made, and the server's counters: provider calls (including the SDK's silent rate-limit retries), schema retries after a malformed turn, and debrief repairs. Provider limit estimates, such as Groq's "Requested" figure in a 429, appear only in the server log and are a different quantity.
 
 **Automatic checks, by category.** Finishing an exercise is reported separately from its content: a run can complete and still have content defects.
 
@@ -69,10 +69,16 @@ Each run writes `eval-results/<timestamp>/` (git-ignored):
 | Privacy | No name, medication or device name, or planted detail in anything sent. **Fails the run.** |
 | Completion | Every call succeeded (**a failed call fails the run**), the exercise reached its end, and the debrief answers both questions. |
 | Structure | Feedback after every response, 3–4 options on every ongoing turn, a clock that moves forward. |
-| Continuity | Equipment that appears without being in the baseline or obtained in the story; debrief points that don't say what they come from, or cite an hour that never happened. |
+| Continuity | Equipment that appears in the story without being in the baseline or obtained. |
+| Citations | Each debrief point says what it comes from, and every cited hour happened. A valid citation shows the event exists, not that the advice describes it correctly. |
+| Known inaccuracies | Claims an earlier run got wrong, such as a 1,500 W heater "exceeding" a standard circuit. Factual support for anything else is unchecked (G11). |
 | Safety | Each rule's `detect` patterns in `data/rules/safety.json`: fuel-burning heat indoors, electric or battery heaters for outages. Flagged sentences need human review; the model-judge version is work item G11. |
-| Suitability | At most three improvements in the debrief, none a checklist in disguise, no grading language. |
+| Suitability | At most three improvements in the debrief, each one action rather than a list of supplies, no grading language. |
 
-Content checks are heuristics in `checks.ts`. Defects found by reading a run become regression examples in `checks.test.ts`, so a check that missed them once is shown to catch them. Some defects, such as physically wrong explanations, still need the model judge.
+Passing means "passed the implemented checks", not verified safe or accurate. The debrief checks are shared with the server (`lib/debrief-checks.ts`), which runs them before showing a debrief and repairs a failing one once (see below); the eval checks the result again. Turn checks are in `checks.ts`. Defects found by reading a run become regression examples in `checks.test.ts` and `lib/debrief-checks.test.ts`, so a check that missed them once is shown to catch them. Some defects, such as physically wrong explanations, still need the model judge.
+
+**Replayed turns.** With `EVAL_REPLAY`, findings in the replayed turns are listed under "Known from the replayed turns" in each report and marked in the summary, but not counted against the new output.
+
+**The server's debrief checks.** The route generates the debrief whole, runs the checks and, if any fail, asks the model once to fix exactly those. A repair starts only with 20 s of the request's 55 s model budget left (the host's limit is 60 s). If the repair also fails, or there's no time, the participant gets a recoverable error and can ask again; a failing debrief is never shown as checked. Each debrief's metadata records the repairs and what the first attempt failed.
 
 Everything except privacy and failed calls is reported for review rather than failing the run, because model output varies between runs.

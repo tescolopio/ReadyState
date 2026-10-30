@@ -1,28 +1,54 @@
 import {
+  createUIMessageStream,
   createUIMessageStreamResponse,
+  generateId,
+  generateText,
   safeValidateUIMessages,
   streamText,
   toUIMessageStream,
   wrapLanguageModel,
+  type LanguageModel,
   type LanguageModelMiddleware,
 } from "ai";
+
+import { checkDebrief, repairInstructions, type DebriefProblem } from "@/lib/debrief-checks";
 
 import { getAppMode } from "@/lib/config";
 import { getHostedServices, type HostedAccount } from "@/lib/hosted";
 import { describeProviderError, isSchemaSlip } from "@/lib/provider-errors";
-import { providerSettingsSchema, resolveModel } from "@/lib/providers";
+import { providerSettingsSchema, resolveModel, type ResolvedModel } from "@/lib/providers";
 import { safetyPrompt } from "@/lib/rules";
 import {
   TARGET_DURATION_HOURS,
   buildExercisePrompt,
   deriveTtxState,
   ttxTools,
+  type AfterActionReport,
   type TtxMetadata,
   type TtxPhase,
   type TtxUIMessage,
 } from "@/lib/ttx";
 
-export const maxDuration = 30;
+/** The host's deadline for this route, in seconds. */
+export const maxDuration = 60;
+
+/**
+ * All model work in one request, including the SDK's waits and retries after
+ * a rate limit and a debrief repair, shares this budget. It ends before
+ * `maxDuration`, leaving time to send the response (eval finding 18).
+ */
+const MODEL_BUDGET_MS = 55_000;
+/** A debrief repair starts only with this much budget left: debrief calls took 3–39 s in the eval. */
+const MIN_REPAIR_BUDGET_MS = 20_000;
+
+/** A deadline for the request's model work, also ended if the participant stops the request. */
+function modelBudget(requestSignal: AbortSignal) {
+  const deadline = Date.now() + MODEL_BUDGET_MS;
+  return {
+    signal: AbortSignal.any([requestSignal, AbortSignal.timeout(MODEL_BUDGET_MS)]),
+    remainingMs: () => deadline - Date.now(),
+  };
+}
 
 const SYSTEM_PROMPT = `You are ReadyState, a tabletop exercise (TTX) controller that helps households practice emergency decisions.
 
@@ -60,6 +86,8 @@ interface CallCounts {
   providerCalls: number;
   /** Retries after a malformed tool call. */
   schemaRetries: number;
+  /** Debrief repairs after failed content checks. */
+  debriefRepairs: number;
 }
 
 /**
@@ -69,21 +97,98 @@ interface CallCounts {
  * as provider calls but not as schema retries. A rejection after output has
  * started streaming is retried by `streamText`'s `onError` instead.
  */
-const retrySchemaSlipOnce = (counts: CallCounts): LanguageModelMiddleware => ({
-  specificationVersion: "v4",
-  wrapStream: async ({ doStream }) => {
+const retrySchemaSlipOnce = (counts: CallCounts): LanguageModelMiddleware => {
+  const once = async <T>(call: () => PromiseLike<T>): Promise<T> => {
     counts.providerCalls++;
     try {
-      return await doStream();
+      return await call();
     } catch (error) {
       if (!isSchemaSlip(error)) throw error;
       console.warn("[ttx] retrying after a malformed tool call");
       counts.providerCalls++;
       counts.schemaRetries++;
-      return doStream();
+      return call();
     }
-  },
-});
+  };
+  return {
+    specificationVersion: "v4",
+    wrapStream: ({ doStream }) => once(doStream),
+    wrapGenerate: ({ doGenerate }) => once(doGenerate),
+  };
+};
+
+const DEBRIEF_STILL_FAILING =
+  "The debrief didn't pass ReadyState's checks, even after one repair, so it isn't shown. Request the debrief again.";
+const DEBRIEF_NO_TIME =
+  "The debrief needed a repair, but there wasn't time before the server's limit, so it isn't shown. Request the debrief again in a minute.";
+
+type DebriefOutcome =
+  | { report: AfterActionReport; failedFirst: DebriefProblem[] }
+  | { error: string; failed: DebriefProblem[] };
+
+/**
+ * Generates the debrief whole and runs the implemented checks
+ * (lib/debrief-checks.ts). If any fail, it asks the model once to repair
+ * exactly those, provided enough of the request's budget is left. A debrief
+ * that still fails is never presented as checked: the outcome is an error the
+ * participant can recover from by asking again.
+ */
+async function generateCheckedDebrief({
+  model,
+  instructions,
+  briefing,
+  messages,
+  reasoning,
+  budget,
+  counts,
+  usage,
+}: {
+  model: LanguageModel;
+  instructions: string;
+  briefing: string;
+  messages: TtxUIMessage[];
+  reasoning: Extract<ResolvedModel, { ok: true }>["reasoning"];
+  budget: ReturnType<typeof modelBudget>;
+  counts: CallCounts;
+  usage: { inputTokens: number; outputTokens: number };
+}): Promise<DebriefOutcome> {
+  const attempt = async (content: string) => {
+    const result = await generateText({
+      model,
+      instructions,
+      messages: [{ role: "user", content }],
+      reasoning,
+      tools: ttxTools,
+      activeTools: ["after_action_report"],
+      toolChoice: { type: "tool", toolName: "after_action_report" },
+      abortSignal: budget.signal,
+    });
+    usage.inputTokens += result.totalUsage.inputTokens ?? 0;
+    usage.outputTokens += result.totalUsage.outputTokens ?? 0;
+    const call = result.toolCalls.find((toolCall) => toolCall.toolName === "after_action_report");
+    if (!call) throw new Error("The model returned no debrief.");
+    return call.input as AfterActionReport;
+  };
+
+  const { turns } = deriveTtxState(messages);
+  const first = await attempt(briefing);
+  const failedFirst = checkDebrief(first, turns);
+  if (!failedFirst.length) return { report: first, failedFirst };
+
+  console.warn("[ttx] debrief failed checks", failedFirst.map((p) => p.problem));
+  if (budget.remainingMs() < MIN_REPAIR_BUDGET_MS) return { error: DEBRIEF_NO_TIME, failed: failedFirst };
+
+  counts.debriefRepairs++;
+  const repaired = await attempt(
+    `${briefing}\n\n${repairInstructions(failedFirst)}\n\nYOUR PREVIOUS DEBRIEF (JSON):\n${JSON.stringify(first)}`,
+  );
+  const stillFailing = checkDebrief(repaired, turns);
+  if (stillFailing.length) {
+    console.warn("[ttx] repaired debrief still failed checks", stillFailing.map((p) => p.problem));
+    return { error: DEBRIEF_STILL_FAILING, failed: stillFailing };
+  }
+  return { report: repaired, failedFirst };
+}
 
 const errorResponse = (status: number, error: string) =>
   Response.json({ error }, { status });
@@ -149,19 +254,75 @@ export async function POST(req: Request) {
     );
   }
 
-  const toolName = phase === "ended" ? "after_action_report" : "generate_turn";
-  const counts: CallCounts = { providerCalls: 0, schemaRetries: 0 };
+  const counts: CallCounts = { providerCalls: 0, schemaRetries: 0, debriefRepairs: 0 };
+  const budget = modelBudget(req.signal);
+  const model =
+    typeof resolved.model === "string"
+      ? resolved.model
+      : wrapLanguageModel({ model: resolved.model, middleware: retrySchemaSlipOnce(counts) });
+  const instructions = `${SYSTEM_PROMPT}\n\n${PHASE_INSTRUCTIONS[phase]}`;
+  // A single compact briefing instead of the replayed chat keeps each call
+  // well under Groq's per-minute token limit (docs/architecture/groq-models.md).
+  const briefing = buildExercisePrompt(messages);
+  const recordUsage = async (inputTokens: number | undefined, outputTokens: number | undefined) => {
+    if (!hosted || !account) return;
+    await hosted.recordUsage(account, { phase, provider: resolved.provider, inputTokens, outputTokens });
+  };
+  const onModelError = (error: unknown) => {
+    console.error("[ttx] model call failed", error);
+    return describeProviderError(error, mode);
+  };
+
+  if (phase === "ended") {
+    return createUIMessageStreamResponse({
+      stream: createUIMessageStream<TtxUIMessage>({
+        execute: async ({ writer }) => {
+          const usage = { inputTokens: 0, outputTokens: 0 };
+          try {
+            const outcome = await generateCheckedDebrief({
+              model,
+              instructions,
+              briefing,
+              messages,
+              reasoning: resolved.reasoning,
+              budget,
+              counts,
+              usage,
+            });
+            if ("error" in outcome) {
+              writer.write({ type: "error", errorText: outcome.error });
+              return;
+            }
+            const metadata: TtxMetadata = {
+              usage,
+              providerCalls: counts.providerCalls,
+              schemaRetries: counts.schemaRetries,
+              debriefRepairs: counts.debriefRepairs,
+              debriefChecks: { passedImplementedChecks: true, failedFirst: outcome.failedFirst.map((p) => p.problem) },
+            };
+            const toolCallId = generateId();
+            writer.write({ type: "start", messageMetadata: metadata });
+            writer.write({ type: "tool-input-available", toolCallId, toolName: "after_action_report", input: outcome.report });
+            writer.write({ type: "tool-output-available", toolCallId, output: outcome.report });
+            writer.write({ type: "finish", messageMetadata: metadata });
+          } finally {
+            await recordUsage(usage.inputTokens, usage.outputTokens);
+          }
+        },
+        onError: onModelError,
+      }),
+    });
+  }
 
   const result = streamText({
-    model: typeof resolved.model === "string" ? resolved.model : wrapLanguageModel({ model: resolved.model, middleware: retrySchemaSlipOnce(counts) }),
-    instructions: `${SYSTEM_PROMPT}\n\n${PHASE_INSTRUCTIONS[phase]}`,
-    // A single compact briefing instead of the replayed chat keeps each call
-    // well under Groq's per-minute token limit (docs/architecture/groq-models.md).
-    messages: [{ role: "user", content: buildExercisePrompt(messages) }],
+    model,
+    instructions,
+    messages: [{ role: "user", content: briefing }],
     reasoning: resolved.reasoning,
     tools: ttxTools,
-    activeTools: [toolName],
-    toolChoice: { type: "tool", toolName },
+    activeTools: ["generate_turn"],
+    toolChoice: { type: "tool", toolName: "generate_turn" },
+    abortSignal: budget.signal,
     // Schema slips that arrive mid-stream get one retry. Tool input is then held
     // until the attempt succeeds, so a discarded attempt never reaches the page.
     streamRetries: 0,
@@ -171,15 +332,7 @@ export async function POST(req: Request) {
       counts.schemaRetries++;
       return { retry: true as const };
     },
-    onFinish: async ({ usage }) => {
-      if (!hosted || !account) return;
-      await hosted.recordUsage(account, {
-        phase,
-        provider: resolved.provider,
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
-      });
-    },
+    onFinish: async ({ usage }) => recordUsage(usage.inputTokens, usage.outputTokens),
   });
 
   return createUIMessageStreamResponse({
@@ -193,10 +346,7 @@ export async function POST(req: Request) {
               schemaRetries: counts.schemaRetries,
             }
           : undefined,
-      onError: (error) => {
-        console.error("[ttx] model call failed", error);
-        return describeProviderError(error, mode);
-      },
+      onError: onModelError,
     }),
   });
 }
