@@ -124,6 +124,41 @@ async function send(messages: TtxUIMessage[]): Promise<{ message?: TtxUIMessage;
   return { message: last };
 }
 
+/** Waits the app tells participants to wait, in ms: "Wait about 12 seconds" or "about 2 minutes". */
+const rateLimitWait = (error: string) => {
+  const match = error.match(/limiting requests.*?about (\d+) (second|minute)/i);
+  if (!match) return undefined;
+  return Number(match[1]) * (match[2].toLowerCase() === "minute" ? 60_000 : 1000) + 1000;
+};
+const MAX_RATE_LIMIT_WAITS = 3;
+
+/**
+ * Sends like a patient participant: waits out a per-minute limit and submits
+ * again, and resubmits once after an incomplete turn (which the server has
+ * already retried once). Each retry is noted so the report shows it.
+ */
+async function sendWithRetries(messages: TtxUIMessage[], notes: string[], label: string) {
+  let waits = 0;
+  let resubmitted = false;
+  while (true) {
+    const result = await send(messages);
+    if (!result.error) return result;
+    const wait = rateLimitWait(result.error);
+    if (wait !== undefined && waits < MAX_RATE_LIMIT_WAITS) {
+      waits++;
+      notes.push(`${label}: rate limited, waited ${Math.round(wait / 1000)} s`);
+      await sleep(wait);
+      continue;
+    }
+    if (/incomplete turn/i.test(result.error) && !resubmitted) {
+      resubmitted = true;
+      notes.push(`${label}: incomplete turn after the server's retry; resubmitted`);
+      continue;
+    }
+    return result;
+  }
+}
+
 const pick = (options: string[], turnIndex: number) => {
   if (CHOOSE === "first") return options[0];
   if (CHOOSE === "last") return options.at(-1)!;
@@ -144,7 +179,7 @@ async function play(household: TestHousehold): Promise<Result> {
   for (let i = 0; i <= MAX_TURNS; i++) {
     messages.push({ id: `u${i}`, role: "user", parts: [{ type: "text", text: next }] });
     const started = performance.now();
-    const { message, error } = await send(messages);
+    const { message, error } = await sendWithRetries(messages, result.notes, `Call ${i + 1}`);
     const ms = Math.round(performance.now() - started);
     if (error || !message) {
       result.turns.push({ sent: next, ms, error });

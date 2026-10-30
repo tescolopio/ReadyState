@@ -177,13 +177,28 @@ const messageText = (message: TtxUIMessage) =>
 const alertsLine = (alerts: string[]) =>
   alerts.length ? alerts.join("; ") : "none";
 
+/** Earlier turns kept as full log lines; anything older gets one short line (work item G6). */
+export const RECENT_LOG_TURNS = 4;
+
+/** Text cut to about `max` characters at a word boundary. */
+const clip = (text: string, max: number) => {
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (flat.length <= max) return flat;
+  const cut = flat.slice(0, max);
+  const space = cut.lastIndexOf(" ");
+  return `${space > max / 2 ? cut.slice(0, space) : cut}…`;
+};
+
+const firstSentence = (text: string) => text.match(/^.*?[.!?](\s|$)/)?.[0].trim() ?? text;
+
 /**
  * Builds the compact model prompt for the next call. Instead of replaying the
  * whole chat (where every turn appears twice, as tool call and echoed result),
  * it sends the baseline, a one-line log entry per older turn, the latest turn
  * in full and the participant's pending action. Older narratives are dropped:
- * the actions, injects and alerts carry the state the model needs, and the
- * prompt grows by a line per turn instead of a full transcript.
+ * the actions, injects and alerts carry the state the model needs. Past the
+ * last few turns, entries shrink to the action and the inject's first
+ * sentence, so a long game grows by a short line per turn.
  */
 export function buildExercisePrompt(messages: TtxUIMessage[]): string {
   let baseline: string | undefined;
@@ -213,7 +228,12 @@ export function buildExercisePrompt(messages: TtxUIMessage[]): string {
   const latest = exchanges.at(-1);
   const older = exchanges.slice(0, -1);
   if (older.length) {
-    const log = older.map(({ action, turn }) => {
+    const firstRecent = older.length - RECENT_LOG_TURNS;
+    const log = older.map(({ action, turn }, index) => {
+      if (index < firstRecent) {
+        const did = action ? `Participant: ${clip(action, 100)} | ` : "";
+        return `- ${turn.time_elapsed}: ${did}Inject: ${clip(firstSentence(turn.new_inject), 140)}`;
+      }
       const did = action ? `Participant: ${action} | ` : "";
       return `- ${turn.time_elapsed}: ${did}Inject: ${turn.new_inject} | Alerts: ${alertsLine(turn.critical_alerts)}`;
     });

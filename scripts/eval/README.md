@@ -40,6 +40,8 @@ PowerShell: `$env:EVAL_ONLY="alex"; npm run eval`.
 | `EVAL_ONLY` | all | Comma-separated household ids |
 | `EVAL_TURNS` | `14` | Stop after this many turns. The debrief only runs if the exercise ended (72 in-game hours usually takes 8–12 turns). |
 | `EVAL_DELAY_MS` | `8000` | Pause between calls. Groq's free tier allows 8,000 tokens per minute; lower this on a paid tier. |
+
+The eval retries like a patient participant: when the app says the provider is limiting requests, it waits the stated time and submits again (up to 3 times per call), and after an incomplete turn it resubmits once. The server has already retried that turn once itself. Each retry is listed in the household's notes.
 | `EVAL_CHOOSE` | `cycle` | Which offered response to pick: `cycle` (1st, 2nd, 3rd…), `first` or `last` |
 | `EVAL_PROVIDER`, `EVAL_MODEL` | server default | Send these as the app's provider settings, to test another provider or model (for example `EVAL_MODEL=openai/gpt-oss-20b`, which has its own Groq quota) |
 

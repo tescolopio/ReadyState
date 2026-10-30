@@ -3,11 +3,13 @@ import {
   safeValidateUIMessages,
   streamText,
   toUIMessageStream,
+  wrapLanguageModel,
+  type LanguageModelMiddleware,
 } from "ai";
 
 import { getAppMode } from "@/lib/config";
 import { getHostedServices, type HostedAccount } from "@/lib/hosted";
-import { describeProviderError } from "@/lib/provider-errors";
+import { describeProviderError, isSchemaSlip } from "@/lib/provider-errors";
 import { providerSettingsSchema, resolveModel } from "@/lib/providers";
 import { safetyPrompt } from "@/lib/rules";
 import {
@@ -45,6 +47,24 @@ const PHASE_INSTRUCTIONS: Record<Exclude<TtxPhase, "aar">, string> = {
   baseline: `Phase 1 - Baseline Generation: the participant just provided their sanitized household parameters. Set feedback to null and suggested_actions to []. Generate the inciting incident in narrative_response, set time_elapsed to "Hour 0" and hours_elapsed to 0, describe the first inject in new_inject, offer response_options for it, and set scenario_status to "ongoing".`,
   loop: `Phase 2 - Response, Feedback & Inject: ${FEEDBACK_RULES} Then report the result of the action in narrative_response, advance the clock by 6 to 12 hours (so the exercise takes about 8 to 10 turns; use shorter steps only for a fast-moving crisis), and add a new development in new_inject that follows from the participant's choices, with response_options for it. The participant may pick one of your earlier options or write their own; evaluate either the same way. Set scenario_status to "complete" if hours_elapsed reaches ${TARGET_DURATION_HOURS}, otherwise "ongoing".`,
   ended: `Phase 4 - Debrief: the exercise is over. There is no win or lose. Help the household answer two questions from everything that happened: what do we need to know about our situation, and what can we do better? Note what went well, too. Don't grade, score or give a verdict.`,
+};
+
+/**
+ * Retries a call once when the provider rejects the model's tool call before
+ * any output (work item G4). A rejection after output has started streaming is
+ * retried by `streamText`'s `onError` instead.
+ */
+const retrySchemaSlipOnce: LanguageModelMiddleware = {
+  specificationVersion: "v4",
+  wrapStream: async ({ doStream }) => {
+    try {
+      return await doStream();
+    } catch (error) {
+      if (!isSchemaSlip(error)) throw error;
+      console.warn("[ttx] retrying after a malformed tool call");
+      return doStream();
+    }
+  },
 };
 
 const errorResponse = (status: number, error: string) =>
@@ -114,7 +134,7 @@ export async function POST(req: Request) {
   const toolName = phase === "ended" ? "after_action_report" : "generate_turn";
 
   const result = streamText({
-    model: resolved.model,
+    model: typeof resolved.model === "string" ? resolved.model : wrapLanguageModel({ model: resolved.model, middleware: retrySchemaSlipOnce }),
     instructions: `${SYSTEM_PROMPT}\n\n${PHASE_INSTRUCTIONS[phase]}`,
     // A single compact briefing instead of the replayed chat keeps each call
     // well under Groq's per-minute token limit (docs/architecture/groq-models.md).
@@ -123,6 +143,14 @@ export async function POST(req: Request) {
     tools: ttxTools,
     activeTools: [toolName],
     toolChoice: { type: "tool", toolName },
+    // Schema slips that arrive mid-stream get one retry. Tool input is then held
+    // until the attempt succeeds, so a discarded attempt never reaches the page.
+    streamRetries: 0,
+    onError: ({ error }) => {
+      if (!isSchemaSlip(error)) return;
+      console.warn("[ttx] retrying after a malformed tool call");
+      return { retry: true as const };
+    },
     onFinish: async ({ usage }) => {
       if (!hosted || !account) return;
       await hosted.recordUsage(account, {

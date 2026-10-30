@@ -1,4 +1,11 @@
-import { readUIMessageStream, simulateReadableStream, type UIMessageChunk } from "ai";
+import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
+import {
+  APICallError,
+  StreamProviderError,
+  readUIMessageStream,
+  simulateReadableStream,
+  type UIMessageChunk,
+} from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -82,6 +89,49 @@ const systemText = (model: MockLanguageModelV4) =>
     .map((m) => m.content)
     .join("\n");
 
+/** The assistant message as the page would end up with it. */
+async function lastMessage(res: Response) {
+  let last: TtxUIMessage | undefined;
+  for await (const message of readUIMessageStream<TtxUIMessage>({
+    stream: res.body!
+      .pipeThrough(new TextDecoderStream())
+      .pipeThrough(
+        new TransformStream<string, UIMessageChunk>({
+          transform(text, controller) {
+            for (const line of text.split("\n")) {
+              if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
+              controller.enqueue(JSON.parse(line.slice(6)));
+            }
+          },
+        }),
+      ),
+  })) {
+    last = message;
+  }
+  return last;
+}
+
+/** Groq's rejection of a tool call that doesn't match the schema (eval finding 8). */
+const schemaSlipMessage =
+  "tool call validation failed: parameters for tool generate_turn did not match schema: errors: [`/feedback/why`: expected string, but got array]";
+
+const schemaSlipError = () =>
+  new APICallError({
+    message: schemaSlipMessage,
+    url: "https://api.groq.com/openai/v1/chat/completions",
+    requestBodyValues: {},
+    statusCode: 400,
+    responseBody: JSON.stringify({ error: { message: schemaSlipMessage, code: "tool_use_failed" } }),
+  });
+
+/** Fails its first call with `firstFailure`, then behaves like `good`. */
+const failingOnce = (good: MockLanguageModelV4, firstFailure: () => ReturnType<MockLanguageModelV4["doStream"]>) => {
+  let calls = 0;
+  return new MockLanguageModelV4({
+    doStream: async (options) => (calls++ === 0 ? firstFailure() : good.doStream(options)),
+  });
+};
+
 const userMessage: TtxUIMessage = {
   id: "u1",
   role: "user",
@@ -150,23 +200,7 @@ describe("POST /api/ttx", () => {
     const res = await post([userMessage]);
     expect(res.status).toBe(200);
 
-    let last: TtxUIMessage | undefined;
-    for await (const message of readUIMessageStream<TtxUIMessage>({
-      stream: res.body!
-        .pipeThrough(new TextDecoderStream())
-        .pipeThrough(
-          new TransformStream<string, UIMessageChunk>({
-            transform(text, controller) {
-              for (const line of text.split("\n")) {
-                if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
-                controller.enqueue(JSON.parse(line.slice(6)));
-              }
-            },
-          }),
-        ),
-    })) {
-      last = message;
-    }
+    const last = await lastMessage(res);
 
     expect(model.doStreamCalls[0].toolChoice).toEqual({
       type: "tool",
@@ -190,6 +224,57 @@ describe("POST /api/ttx", () => {
     ]);
     const part = last?.parts.find((p) => p.type === "tool-generate_turn");
     expect(part).toMatchObject({ state: "output-available", output: turnInput });
+  });
+
+  it("retries once when the provider rejects a malformed turn before any output", async () => {
+    const model = failingOnce(mockToolCallModel("generate_turn", turnInput), async () => {
+      throw schemaSlipError();
+    });
+    env.model = model;
+
+    const last = await lastMessage(await post([userMessage]));
+    expect(model.doStreamCalls).toHaveLength(2);
+    expect(last?.parts.find((p) => p.type === "tool-generate_turn")).toMatchObject({
+      state: "output-available",
+      output: turnInput,
+    });
+  });
+
+  it("retries once when a malformed turn is rejected mid-stream", async () => {
+    const model = failingOnce(mockToolCallModel("generate_turn", turnInput), async () => ({
+      stream: simulateReadableStream<LanguageModelV4StreamPart>({
+        chunks: [
+          { type: "reasoning-start", id: "r1" },
+          { type: "reasoning-delta", id: "r1", delta: "Thinking about the storm." },
+          { type: "reasoning-end", id: "r1" },
+          {
+            type: "error",
+            error: new StreamProviderError({ message: schemaSlipMessage, code: "tool_use_failed", statusCode: 400 }),
+          },
+        ],
+      }),
+    }));
+    env.model = model;
+
+    const last = await lastMessage(await post([userMessage]));
+    expect(model.doStreamCalls).toHaveLength(2);
+    expect(last?.parts.find((p) => p.type === "tool-generate_turn")).toMatchObject({
+      state: "output-available",
+      output: turnInput,
+    });
+  });
+
+  it("explains a malformed turn that fails twice instead of retrying again", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        throw schemaSlipError();
+      },
+    });
+    env.model = model;
+
+    const body = await (await post([userMessage])).text();
+    expect(model.doStreamCalls).toHaveLength(2);
+    expect(body).toContain("The model returned an incomplete turn.");
   });
 
   it("forces the after_action_report tool once the exercise has ended", async () => {

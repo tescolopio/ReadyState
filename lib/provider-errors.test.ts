@@ -1,7 +1,7 @@
-import { APICallError, RetryError } from "ai";
+import { APICallError, RetryError, StreamProviderError } from "ai";
 import { describe, expect, it } from "vitest";
 
-import { describeProviderError } from "@/lib/provider-errors";
+import { describeProviderError, isSchemaSlip, retryAfterSeconds } from "@/lib/provider-errors";
 
 const apiError = (statusCode: number, responseBody = "", responseHeaders: Record<string, string> = {}) =>
   new APICallError({
@@ -49,6 +49,24 @@ describe("describeProviderError", () => {
     expect(describeProviderError(invalid, "self-hosted")).toBe(
       "The model returned an incomplete turn. Submit your response again; if it keeps happening, choose a larger model in Settings.",
     );
+  });
+
+  it("recognizes a malformed turn reported mid-stream", () => {
+    const midStream = new StreamProviderError({
+      message: "tool call validation failed: parameters for tool generate_turn did not match schema",
+      code: "tool_use_failed",
+      statusCode: 400,
+    });
+    expect(isSchemaSlip(midStream)).toBe(true);
+    expect(describeProviderError(midStream, "hosted")).toBe("The model returned an incomplete turn. Submit your response again.");
+    expect(isSchemaSlip(apiError(400, "context length exceeded"))).toBe(false);
+  });
+
+  it("reads the wait from the message, then the retry-after header", () => {
+    expect(retryAfterSeconds(dailyLimit)).toBeCloseTo(275.616);
+    expect(retryAfterSeconds(apiError(429, "", { "retry-after": "12" }))).toBe(12);
+    expect(retryAfterSeconds(apiError(429))).toBeUndefined();
+    expect(retryAfterSeconds(new Error("boom"))).toBeUndefined();
   });
 
   it("falls back to a generic message for anything else", () => {
