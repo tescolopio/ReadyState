@@ -38,6 +38,12 @@ describe("describeProviderError", () => {
     );
   });
 
+  it("says a few seconds for a sub-second wait, as Groq sends in milliseconds", () => {
+    expect(describeProviderError(apiError(429, "on tokens per minute (TPM). Please try again in 277.499999ms."), "hosted")).toBe(
+      "The model provider is limiting requests right now. Wait a few seconds and submit again.",
+    );
+  });
+
   it("points self-hosters at their key, model or the provider", () => {
     expect(describeProviderError(apiError(401), "self-hosted")).toContain("rejected the API key");
     expect(describeProviderError(apiError(404), "self-hosted")).toContain("doesn't recognize the selected model");
@@ -65,6 +71,8 @@ describe("describeProviderError", () => {
   it("reads the wait from the message, then the retry-after header", () => {
     expect(retryAfterSeconds(dailyLimit)).toBeCloseTo(275.616);
     expect(retryAfterSeconds(apiError(429, "", { "retry-after": "12" }))).toBe(12);
+    expect(retryAfterSeconds(apiError(429, "Please try again in 277.499999ms."))).toBeCloseTo(0.2775);
+    expect(retryAfterSeconds(apiError(429, "Please try again in 1.065s."))).toBeCloseTo(1.065);
     expect(retryAfterSeconds(apiError(429))).toBeUndefined();
     expect(retryAfterSeconds(new Error("boom"))).toBeUndefined();
   });

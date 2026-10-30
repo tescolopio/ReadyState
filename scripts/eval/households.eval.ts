@@ -124,11 +124,15 @@ async function send(messages: TtxUIMessage[]): Promise<{ message?: TtxUIMessage;
   return { message: last };
 }
 
-/** Waits the app tells participants to wait, in ms: "Wait about 12 seconds" or "about 2 minutes". */
+/**
+ * The wait the app tells participants, in ms: "about 12 seconds", "about 2
+ * minutes", "a few seconds", or "a little while" when the provider gave none.
+ */
 const rateLimitWait = (error: string) => {
-  const match = error.match(/limiting requests.*?about (\d+) (second|minute)/i);
-  if (!match) return undefined;
-  return Number(match[1]) * (match[2].toLowerCase() === "minute" ? 60_000 : 1000) + 1000;
+  if (!/limiting requests/i.test(error)) return undefined;
+  const match = error.match(/about (\d+) (second|minute)/i);
+  if (match) return Number(match[1]) * (match[2].toLowerCase() === "minute" ? 60_000 : 1000) + 1000;
+  return /a few seconds/i.test(error) ? 5000 : 30_000;
 };
 const MAX_RATE_LIMIT_WAITS = 3;
 

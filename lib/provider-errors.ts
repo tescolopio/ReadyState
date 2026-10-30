@@ -22,15 +22,18 @@ const providerFailure = (error: unknown): ProviderFailure | undefined => {
   return undefined;
 };
 
-/** "4m35.616s" or "12s" from a provider message, in seconds. */
+/** "4m35.616s", "12s" or "277.5ms" from a provider message, in seconds. */
 export function retryAfterSeconds(error: unknown): number | undefined {
   const failure = providerFailure(error);
   if (!failure) return undefined;
   const retryAfter = Number(failure.headers?.["retry-after"]);
-  const match = failure.text.match(/try again in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?/i);
-  const seconds = match
-    ? Number(match[1] ?? 0) * 3600 + Number(match[2] ?? 0) * 60 + Number(match[3] ?? 0)
-    : retryAfter;
+  const ms = failure.text.match(/try again in ([\d.]+)ms/i);
+  const match = failure.text.match(/try again in (?:(\d+)h)?(?:(\d+)m(?!s))?(?:([\d.]+)s)?/i);
+  const seconds = ms
+    ? Number(ms[1]) / 1000
+    : match?.slice(1).some(Boolean)
+      ? Number(match[1] ?? 0) * 3600 + Number(match[2] ?? 0) * 60 + Number(match[3] ?? 0)
+      : retryAfter;
   return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
 }
 
@@ -38,6 +41,7 @@ export function retryAfterSeconds(error: unknown): number | undefined {
 const waitFor = (error: unknown) => {
   const seconds = retryAfterSeconds(error);
   if (!seconds) return "a little while";
+  if (seconds < 5) return "a few seconds";
   if (seconds < 90) return `about ${Math.ceil(seconds)} seconds`;
   if (seconds < 5400) return `about ${Math.ceil(seconds / 60)} minutes`;
   return `about ${Math.ceil(seconds / 3600)} hours`;
