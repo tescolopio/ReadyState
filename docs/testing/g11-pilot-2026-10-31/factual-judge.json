@@ -1,0 +1,749 @@
+{
+  "model": "groq/openai/gpt-oss-120b",
+  "set": "pilot",
+  "budget": 29643,
+  "charged": 22248,
+  "reported": {
+    "input": 12278,
+    "output": 2561
+  },
+  "providerCalls": 4,
+  "elapsedMs": 197189,
+  "revision": "c9d3f86",
+  "runs": [
+    {
+      "name": "pilot 1 of 4",
+      "status": "completed",
+      "result": {
+        "claims": [
+          {
+            "id": "C07",
+            "claim": "Power was restored at Hour 60, but central heating did not fully recover until about six hours later (between Hour 60 and Hour 72).",
+            "basis": "story",
+            "assertions": [
+              {
+                "kind": "state",
+                "quote": "Power was restored at Hour 60",
+                "verdict": "supported",
+                "evidence": [
+                  {
+                    "ref": "Hour 60 outcome",
+                    "quote": "building's generator has come back online, restoring limited electric heat"
+                  }
+                ],
+                "searched": [],
+                "missing": "",
+                "outside_knowledge": false
+              },
+              {
+                "kind": "state",
+                "quote": "central heating did not fully recover until about six hours later (between Hour 60 and Hour 72)",
+                "verdict": "supported",
+                "evidence": [
+                  {
+                    "ref": "Hour 72 outcome",
+                    "quote": "After six hours, the building’s central heating system comes back online, raising the indoor temperature to a comfortable 68 °F"
+                  }
+                ],
+                "searched": [],
+                "missing": "",
+                "outside_knowledge": false
+              }
+            ],
+            "verdict": "supported",
+            "explanation": "Both power restoration and delayed heating are described in the hour‑60 and hour‑72 outcomes."
+          },
+          {
+            "id": "C56",
+            "claim": "The story introduced a 1500-watt space heater from the building's maintenance closet.",
+            "basis": "story",
+            "assertions": [
+              {
+                "kind": "other",
+                "quote": "1500-watt space heater from the building's maintenance closet",
+                "verdict": "supported",
+                "evidence": [
+                  {
+                    "ref": "Hour 72 outcome",
+                    "quote": "You locate a small 1500‑watt space heater stored in the building’s maintenance closet"
+                  }
+                ],
+                "searched": [],
+                "missing": "",
+                "outside_knowledge": false
+              }
+            ],
+            "verdict": "supported",
+            "explanation": "The hour‑72 outcome mentions the heater’s presence."
+          }
+        ]
+      },
+      "finishReason": "tool-calls",
+      "schemaValid": true,
+      "schemaIssues": [],
+      "usage": {
+        "inputTokens": 4100,
+        "outputTokens": 870
+      },
+      "ms": 2517,
+      "attempts": 1,
+      "providerCalls": 1
+    },
+    {
+      "name": "pilot 2 of 4",
+      "status": "provider failure",
+      "error": "status 400, malformed tool call",
+      "errorCode": "tool_use_failed",
+      "failedGeneration": {
+        "length": 3816,
+        "json": true,
+        "schemaIssues": [
+          "claims.0.assertions.0.missing",
+          "claims.0.assertions.1.missing",
+          "claims.0.assertions.2.missing",
+          "claims.0.assertions.3.missing",
+          "claims.1.assertions.0.missing",
+          "claims.1.assertions.1.evidence"
+        ]
+      },
+      "usage": {
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      "ms": 3701,
+      "attempts": 1,
+      "providerCalls": 1
+    },
+    {
+      "name": "pilot 3 of 4",
+      "status": "completed",
+      "result": {
+        "claims": [
+          {
+            "id": "C16",
+            "claim": "Your stored water would have run out well before the 72-hour outage ended.",
+            "basis": "household",
+            "assertions": [
+              {
+                "kind": "quantity",
+                "quote": "Stored: 1 gallon of stored water (about 1.0 days at 1 gallon per person per day, before pets)",
+                "verdict": "supported",
+                "evidence": [
+                  {
+                    "ref": "Baseline: Stored",
+                    "quote": "1 gallon of stored water (about 1.0 days at 1 gallon per person per day, before pets)"
+                  }
+                ],
+                "searched": [],
+                "missing": "",
+                "outside_knowledge": false
+              },
+              {
+                "kind": "state",
+                "quote": "well before the 72-hour outage ended",
+                "verdict": "supported",
+                "evidence": [
+                  {
+                    "ref": "Baseline: Stored",
+                    "quote": "about 1.0 days at 1 gallon per person per day"
+                  }
+                ],
+                "searched": [],
+                "missing": "",
+                "outside_knowledge": false
+              }
+            ],
+            "verdict": "supported",
+            "explanation": "Baseline stored water insufficient for 72 h duration."
+          },
+          {
+            "id": "C58",
+            "claim": "The breaker tripped twice when you plugged in a 1500-watt space heater.",
+            "basis": "story",
+            "assertions": [
+              {
+                "kind": "action",
+                "quote": "You locate a small 1500‑watt space heater stored in the building’s maintenance closet and plug it into an outlet near the living‑room sofa.",
+                "verdict": "supported",
+                "evidence": [
+                  {
+                    "ref": "Hour 72 outcome",
+                    "quote": "You locate a small 1500‑watt space heater stored in the building’s maintenance closet and plug it into an outlet near the living‑room sofa."
+                  }
+                ],
+                "searched": [],
+                "missing": "",
+                "outside_knowledge": false
+              },
+              {
+                "kind": "state",
+                "quote": "Within about 10 minutes the circuit breaker trips, cutting power to the heater and the apartment lights. ... The heater runs for a short time before the breaker trips again",
+                "verdict": "supported",
+                "evidence": [
+                  {
+                    "ref": "Hour 72 outcome",
+                    "quote": "Within about 10 minutes the circuit breaker trips, cutting power to the heater and the apartment lights."
+                  },
+                  {
+                    "ref": "Hour 72 outcome",
+                    "quote": "The heater runs for a short time before the breaker trips again, forcing you to shut it off."
+                  }
+                ],
+                "searched": [],
+                "missing": "",
+                "outside_knowledge": false
+              }
+            ],
+            "verdict": "supported",
+            "explanation": "Hour 72 outcome describes two trips after plugging heater."
+          }
+        ]
+      },
+      "finishReason": "tool-calls",
+      "schemaValid": true,
+      "schemaIssues": [],
+      "usage": {
+        "inputTokens": 4086,
+        "outputTokens": 955
+      },
+      "ms": 2654,
+      "attempts": 1,
+      "providerCalls": 1
+    },
+    {
+      "name": "pilot 4 of 4",
+      "status": "completed",
+      "result": {
+        "claims": [
+          {
+            "id": "C19",
+            "claim": "C19: The breaker trips showed that the apartment's circuit cannot support high-wattage heaters.",
+            "basis": "story",
+            "assertions": [
+              {
+                "kind": "state",
+                "quote": "the circuit breaker trips",
+                "verdict": "supported",
+                "evidence": [
+                  {
+                    "ref": "Hour 72 outcome",
+                    "quote": "the circuit breaker trips, cutting power to the heater and the apartment lights"
+                  },
+                  {
+                    "ref": "Hour 72 outcome",
+                    "quote": "the heater runs for a short time before the breaker trips again"
+                  }
+                ],
+                "searched": [],
+                "missing": "",
+                "outside_knowledge": false
+              },
+              {
+                "kind": "state",
+                "quote": "apartment's circuit cannot support high-wattage heaters",
+                "verdict": "supported",
+                "evidence": [
+                  {
+                    "ref": "Hour 72 outcome",
+                    "quote": "you locate a small 1500‑watt space heater ... Within about 10 minutes the circuit breaker trips, cutting power to the heater"
+                  },
+                  {
+                    "ref": "Hour 72 outcome",
+                    "quote": "the heater runs for a short time before the breaker trips again, forcing you to shut it off"
+                  }
+                ],
+                "searched": [],
+                "missing": "",
+                "outside_knowledge": false
+              }
+            ],
+            "verdict": "supported",
+            "explanation": ""
+          },
+          {
+            "id": "C09",
+            "claim": "C09: Power was restored at Hour 60, but central heating stayed unavailable and only returned during the Hour 72 turn.",
+            "basis": "story",
+            "assertions": [
+              {
+                "kind": "state",
+                "quote": "Power was restored at Hour 60",
+                "verdict": "supported",
+                "evidence": [
+                  {
+                    "ref": "Hour 60 outcome",
+                    "quote": "Power is restored but the building’s central heating is slow to recover, keeping indoor temperatures around 45 °F"
+                  }
+                ],
+                "searched": [],
+                "missing": "",
+                "outside_knowledge": false
+              },
+              {
+                "kind": "state",
+                "quote": "central heating stayed unavailable",
+                "verdict": "supported",
+                "evidence": [
+                  {
+                    "ref": "Hour 60 outcome",
+                    "quote": "central heating is slow to recover, keeping indoor temperatures around 45 °F"
+                  }
+                ],
+                "searched": [],
+                "missing": "",
+                "outside_knowledge": false
+              },
+              {
+                "kind": "state",
+                "quote": "only returned during the Hour 72 turn",
+                "verdict": "supported",
+                "evidence": [
+                  {
+                    "ref": "Hour 72 outcome",
+                    "quote": "After six hours, the building’s central heating system comes back online, raising the indoor temperature to a comfortable 68 °F"
+                  }
+                ],
+                "searched": [],
+                "missing": "",
+                "outside_knowledge": false
+              }
+            ],
+            "verdict": "supported",
+            "explanation": ""
+          }
+        ]
+      },
+      "finishReason": "tool-calls",
+      "schemaValid": true,
+      "schemaIssues": [],
+      "usage": {
+        "inputTokens": 4092,
+        "outputTokens": 736
+      },
+      "ms": 2301,
+      "attempts": 1,
+      "providerCalls": 1
+    }
+  ],
+  "validated": [
+    {
+      "id": "C07",
+      "judged": {
+        "id": "C07",
+        "claim": "Power was restored at Hour 60, but central heating did not fully recover until about six hours later (between Hour 60 and Hour 72).",
+        "basis": "story",
+        "assertions": [
+          {
+            "kind": "state",
+            "quote": "Power was restored at Hour 60",
+            "verdict": "supported",
+            "evidence": [
+              {
+                "ref": "Hour 60 outcome",
+                "quote": "building's generator has come back online, restoring limited electric heat"
+              }
+            ],
+            "searched": [],
+            "missing": "",
+            "outside_knowledge": false
+          },
+          {
+            "kind": "state",
+            "quote": "central heating did not fully recover until about six hours later (between Hour 60 and Hour 72)",
+            "verdict": "supported",
+            "evidence": [
+              {
+                "ref": "Hour 72 outcome",
+                "quote": "After six hours, the building’s central heating system comes back online, raising the indoor temperature to a comfortable 68 °F"
+              }
+            ],
+            "searched": [],
+            "missing": "",
+            "outside_knowledge": false
+          }
+        ],
+        "verdict": "supported",
+        "explanation": "Both power restoration and delayed heating are described in the hour‑60 and hour‑72 outcomes."
+      },
+      "invalid": [
+        "claim words no assertion quotes: but"
+      ],
+      "boundaryViolations": []
+    },
+    {
+      "id": "C56",
+      "judged": {
+        "id": "C56",
+        "claim": "The story introduced a 1500-watt space heater from the building's maintenance closet.",
+        "basis": "story",
+        "assertions": [
+          {
+            "kind": "other",
+            "quote": "1500-watt space heater from the building's maintenance closet",
+            "verdict": "supported",
+            "evidence": [
+              {
+                "ref": "Hour 72 outcome",
+                "quote": "You locate a small 1500‑watt space heater stored in the building’s maintenance closet"
+              }
+            ],
+            "searched": [],
+            "missing": "",
+            "outside_knowledge": false
+          }
+        ],
+        "verdict": "supported",
+        "explanation": "The hour‑72 outcome mentions the heater’s presence."
+      },
+      "invalid": [
+        "claim words no assertion quotes: story, introduced"
+      ],
+      "boundaryViolations": []
+    },
+    {
+      "id": "C16",
+      "judged": {
+        "id": "C16",
+        "claim": "Your stored water would have run out well before the 72-hour outage ended.",
+        "basis": "household",
+        "assertions": [
+          {
+            "kind": "quantity",
+            "quote": "Stored: 1 gallon of stored water (about 1.0 days at 1 gallon per person per day, before pets)",
+            "verdict": "supported",
+            "evidence": [
+              {
+                "ref": "Baseline: Stored",
+                "quote": "1 gallon of stored water (about 1.0 days at 1 gallon per person per day, before pets)"
+              }
+            ],
+            "searched": [],
+            "missing": "",
+            "outside_knowledge": false
+          },
+          {
+            "kind": "state",
+            "quote": "well before the 72-hour outage ended",
+            "verdict": "supported",
+            "evidence": [
+              {
+                "ref": "Baseline: Stored",
+                "quote": "about 1.0 days at 1 gallon per person per day"
+              }
+            ],
+            "searched": [],
+            "missing": "",
+            "outside_knowledge": false
+          }
+        ],
+        "verdict": "supported",
+        "explanation": "Baseline stored water insufficient for 72 h duration."
+      },
+      "invalid": [
+        "assertion 1: its quote isn't a span of the claim (\"Stored: 1 gallon of stored water (about 1.0 days a\")",
+        "claim words no assertion quotes: your, would, have, run, out"
+      ],
+      "boundaryViolations": []
+    },
+    {
+      "id": "C58",
+      "judged": {
+        "id": "C58",
+        "claim": "The breaker tripped twice when you plugged in a 1500-watt space heater.",
+        "basis": "story",
+        "assertions": [
+          {
+            "kind": "action",
+            "quote": "You locate a small 1500‑watt space heater stored in the building’s maintenance closet and plug it into an outlet near the living‑room sofa.",
+            "verdict": "supported",
+            "evidence": [
+              {
+                "ref": "Hour 72 outcome",
+                "quote": "You locate a small 1500‑watt space heater stored in the building’s maintenance closet and plug it into an outlet near the living‑room sofa."
+              }
+            ],
+            "searched": [],
+            "missing": "",
+            "outside_knowledge": false
+          },
+          {
+            "kind": "state",
+            "quote": "Within about 10 minutes the circuit breaker trips, cutting power to the heater and the apartment lights. ... The heater runs for a short time before the breaker trips again",
+            "verdict": "supported",
+            "evidence": [
+              {
+                "ref": "Hour 72 outcome",
+                "quote": "Within about 10 minutes the circuit breaker trips, cutting power to the heater and the apartment lights."
+              },
+              {
+                "ref": "Hour 72 outcome",
+                "quote": "The heater runs for a short time before the breaker trips again, forcing you to shut it off."
+              }
+            ],
+            "searched": [],
+            "missing": "",
+            "outside_knowledge": false
+          }
+        ],
+        "verdict": "supported",
+        "explanation": "Hour 72 outcome describes two trips after plugging heater."
+      },
+      "invalid": [
+        "assertion 1: its quote isn't a span of the claim (\"You locate a small 1500‑watt space heater stored i\")",
+        "assertion 2: its quote isn't a span of the claim (\"Within about 10 minutes the circuit breaker trips,\")",
+        "claim words no assertion quotes: tripped, twice, when, plugged"
+      ],
+      "boundaryViolations": []
+    },
+    {
+      "id": "C19",
+      "judged": {
+        "id": "C19",
+        "claim": "C19: The breaker trips showed that the apartment's circuit cannot support high-wattage heaters.",
+        "basis": "story",
+        "assertions": [
+          {
+            "kind": "state",
+            "quote": "the circuit breaker trips",
+            "verdict": "supported",
+            "evidence": [
+              {
+                "ref": "Hour 72 outcome",
+                "quote": "the circuit breaker trips, cutting power to the heater and the apartment lights"
+              },
+              {
+                "ref": "Hour 72 outcome",
+                "quote": "the heater runs for a short time before the breaker trips again"
+              }
+            ],
+            "searched": [],
+            "missing": "",
+            "outside_knowledge": false
+          },
+          {
+            "kind": "state",
+            "quote": "apartment's circuit cannot support high-wattage heaters",
+            "verdict": "supported",
+            "evidence": [
+              {
+                "ref": "Hour 72 outcome",
+                "quote": "you locate a small 1500‑watt space heater ... Within about 10 minutes the circuit breaker trips, cutting power to the heater"
+              },
+              {
+                "ref": "Hour 72 outcome",
+                "quote": "the heater runs for a short time before the breaker trips again, forcing you to shut it off"
+              }
+            ],
+            "searched": [],
+            "missing": "",
+            "outside_knowledge": false
+          }
+        ],
+        "verdict": "supported",
+        "explanation": ""
+      },
+      "invalid": [
+        "claim not quoted exactly",
+        "assertion 1: its quote isn't a span of the claim (\"the circuit breaker trips\")",
+        "claim words no assertion quotes: showed",
+        "assertion 1 (state): quotation not in Hour 72 outcome: \"the heater runs for a short time before the breaker trips ag\"",
+        "assertion 2 (state): quotation not in Hour 72 outcome: \"you locate a small 1500‑watt space heater ... Within about 1\"",
+        "assertion 2 (state): quotation not in Hour 72 outcome: \"the heater runs for a short time before the breaker trips ag\""
+      ],
+      "boundaryViolations": []
+    },
+    {
+      "id": "C09",
+      "judged": {
+        "id": "C09",
+        "claim": "C09: Power was restored at Hour 60, but central heating stayed unavailable and only returned during the Hour 72 turn.",
+        "basis": "story",
+        "assertions": [
+          {
+            "kind": "state",
+            "quote": "Power was restored at Hour 60",
+            "verdict": "supported",
+            "evidence": [
+              {
+                "ref": "Hour 60 outcome",
+                "quote": "Power is restored but the building’s central heating is slow to recover, keeping indoor temperatures around 45 °F"
+              }
+            ],
+            "searched": [],
+            "missing": "",
+            "outside_knowledge": false
+          },
+          {
+            "kind": "state",
+            "quote": "central heating stayed unavailable",
+            "verdict": "supported",
+            "evidence": [
+              {
+                "ref": "Hour 60 outcome",
+                "quote": "central heating is slow to recover, keeping indoor temperatures around 45 °F"
+              }
+            ],
+            "searched": [],
+            "missing": "",
+            "outside_knowledge": false
+          },
+          {
+            "kind": "state",
+            "quote": "only returned during the Hour 72 turn",
+            "verdict": "supported",
+            "evidence": [
+              {
+                "ref": "Hour 72 outcome",
+                "quote": "After six hours, the building’s central heating system comes back online, raising the indoor temperature to a comfortable 68 °F"
+              }
+            ],
+            "searched": [],
+            "missing": "",
+            "outside_knowledge": false
+          }
+        ],
+        "verdict": "supported",
+        "explanation": ""
+      },
+      "invalid": [
+        "claim not quoted exactly",
+        "claim words no assertion quotes: but",
+        "assertion 1 (state): quotation not in Hour 60 outcome: \"Power is restored but the building’s central heating is slow\"",
+        "assertion 2 (state): quotation not in Hour 60 outcome: \"central heating is slow to recover, keeping indoor temperatu\""
+      ],
+      "boundaryViolations": []
+    }
+  ],
+  "notes": [],
+  "scored": [
+    {
+      "id": "C07",
+      "set": "development",
+      "household": "alex",
+      "kind": "defect",
+      "type": "heating timeline",
+      "expected": "contradicted",
+      "outcome": "invalid response",
+      "invalid": [
+        "claim words no assertion quotes: but"
+      ],
+      "boundaryViolations": [],
+      "explanation": "Both power restoration and delayed heating are described in the hour‑60 and hour‑72 outcomes.",
+      "review": {
+        "falseDetail": "six hours later",
+        "rejected": []
+      }
+    },
+    {
+      "id": "C09",
+      "set": "development",
+      "household": "alex",
+      "kind": "accurate",
+      "type": "accurate rewrite (heating timeline)",
+      "expected": "supported",
+      "outcome": "invalid response",
+      "invalid": [
+        "claim not quoted exactly",
+        "claim words no assertion quotes: but",
+        "assertion 1 (state): quotation not in Hour 60 outcome: \"Power is restored but the building’s central heating is slow\"",
+        "assertion 2 (state): quotation not in Hour 60 outcome: \"central heating is slow to recover, keeping indoor temperatu\""
+      ],
+      "boundaryViolations": [],
+      "explanation": ""
+    },
+    {
+      "id": "C25",
+      "set": "development",
+      "household": "alex",
+      "kind": "defect",
+      "type": "equipment provenance",
+      "expected": "contradicted",
+      "outcome": "provider failure",
+      "invalid": [],
+      "boundaryViolations": []
+    },
+    {
+      "id": "C16",
+      "set": "development",
+      "household": "alex",
+      "kind": "defect",
+      "type": "outage length",
+      "expected": "contradicted",
+      "outcome": "invalid response",
+      "invalid": [
+        "assertion 1: its quote isn't a span of the claim (\"Stored: 1 gallon of stored water (about 1.0 days a\")",
+        "claim words no assertion quotes: your, would, have, run, out"
+      ],
+      "boundaryViolations": [],
+      "explanation": "Baseline stored water insufficient for 72 h duration.",
+      "review": {
+        "falseDetail": "72-hour",
+        "rejected": []
+      }
+    },
+    {
+      "id": "C19",
+      "set": "development",
+      "household": "alex",
+      "kind": "defect",
+      "type": "causal conclusion",
+      "expected": "unsupported",
+      "outcome": "invalid response",
+      "invalid": [
+        "claim not quoted exactly",
+        "assertion 1: its quote isn't a span of the claim (\"the circuit breaker trips\")",
+        "claim words no assertion quotes: showed",
+        "assertion 1 (state): quotation not in Hour 72 outcome: \"the heater runs for a short time before the breaker trips ag\"",
+        "assertion 2 (state): quotation not in Hour 72 outcome: \"you locate a small 1500‑watt space heater ... Within about 1\"",
+        "assertion 2 (state): quotation not in Hour 72 outcome: \"the heater runs for a short time before the breaker trips ag\""
+      ],
+      "boundaryViolations": [],
+      "explanation": "",
+      "review": {
+        "falseDetail": "cannot support",
+        "rejected": []
+      }
+    },
+    {
+      "id": "C56",
+      "set": "development",
+      "household": "alex",
+      "kind": "accurate",
+      "type": "accurate rewrite (equipment provenance)",
+      "expected": "supported",
+      "outcome": "invalid response",
+      "invalid": [
+        "claim words no assertion quotes: story, introduced"
+      ],
+      "boundaryViolations": [],
+      "explanation": "The hour‑72 outcome mentions the heater’s presence."
+    },
+    {
+      "id": "C57",
+      "set": "development",
+      "household": "alex",
+      "kind": "accurate",
+      "type": "accurate rewrite (outage length)",
+      "expected": "supported",
+      "outcome": "provider failure",
+      "invalid": [],
+      "boundaryViolations": []
+    },
+    {
+      "id": "C58",
+      "set": "development",
+      "household": "alex",
+      "kind": "accurate",
+      "type": "accurate rewrite (causal conclusion)",
+      "expected": "supported",
+      "outcome": "invalid response",
+      "invalid": [
+        "assertion 1: its quote isn't a span of the claim (\"You locate a small 1500‑watt space heater stored i\")",
+        "assertion 2: its quote isn't a span of the claim (\"Within about 10 minutes the circuit breaker trips,\")",
+        "claim words no assertion quotes: tripped, twice, when, plugged"
+      ],
+      "boundaryViolations": [],
+      "explanation": "Hour 72 outcome describes two trips after plugging heater."
+    }
+  ]
+}

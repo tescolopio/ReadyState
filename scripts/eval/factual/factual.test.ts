@@ -1,6 +1,9 @@
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import { ALL_CASES, BATCHES, NOTE_CHECKS, PILOT_CALLS, PILOT_PAIRS, pilotBatches, type Batch } from "./cases";
+import { ALL_CASES, BATCHES, FIXTURE_CORRECTIONS, NOTE_CHECKS, PILOT_CALLS, PILOT_PAIRS, pilotBatches, type Batch } from "./cases";
 import {
   ASSERTION_KINDS,
   JUDGE_INSTRUCTIONS,
@@ -600,5 +603,26 @@ describe("the pilot rewrites' support in the supplied evidence", () => {
   it("C58: two trips while the plugged-in heater ran", () => {
     has("Hour 72 outcome", "plug it into an outlet near the living-room sofa. Within about 10 minutes the circuit breaker trips");
     has("Hour 72 outcome", "The heater runs for a short time before the breaker trips again");
+  });
+
+  it("C58's corrected wording is the case's claim, and the pilot's wording is kept as the before", () => {
+    const claims = new Map(ALL_CASES.map((c) => [c.id, c.claim]));
+    for (const correction of FIXTURE_CORRECTIONS) {
+      expect(claims.get(correction.id)).toBe(correction.after);
+      expect(correction.before).not.toBe(correction.after);
+    }
+    expect(FIXTURE_CORRECTIONS.find((c) => c.id === "C58")?.before).toBe("The breaker tripped twice when you plugged in a 1500-watt space heater.");
+  });
+});
+
+describe("the judge stays eval-only", () => {
+  it("no app, server or shared code imports the eval scripts", () => {
+    const roots = ["app", "lib", "components", "utils", "store"];
+    const files = roots.flatMap((root) =>
+      existsSync(root) ? readdirSync(root, { recursive: true, encoding: "utf8" }).filter((f) => /\.(ts|tsx)$/.test(f)).map((f) => path.join(root, f)) : [],
+    );
+    expect(files.length).toBeGreaterThan(0);
+    const importers = files.filter((file) => /from\s+["'][^"']*scripts\/eval/.test(readFileSync(file, "utf8")));
+    expect(importers).toEqual([]);
   });
 });

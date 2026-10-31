@@ -89,7 +89,7 @@ export const BATCHES: Batch[] = [
     cases: [
       { id: "C56", claim: "The story introduced a 1500-watt space heater from the building's maintenance closet." },
       { id: "C57", claim: "Your stored water, about one day's worth, would have run out well before power returned at Hour 60." },
-      { id: "C58", claim: "The breaker tripped twice when you plugged in a 1500-watt space heater." },
+      { id: "C58", claim: "The breaker tripped twice while the heater was running." },
     ],
   },
   {
@@ -191,6 +191,22 @@ export const BATCHES: Batch[] = [
     ],
   },
 ];
+
+/**
+ * Fixture wording changed after a run. The run's artifacts keep the wording it judged, and its score stays as
+ * recorded; a later run judges the corrected wording.
+ */
+export const FIXTURE_CORRECTIONS = [
+  {
+    id: "C58",
+    date: "2026-10-31",
+    before: "The breaker tripped twice when you plugged in a 1500-watt space heater.",
+    after: "The breaker tripped twice while the heater was running.",
+    judgedBefore: "the pilot (code c9d3f86): supported, invalid result",
+    reason:
+      "\"When you plugged in\" compresses two sequences: the first trip about 10 minutes after plugging in, the second after a reset while the heater ran.",
+  },
+] as const;
 
 export const ALL_CASES = BATCHES.flatMap((batch) => batch.cases.map((c) => ({ ...c, set: batch.set, household: batch.household })));
 
