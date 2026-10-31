@@ -152,6 +152,9 @@ const CONCLUSIONS: { kind: string; pattern: RegExp }[] = [
   },
   { kind: "capacity", pattern: /\b(cannot|can't|can ?not|unable to|won't|will not|isn't able to)\s+(sustain|handle|support|carry|take|run|power)\b|\b(electrical|circuit) capacity\b|\bdedicated circuit\b|\bamp(erage)? rating\b|\b80 ?(%|percent)\b|\b(compatible|within) (with )?(the |your )?(apartment's |home's )?(electrical|circuit)/i },
   { kind: "prediction", pattern: /\b(will|would|always)\s+(trip|overload|blow)\w*\b/i },
+  // "High‑wattage electric heaters can trip circuit breakers repeatedly in an older building's wiring" (Alex,
+  // 11:35 on 2026-10-31). Only a possibility of tripping or overloading counts, not any "can"; "you can" is an action.
+  { kind: "generalization", pattern: /(?<!\b(you|we)\s+)\b(can|could|may|might|tends? to|often|frequently|commonly)\s+(repeatedly\s+|easily\s+)?(trip|overload|blow|short)\w*/i },
   {
     kind: "generalization",
     pattern: /\b(showing|shows|showed|proves?|proving|demonstrat\w*|means?|indicat\w*) that\b[^.]{0,80}\b(circuits?|breakers?|wiring|outlets?|heaters?|watt\w*|draw|electrical)\b/i,
@@ -226,6 +229,34 @@ const RECOMMENDS =
 const UNAVAILABLE = /\b(unavailable|useless|won't (work|run|help)|doesn't (work|run|help)|don't (work|run|help)|can't (work|run)|stops? working)\b/i;
 const NOT_ADVICE = /\b(don't|do not|never|avoid|won't|will not|doesn't|does not|can't|cannot|not|instead of|rather than|useless|unavailable)\b/i;
 const ACQUIRE = /\b(get|buy|obtain|acquire|purchase|add|borrow|pick up|invest in)\b/i;
+
+/**
+ * Heating advice too vague to follow safely: "rely on layered clothing and non‑electrical heat sources" (Alex,
+ * 11:35 on 2026-10-31) can be read as fuel-burning heat indoors. It passes when the phrase itself names safe
+ * warmth from the approved guidance ("alternative heat sources such as blankets"), and in a warning.
+ */
+const VAGUE_HEAT =
+  /\b(non[- ‑]?electric(al)?|alternative|alternate|other|backup|back[- ‑]up|secondary|supplemental|additional|extra|emergency|off[- ‑]grid|safe|personal|portable|independent)\s+(heat(ing)?|warming|warmth)(\s+(sources?|methods?|options?|devices?|solutions?))?\b|\b(non[- ‑]?electric(al)?|alternative|backup|safe|portable)\s+heaters?\b|\bsources? of (heat|warmth)\b/i;
+const VAGUE_HEAT_ADVICE = new RegExp(`${RECOMMENDS.source}|\\b(need|needs|should|plan( for)?|prepare|identify|arrange|stock|store|seek|find)\\b`, "i");
+/** Safe warmth from rule outage-appropriate-heating, named right after the vague phrase. */
+const SAFE_EXAMPLES =
+  /^[^.;]{0,30}?\b(such as|like|e\.g\.|including|namely)\s+(?:(?:and|or|a|an|extra|warm|wool|heavy|layered|dry|your)\s+|,\s*)*(layers|layered clothing|warm clothing|clothing|blankets?|sleeping bags?|hand warmers?|a warming center|warming centers?)\b/i;
+const FUEL_HEAT = /\b(gas|propane|kerosene|butane|charcoal|grills?|camp(ing)? stoves?|fireplaces?|wood|candles?|generators?|fuel)\b/i;
+const HEAT_WARNING = /\b(never|don't|do not|avoid|not|unsafe|dangerous|danger|hazard\w*|risk\w*|carbon monoxide|poison\w*|instead of|rather than)\b|\bCO\b/i;
+const clauses = (sentence: string) => sentence.split(/;|:|,\s+(?=but\b|so\b)/);
+
+/** The vague phrase in a sentence of heating advice, or undefined; a checklist item is advice by being on the list. */
+export function vagueHeating(sentence: string, listItem = false): string | undefined {
+  for (const clause of clauses(sentence)) {
+    const match = clause.match(VAGUE_HEAT);
+    if (!match || HEAT_WARNING.test(clause)) continue;
+    if (!listItem && !VAGUE_HEAT_ADVICE.test(clause)) continue;
+    const after = clause.slice(match.index! + match[0].length);
+    if (SAFE_EXAMPLES.test(after) && !FUEL_HEAT.test(clause)) continue;
+    return match[0];
+  }
+  return undefined;
+}
 
 const OUTAGE_HEATING = SAFETY_RULES.find((rule) => rule.id === "outage-appropriate-heating");
 
@@ -400,6 +431,21 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[], con
       add("safety", `safety:${rule}`, sentence.field, matched, `Breaks safety rule ${rule}: ${quote(sentence.text)}`, prompt);
     }
   }
+  // Vague heating advice, in every displayed field.
+  for (const { field, text } of [...sentencesOf(all.filter(({ field }) => !field.startsWith("supply_checklist"))), ...checklist]) {
+    const vague = vagueHeating(text, field.startsWith("supply_checklist"));
+    if (vague) {
+      add(
+        "safety",
+        "safety:vague-heating",
+        field,
+        vague,
+        `Heating advice too vague to follow safely; it could be read as fuel-burning heat indoors: ${quote(text)}`,
+        'Name the warmth itself, from what works without grid power: layers, blankets, sleeping bags, gathering in one small room, hand warmers or a warming center (e.g. "rely on layered clothing and blankets"). Don\'t refer to heat sources in general.',
+      );
+    }
+  }
+
   // In an exercise with a power outage, the outage-heating rule applies to any recommendation of grid-powered
   // heat, whether or not the sentence says "outage", and even after power returned in the story.
   if (OUTAGE_HEATING && powerOutageContext(context.baseline ?? "", turns)) {

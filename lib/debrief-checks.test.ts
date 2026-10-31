@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { introducedEquipment } from "@/lib/continuity";
-import { checkDebrief, omitKitImprovement, repairInstructions, storyDefects, unsupportedInterval } from "@/lib/debrief-checks";
-import saved from "@/lib/fixtures/alex-2026-10-31-drafts.json";
+import { checkDebrief, electricalConclusion, omitKitImprovement, repairInstructions, storyDefects, unsupportedInterval, vagueHeating } from "@/lib/debrief-checks";
+import saved from "@/lib/fixtures/alex-2026-10-31-0407-drafts.json";
+import saved1135 from "@/lib/fixtures/alex-2026-10-31-1135-drafts.json";
 import type { AfterActionReport, TurnOutput } from "@/lib/ttx";
 
 const turnAt = (hours: number): TurnOutput => ({
@@ -560,9 +561,10 @@ describe("checkDebrief: durations", () => {
 
 describe("omitKitImprovement: the server's fallback after a repair", () => {
   const repair = saved.repair as AfterActionReport;
-  /** The saved repair with its duration corrected: only the kit list is left. */
+  /** The saved repair with its duration and vague heating corrected: only the kit list is left. */
   const kitOnly: AfterActionReport = {
     ...repair,
+    summary: repair.summary.replace("underscoring the need for additional warming methods", "so layers and blankets mattered"),
     need_to_know: [
       "Power returned at Hour 60, but the central heating stayed off through Hour 72, leaving indoor temperatures around 45 °F (Hours 60–72).",
       ...repair.need_to_know.slice(1),
@@ -570,9 +572,10 @@ describe("omitKitImprovement: the server's fallback after a repair", () => {
   };
   const omit = (report: AfterActionReport) => omitKitImprovement(report, checkDebrief(report, alex31Turns, alex31Context), alex31Turns, alex31Context);
 
-  it("doesn't apply to the saved repair: its wrong duration must still prevent delivery", () => {
+  it("doesn't apply to the saved repair: its wrong duration and vague heating must still prevent delivery", () => {
     expect(checkDebrief(repair, alex31Turns, alex31Context).map((p) => `${p.check} ${p.field}`)).toEqual([
       "list-shaped do_better[1].action",
+      "safety:vague-heating summary",
       "accuracy:unsupported-duration need_to_know[0]",
     ]);
     expect(omit(repair)).toBeUndefined();
@@ -616,5 +619,97 @@ describe("omitKitImprovement: the server's fallback after a repair", () => {
 
   it("doesn't apply to a debrief that passed", () => {
     expect(omitKitImprovement(saved.repair as AfterActionReport, [], alex31Turns, alex31Context)).toBeUndefined();
+  });
+});
+
+describe("checkDebrief: vague heating advice", () => {
+  it.each([
+    // The displayed 11:35 debrief, need_to_know[0].
+    "Without power, the building’s central heating can remain below safe indoor temperatures (45 °F) for many hours; rely on layered clothing and non‑electrical heat sources (derived from Hours 66‑72).",
+    "Keep an alternative heat source ready for the next outage.",
+    "The outage underscored the need for additional warming methods.",
+    "Have a backup heat source.",
+    "Use non-electrical heat sources such as a camp stove or blankets.",
+  ])("rejects a recommendation: %s", (sentence) => {
+    expect(vagueHeating(sentence)).toBeDefined();
+  });
+
+  it.each([
+    "Rely on layered clothing and blankets to stay warm.",
+    "Keep alternative heat sources such as blankets and sleeping bags where you can reach them.",
+    "Never use a grill, camp stove or other fuel-burning heat source indoors.",
+    "Don't rely on alternative heat sources like propane heaters inside the apartment: they produce carbon monoxide.",
+    "Alternative heat sources that burn fuel are dangerous indoors.",
+    "Rely on layers and blankets rather than a backup heater.",
+    "The limited water supply, lack of personal heat sources, and an incomplete emergency kit left you reliant on outside help.",
+    "You used blankets as your only source of warmth (Hour 72).",
+  ])("allows specific warmth, warnings and recounts: %s", (sentence) => {
+    expect(vagueHeating(sentence)).toBeUndefined();
+  });
+
+  it("treats a checklist item as advice", () => {
+    expect(vagueHeating("Alternative heat source", true)).toBeDefined();
+    expect(vagueHeating("Warm sleeping bags or heavy blankets", true)).toBeUndefined();
+  });
+
+  it("rejects the displayed 11:35 debrief and the first draft on the same sentence, and nothing else new", () => {
+    for (const report of [saved1135.first, saved1135.repair] as AfterActionReport[]) {
+      expect(checkDebrief(report, alex31Turns, alex31Context).filter((p) => p.check === "safety:vague-heating")).toEqual([
+        expect.objectContaining({ field: "need_to_know[0]", matched: "non‑electrical heat sources" }),
+      ]);
+    }
+    expect(checkDebrief(saved1135.repair as AfterActionReport, alex31Turns, alex31Context).map((p) => p.check)).toEqual(["safety:vague-heating"]);
+  });
+
+  it("passes the displayed debrief once that sentence names the warmth", () => {
+    const repair = saved1135.repair as AfterActionReport;
+    const fixed = {
+      ...repair,
+      need_to_know: [
+        "Central heating stayed off after power returned at Hour 60 and was still off through Hour 72, keeping the apartment around 45 °F; rely on layered clothing and blankets (Hours 60–72).",
+        repair.need_to_know[1],
+      ],
+    };
+    expect(checkDebrief(fixed, alex31Turns, alex31Context)).toEqual([]);
+  });
+
+  it("checks every displayed field", () => {
+    const repair = saved1135.repair as AfterActionReport;
+    const vague = "Keep an alternative heat source ready.";
+    const report: AfterActionReport = {
+      ...repair,
+      summary: `${repair.summary} ${vague}`,
+      went_well: [...repair.went_well, vague],
+      do_better: [{ ...repair.do_better[0], why: vague }, repair.do_better[1]],
+      supply_checklist: [...repair.supply_checklist, "Backup heat source"],
+    };
+    expect(checkDebrief(report, alex31Turns, alex31Context).filter((p) => p.check === "safety:vague-heating").map((p) => p.field)).toEqual(
+      expect.arrayContaining(["summary", "went_well[4]", "do_better[0].why", "supply_checklist[14]"]),
+    );
+  });
+});
+
+describe("checkDebrief: electrical generalizations with can", () => {
+  it("rejects the captured 11:35 sentence as a generalization", () => {
+    const sentence = (saved1135.first as AfterActionReport).need_to_know[1];
+    expect(sentence).toContain("can trip circuit breakers repeatedly");
+    expect(electricalConclusion(sentence)).toEqual({ kind: "generalization", matched: "can trip" });
+  });
+
+  it.each([
+    "Space heaters may overload an apartment circuit.",
+    "Older wiring often trips under a heater's load.",
+  ])("rejects other possibilities of tripping or overloading: %s", (sentence) => {
+    expect(electricalConclusion(sentence)?.kind).toBe("generalization");
+  });
+
+  it.each([
+    "Building maintenance can reset the breaker.",
+    "You can shut off the main breaker if water reaches the outlets (Hour 30).",
+    "You can trip the main breaker to cut power to flooded outlets.",
+    "Electric heat can't run without power, so outlets are useless during the outage.",
+    "The breaker tripped and the lights went out (Hour 72).",
+  ])("allows other sentences with can: %s", (sentence) => {
+    expect(electricalConclusion(sentence)).toBeUndefined();
   });
 });
