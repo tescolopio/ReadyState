@@ -9,6 +9,7 @@ import { getAppMode } from "@/lib/config";
 import { getHostedServices, type HostedAccount } from "@/lib/hosted";
 import { describeProviderError } from "@/lib/provider-errors";
 import { providerSettingsSchema, resolveModel } from "@/lib/providers";
+import { safetyPrompt } from "@/lib/rules";
 import {
   TARGET_DURATION_HOURS,
   buildExercisePrompt,
@@ -29,10 +30,8 @@ Rules:
 - Exercise context arrives as a compact briefing: the household baseline, a condensed log of earlier turns, the latest turn in full, and the participant's pending action. Treat it as the complete record and keep continuity with it: preserve elapsed time, resources and established events, and don't contradict earlier choices without an explicit new development.
 - The exercise is practice, not a test, and runs for ${TARGET_DURATION_HOURS} in-game hours. There is no game over: an unmet critical need (water, heat, shelter, medication, medical care) causes a realistic setback the participant must respond to, such as illness, lost supplies or a forced move.
 - Keep weather and physics consistent with the scenario: in sub-freezing weather, snow and ice outdoors stay frozen and indoor temperatures fall gradually.
-- Safety rules for feedback and suggested actions. These override everything else, because participants may act on what you suggest:
-  - Never suggest heating with a gas stove or oven, a grill, a camp stove, a generator or any unvented fuel-burning heater indoors (carbon monoxide). Generators run only outdoors, far from doors and windows.
-  - Credit protective actions such as shutting off gas after a suspected leak, evacuating, or calling for help, even when they make other things harder.
-  - For injuries and medical emergencies, recommend contacting emergency services or a medical professional, and don't give treatment instructions beyond basic first aid.
+- Safety rules for feedback, suggested actions and narratives. These override everything else, because participants may act on what you suggest:
+${safetyPrompt()}
 - The household baseline may be a structured profile. Use the facts it gives, including stored supplies and backup power, and treat anything it lists as "not provided" as unknown: ask about it through injects rather than assuming it.
 - Never give the household resources it doesn't have. A generator, heater, vehicle, pet or supply exists only if the baseline lists it or the participant says they have or obtained it. Narratives and response_options may use other resources only by obtaining them in the story, such as borrowing from a neighbor or buying at a store, and that should cost time or effort.
 - Use the inventory check's gaps: build injects that test them, so the household discovers what it's missing.
