@@ -20,7 +20,7 @@
       "\\belectric (space )?heaters?\\b.{0,80}\\b(power )?outages?\\b",
       "\\bbattery[-\\u2010\\u2011 ](powered|operated) (space )?heaters?\\b"
     ],
-    "exceptWhen": "\\b(won't|will not|can't|cannot|doesn't|does not|don't|do not|not|useless|needs power|without (grid )?power)\\b",
+    "exceptWhen": "\\b(don't|do not|not|never|avoid|instead of|rather than)\\b[^.;]{0,40}\\b(electric|battery)|\\bheaters?\\b[^.;]{0,60}\\b(won't|will not|can't|cannot|doesn't|does not|don't|do not|needs? (grid )?power|(is|are) useless)\\b",
     "status": "draft",
     "sources": [
       "ready-gov-power-outages"

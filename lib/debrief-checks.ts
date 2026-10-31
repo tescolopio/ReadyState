@@ -263,7 +263,10 @@ export function supplyDuration(sentence: string, baseline: string | undefined): 
   }
   const gallons = baseline?.match(/\b(\d+(?:\.\d+)?) gallons? of stored water\b/i)?.[1];
   const peopleLine = baseline?.match(/^People: (.+)$/m)?.[1];
-  const people = peopleLine ? [...peopleLine.matchAll(/\b(\d+)\b/g)].reduce((sum, match) => sum + Number(match[1]), 0) : 0;
+  // The count that starts each group ("2 adults, 1 child (2–12)"); age ranges in parentheses aren't people.
+  const people = peopleLine
+    ? [...peopleLine.replace(/\([^)]*\)/g, "").matchAll(/(?:^|,)\s*(\d+)\b/g)].reduce((sum, match) => sum + Number(match[1]), 0)
+    : 0;
   if (!gallons) return { ...claim, missing: "the stored gallons of water" };
   if (!people) return { ...claim, missing: "the number of people" };
   if (/^Pets: /m.test(baseline ?? "")) return { ...claim, missing: "a water rate that includes the pets" };
@@ -313,7 +316,14 @@ const RECOUNTING = /\b(have|has|had)\s+(been|\w+ed|led|had|done|made|gone|kept|r
 const advises = (pattern: RegExp, text: string) => pattern.test(text.replace(RECOUNTING, ""));
 /** Says grid heat won't help: "Electric heating … is unavailable during a power outage" (Alex, 2026-10-31). */
 const UNAVAILABLE = /\b(unavailable|useless|won't (work|run|help)|doesn't (work|run|help)|don't (work|run|help)|can't (work|run)|stops? working)\b/i;
-const NOT_ADVICE = /\b(don't|do not|never|avoid|won't|will not|doesn't|does not|can't|cannot|not|instead of|rather than|useless|unavailable)\b/i;
+/**
+ * A sentence that advises against grid heat: the negation must govern the heater, as in "don't rely on an electric
+ * heater" or "space heaters won't run", so "buy an electric heater for outages, not candles" still counts as advice.
+ */
+const HEAT_NOT_ADVISED = new RegExp(
+  String.raw`\b(don't|do not|never|avoid|not|instead of|rather than)\b[^.;]{0,40}(?:${GRID_HEAT.source})|(?:${GRID_HEAT.source})[^.;]{0,60}\b(won't|will not|can't|cannot|doesn't|does not|don't|do not|needs? (grid )?power|(is|are) (useless|unavailable))\b`,
+  "i",
+);
 const ACQUIRE = /\b(get|buy|obtain|acquire|purchase|add|borrow|pick up|invest in)\b/i;
 
 /**
@@ -352,6 +362,8 @@ export interface DebriefContext {
   baseline?: string;
   /** The participant's responses: `participantText[i]` came after `turns[i]`. */
   participantText?: string[];
+  /** `storyDefects(turns, context)`, when the caller has already worked it out, so each check doesn't redo it. */
+  defects?: IntroducedItem[];
 }
 
 /**
@@ -493,7 +505,7 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[], con
   // Continuity: an event in the log isn't a valid premise if the story invented it. Equipment the
   // story introduced without the household having or obtaining it can't ground a point, and the
   // original defect stays attributed to the turn that introduced it.
-  for (const { item, time } of storyDefects(turns, context)) {
+  for (const { item, time } of context.defects ?? storyDefects(turns, context)) {
     // A general statement that such equipment won't work isn't a premise about this one.
     const refersTo = (text: string) =>
       (mentions(text, item) || (item === "space heater" && mentions(text, "heater"))) && !negated(text, item) && !UNAVAILABLE.test(text);
@@ -548,13 +560,13 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[], con
   // In an exercise with a power outage, the outage-heating rule applies to any recommendation of grid-powered
   // heat, whether or not the sentence says "outage", and even after power returned in the story.
   if (OUTAGE_HEATING && powerOutageContext(context.baseline ?? "", turns)) {
-    const recommends = (sentence: string) => GRID_HEAT.test(sentence) && advises(RECOMMENDS, sentence) && !NOT_ADVICE.test(sentence);
+    const recommends = (sentence: string) => GRID_HEAT.test(sentence) && advises(RECOMMENDS, sentence) && !HEAT_NOT_ADVISED.test(sentence);
     const recommending = [
       ...sentencesOf([{ field: "summary", text: report.summary }, ...list("need_to_know", report.need_to_know), ...improvementFields(report, ["action", "why"])]).filter(
         ({ text }) => recommends(text),
       ),
       // A checklist item is a recommendation by being on the list.
-      ...checklist.filter(({ text }) => GRID_HEAT.test(text) && !NOT_ADVICE.test(text)),
+      ...checklist.filter(({ text }) => GRID_HEAT.test(text) && !HEAT_NOT_ADVISED.test(text)),
     ];
     for (const { field, text } of recommending) {
       if (flagged.has(`${OUTAGE_HEATING.id}:${text}`)) continue;

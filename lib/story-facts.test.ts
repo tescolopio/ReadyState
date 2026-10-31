@@ -52,3 +52,13 @@ describe("storyFacts", () => {
     expect(note).not.toContain("returned during");
   });
 });
+
+describe("storyFacts order within a turn", () => {
+  it("takes the turn's outcome before its new inject", () => {
+    const facts = storyFacts([
+      turn(0, "The power goes out."),
+      turn(60, "The building says power is restored at noon tomorrow.", "Power is restored, but the central heating stays off."),
+    ]);
+    expect(facts.powerReturned).toEqual({ hour: 60, sentence: "Power is restored, but the central heating stays off." });
+  });
+});

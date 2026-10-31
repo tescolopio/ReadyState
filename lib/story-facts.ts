@@ -56,7 +56,8 @@ function heatingState(sentence: string): { state: HeatingState; clause: string }
 
 export function storyFacts(turns: TurnOutput[], defects: Pick<IntroducedItem, "item" | "time" | "sentence" | "fromOption">[] = []): StoryFacts {
   const told = turns.flatMap((turn) =>
-    [turn.new_inject, turn.narrative_response].flatMap((text) => split(text ?? "").map((sentence) => ({ hour: turn.hours_elapsed, sentence }))),
+    // In the order things happen within a turn: the outcome of the last action, then the new development.
+    [turn.narrative_response, turn.new_inject].flatMap((text) => split(text ?? "").map((sentence) => ({ hour: turn.hours_elapsed, sentence }))),
   );
   const powerReturned = told.find(({ sentence }) => POWER_BACK.test(sentence));
   const heatingAfterPower = powerReturned

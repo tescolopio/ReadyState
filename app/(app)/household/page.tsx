@@ -7,6 +7,7 @@ import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { HouseholdWizard, InventoryCheck } from "@/components/household-wizard";
 import { Button } from "@/components/ui/button";
+import { resetExercise } from "@/lib/exercise-session";
 import {
   AGE_RANGES,
   BACKUP_POWER,
@@ -73,7 +74,11 @@ export default function HouseholdPage() {
 
       {showWizard ? (
         <HouseholdWizard
-          onStart={() => router.push("/exercise?start=1")}
+          onStart={() => {
+            // A fresh exercise with the edited household, as from the Exercises page; otherwise one in progress resumes.
+            resetExercise();
+            router.push("/exercise?start=1");
+          }}
           onClose={() => (saved ? setEditing(false) : router.push("/journal"))}
         />
       ) : (

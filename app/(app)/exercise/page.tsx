@@ -19,6 +19,7 @@ import { SCENARIOS, hasProfile, privateTerms, type HouseholdProfile } from "@/li
 import { engineBaseline } from "@/lib/inventory";
 import { TEST_HOUSEHOLDS } from "@/lib/test-households";
 import {
+  DEBRIEF_REQUEST,
   OMITTED_IMPROVEMENT_NOTICE,
   TARGET_DURATION_HOURS,
   deriveTtxState,
@@ -33,7 +34,6 @@ import { usePlanStore } from "@/store/usePlanStore";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { maskInput, unmaskOutput } from "@/utils/obfuscator";
 
-const DEBRIEF_REQUEST = "The exercise is over. Please prepare the debrief.";
 
 /** Three recorded, already-masked turns from an eval run of the "sam" test household. */
 const PREVIEW_MESSAGES = previewJson as unknown as TtxUIMessage[];

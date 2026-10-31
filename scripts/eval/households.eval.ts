@@ -16,7 +16,7 @@ import { CAPTURE_HEADER, type DebriefCapture } from "@/lib/debrief-capture";
 import { leakedTerms, privateTerms } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { PRIVACY_LEAKS, TEST_HOUSEHOLDS, type TestHousehold } from "@/lib/test-households";
-import { OMITTED_IMPROVEMENT_NOTICE, deriveTtxState, improvementText, type AfterActionReport, type TtxUIMessage, type TurnOutput } from "@/lib/ttx";
+import { DEBRIEF_REQUEST, OMITTED_IMPROVEMENT_NOTICE, deriveTtxState, improvementText, participantResponses, type AfterActionReport, type TtxUIMessage, type TurnOutput } from "@/lib/ttx";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { maskInput } from "@/utils/obfuscator";
 
@@ -37,7 +37,6 @@ const CHOOSE = process.env.EVAL_CHOOSE ?? "cycle";
  * finished exercise goes straight to the debrief. For targeted reruns.
  */
 const REPLAY = process.env.EVAL_REPLAY;
-const DEBRIEF_REQUEST = "The exercise is over. Please prepare the debrief.";
 /**
  * Asks the server for every debrief draft, rejected ones included, and writes
  * them to <household>-debrief-drafts.json and .md for manual review. The
@@ -242,12 +241,11 @@ function check(result: Result, messages: TtxUIMessage[]) {
   const { findings } = result;
   const add = (category: CheckCategory, text: string) => findings.push({ category, text });
   const turns = result.turns.flatMap((record) => (record.turn ? [record.turn] : []));
-  const participantText = messages
+  // Privacy: nothing private in anything sent, resent messages included.
+  const sent = messages
     .filter((m) => m.role === "user")
-    .flatMap((m) => m.parts.map((p) => (p.type === "text" ? p.text : "")));
-
-  // Privacy: nothing private in anything sent.
-  const sent = participantText.join("\n");
+    .flatMap((m) => m.parts.map((p) => (p.type === "text" ? p.text : "")))
+    .join("\n");
   const leaked = [
     ...leakedTerms(sent, privateTerms(result.household.profile)),
     ...(result.household.id === "privacy" ? PRIVACY_LEAKS.filter((leak) => containsWord(sent, leak)) : []),
@@ -275,7 +273,7 @@ function check(result: Result, messages: TtxUIMessage[]) {
 
   // Continuity, safety, suitability (scripts/eval/checks.ts).
   const replayedTurns = result.turns.filter((record) => record.replayed).length;
-  findings.push(...contentFindings({ baseline: result.baseline, turns, participantText: participantText.slice(1), report: result.report, replayedTurns }));
+  findings.push(...contentFindings({ baseline: result.baseline, turns, participantText: participantResponses(messages).responses, report: result.report, replayedTurns }));
 
   const calls = [...result.turns, ...(result.debrief ? [result.debrief] : [])].filter(
     // A rejected debrief still used the provider, and reports what it used.

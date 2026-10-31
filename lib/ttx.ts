@@ -235,8 +235,33 @@ const messageText = (message: TtxUIMessage) =>
     .trim();
 
 /** What the participant sent, in order: the household baseline first, then each response. */
-export const participantMessages = (messages: TtxUIMessage[]) =>
-  messages.filter((message) => message.role === "user").map(messageText).filter(Boolean);
+/** What the exercise page sends to ask for the debrief; it isn't a participant action. */
+export const DEBRIEF_REQUEST = "The exercise is over. Please prepare the debrief.";
+
+/**
+ * The baseline and the participant's response after each completed turn: `responses[i]` follows `turns[i]`, or is
+ * empty if none did. Messages are walked in order, as `buildExercisePrompt` does, so a resent response after a failed
+ * turn replaces the first rather than shifting every later one; the debrief request isn't counted.
+ */
+export function participantResponses(messages: TtxUIMessage[]): { baseline: string; responses: string[] } {
+  let baseline: string | undefined;
+  const responses: string[] = [];
+  let turns = 0;
+  for (const message of messages) {
+    if (message.role === "user") {
+      const text = messageText(message);
+      if (!text || text === DEBRIEF_REQUEST) continue;
+      if (baseline === undefined) baseline = text;
+      else if (turns > 0) responses[turns - 1] = text;
+      continue;
+    }
+    if (message.role !== "assistant") continue;
+    for (const part of message.parts) {
+      if (part.type === "tool-generate_turn" && completedOutput<TurnOutput>(part)) turns++;
+    }
+  }
+  return { baseline: baseline ?? "", responses: Array.from({ length: turns }, (_, i) => responses[i] ?? "") };
+}
 
 const alertsLine = (alerts: string[]) =>
   alerts.length ? alerts.join("; ") : "none";

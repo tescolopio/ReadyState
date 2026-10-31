@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { introducedEquipment } from "@/lib/continuity";
-import { checkDebrief, electricalConclusion, omitKitImprovement, repairInstructions, storyDefects, unsupportedInterval, vagueHeating } from "@/lib/debrief-checks";
+import { checkDebrief, electricalConclusion, omitKitImprovement, repairInstructions, storyDefects, supplyDuration, unsupportedInterval, vagueHeating } from "@/lib/debrief-checks";
 import saved from "@/lib/fixtures/alex-2026-10-31-0407-drafts.json";
 import saved1135 from "@/lib/fixtures/alex-2026-10-31-1135-drafts.json";
 import type { AfterActionReport, TurnOutput } from "@/lib/ttx";
@@ -711,5 +711,25 @@ describe("checkDebrief: electrical generalizations with can", () => {
     "The breaker tripped and the lights went out (Hour 72).",
   ])("allows other sentences with can: %s", (sentence) => {
     expect(electricalConclusion(sentence)).toBeUndefined();
+  });
+});
+
+describe("supplyDuration head count", () => {
+  it("counts people, not the numbers in age ranges", () => {
+    const baseline = "People: 2 adults, 1 child (2–12), 1 older adult (65+).\nStored: 8 gallons of stored water, 5 days of food.";
+    expect(supplyDuration("Your 8 gallons of stored water would last about 2 days.", baseline)).toMatchObject({ resource: "water", supportedDays: 2 });
+  });
+});
+
+describe("grid heat advice with an unrelated negation", () => {
+  it("still flags an electric heater recommended for outages when 'not' governs something else", () => {
+    const report: AfterActionReport = {
+      summary: "The cold was the hardest part.",
+      went_well: [],
+      need_to_know: [],
+      do_better: [{ action: "Buy an electric space heater for future power outages, not candles.", evidence: "Hour 60 outcome", why: "It keeps one room warm." }],
+      supply_checklist: [],
+    };
+    expect(checkDebrief(report, alex31Turns, alex31Context).map((p) => p.check)).toEqual(expect.arrayContaining([expect.stringMatching(/outage/)]));
   });
 });

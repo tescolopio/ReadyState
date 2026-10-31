@@ -7,6 +7,7 @@ import {
   streamText,
   toUIMessageStream,
   wrapLanguageModel,
+  type InferUIMessageChunk,
   type LanguageModel,
   type LanguageModelMiddleware,
 } from "ai";
@@ -17,6 +18,7 @@ import { storyFacts, storyFactsBriefing } from "@/lib/story-facts";
 
 import { getAppMode } from "@/lib/config";
 import { getHostedServices, type HostedAccount } from "@/lib/hosted";
+import { reportBudgetTimeout } from "@/lib/budget-timeout";
 import { describeProviderError, isSchemaSlip } from "@/lib/provider-errors";
 import { providerSettingsSchema, resolveModel, type ResolvedModel } from "@/lib/providers";
 import { safetyPrompt } from "@/lib/rules";
@@ -24,7 +26,7 @@ import {
   TARGET_DURATION_HOURS,
   buildExercisePrompt,
   deriveTtxState,
-  participantMessages,
+  participantResponses,
   ttxTools,
   type AfterActionReport,
   type OmittedImprovement,
@@ -48,9 +50,12 @@ const MIN_REPAIR_BUDGET_MS = 20_000;
 /** A deadline for the request's model work, also ended if the participant stops the request. */
 function modelBudget(requestSignal: AbortSignal) {
   const deadline = Date.now() + MODEL_BUDGET_MS;
+  const signal = AbortSignal.any([requestSignal, AbortSignal.timeout(MODEL_BUDGET_MS)]);
   return {
-    signal: AbortSignal.any([requestSignal, AbortSignal.timeout(MODEL_BUDGET_MS)]),
+    signal,
     remainingMs: () => deadline - Date.now(),
+    /** The timeout's error when the budget ran out, rather than the participant stopping the request. */
+    timeout: (): unknown => (signal.aborted && !requestSignal.aborted ? signal.reason : undefined),
   };
 }
 
@@ -199,9 +204,10 @@ async function generateCheckedDebrief({
 
   const { turns } = deriveTtxState(messages);
   // participantText[i] is the participant's message after turns[i].
-  const [baseline = "", ...participantText] = participantMessages(messages);
-  const context = { baseline, participantText };
-  const defects = storyDefects(turns, context);
+  const { baseline, responses: participantText } = participantResponses(messages);
+  const defects = storyDefects(turns, { baseline, participantText });
+  // Worked out once here; the first check, the repair check and the fallback's re-check all reuse it.
+  const context = { baseline, participantText, defects };
   const debriefBriefing = `${briefing}\n\n${storyFactsBriefing(storyFacts(turns, defects))}`;
   const capture = {
     drafts,
@@ -391,6 +397,7 @@ export async function POST(req: Request) {
     });
   }
 
+  let streamRetried = false;
   const result = streamText({
     model,
     instructions,
@@ -404,7 +411,9 @@ export async function POST(req: Request) {
     // until the attempt succeeds, so a discarded attempt never reaches the page.
     streamRetries: 0,
     onError: ({ error }) => {
-      if (!isSchemaSlip(error)) return;
+      // The SDK grants one callback-directed retry per step, so only the first slip is a retry.
+      if (!isSchemaSlip(error) || streamRetried) return;
+      streamRetried = true;
       console.warn("[ttx] retrying after a malformed tool call");
       counts.schemaRetries++;
       return { retry: true as const };
@@ -424,6 +433,6 @@ export async function POST(req: Request) {
             }
           : undefined,
       onError: onModelError,
-    }),
+    }).pipeThrough(reportBudgetTimeout<InferUIMessageChunk<TtxUIMessage>>(budget.timeout, onModelError)),
   });
 }

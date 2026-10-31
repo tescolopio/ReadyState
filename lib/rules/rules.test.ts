@@ -190,3 +190,20 @@ describe("guidance", () => {
     expect(problems).toEqual([]);
   });
 });
+
+describe("outage heating detection", () => {
+  const rule = SAFETY_RULES.find((r) => r.id === "outage-appropriate-heating")!;
+  const flags = (sentence: string) =>
+    rule.detect!.some((p) => new RegExp(p, "i").test(sentence)) && !new RegExp(rule.exceptWhen!, "i").test(sentence);
+
+  it("flags an electric heater recommended for outages even when 'not' appears elsewhere", () => {
+    expect(flags("Buy an electric space heater for future power outages, not candles.")).toBe(true);
+    expect(flags("Keep a UL-listed electric heater ready for power outages.")).toBe(true);
+  });
+
+  it("lets warnings about electric heat in outages through", () => {
+    expect(flags("An electric space heater won't help during a power outage.")).toBe(false);
+    expect(flags("Don't count on electric heaters in a power outage.")).toBe(false);
+    expect(flags("Electric heaters need grid power, so they're useless in a power outage.")).toBe(false);
+  });
+});

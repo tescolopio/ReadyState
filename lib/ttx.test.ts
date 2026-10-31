@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEBRIEF_REQUEST,
   RECENT_LOG_TURNS,
   buildExercisePrompt,
   deriveTtxState,
+  participantResponses,
   type AfterActionReport,
   type TtxUIMessage,
   type TurnOutput,
@@ -217,5 +219,22 @@ describe("buildExercisePrompt", () => {
     // prompt, safety rules and tool schema (about 1,700), a request stays
     // within G6's 5,000-token target.
     expect(buildExercisePrompt(messages).length).toBeLessThan(12_000);
+  });
+});
+
+describe("participantResponses", () => {
+  it("pairs each response with the turn before it, even after a resend, and skips the debrief request", () => {
+    const messages = [
+      user("u0", "baseline"),
+      turnMessage("a0", turn()),
+      user("u1", "first try"),
+      // The next turn failed; the participant sent the response again.
+      user("u2", "resent"),
+      turnMessage("a1", turn({ time_elapsed: "Hour 6", hours_elapsed: 6 })),
+      user("u3", "after hour 6"),
+      turnMessage("a2", turn({ time_elapsed: "Hour 12", hours_elapsed: 12, scenario_status: "complete" })),
+      user("u4", DEBRIEF_REQUEST),
+    ];
+    expect(participantResponses(messages)).toEqual({ baseline: "baseline", responses: ["resent", "after hour 6", ""] });
   });
 });
