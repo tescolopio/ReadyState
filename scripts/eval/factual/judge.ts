@@ -44,32 +44,44 @@ const quotedEvidence = z.array(
   }),
 );
 
-export const judgmentSchema = z.object({
-  claims: z.array(
-    z.object({
-      id: z.string(),
-      claim: z.string().describe("The claim, quoted exactly as given."),
-      basis: z.enum(["story", "household", "guidance"]),
-      assertions: z
-        .array(
-          z.object({
-            kind: z.enum(ASSERTION_KINDS),
-            quote: z.string().describe("The exact span of the claim this assertion covers, copied character for character."),
-            verdict: z.enum(VERDICTS),
-            evidence: quotedEvidence.describe("For supported or contradicted: the lines and exact words that show it."),
-            searched: z.array(z.string()).describe("For unsupported: the references or sections you searched. Otherwise empty."),
-            missing: z.string().describe("For unsupported: what the evidence would need to say. Otherwise empty."),
-            outside_knowledge: z.boolean().describe("True if the verdict relies on anything not in the evidence."),
-          }),
-        )
-        .describe("Every material assertion. Together the quotes must cover every word of the claim that carries meaning."),
-      verdict: z.enum(VERDICTS).describe("supported only if every assertion is; contradicted if any is; else unsupported if any is; else unclear."),
-      explanation: z.string().describe("At most 25 words."),
-    }),
-  ),
-});
+const claimJudgmentSchema = <K extends z.ZodType<string>>(kind: K) =>
+  z.object({
+    claims: z.array(
+      z.object({
+        id: z.string(),
+        claim: z.string().describe("The claim, quoted exactly as given."),
+        basis: z.enum(["story", "household", "guidance"]),
+        assertions: z
+          .array(
+            z.object({
+              kind,
+              quote: z.string().describe("The exact span of the claim this assertion covers, copied character for character."),
+              verdict: z.enum(VERDICTS),
+              evidence: quotedEvidence.describe("For supported or contradicted: the lines and exact words that show it."),
+              searched: z.array(z.string()).describe("For unsupported: the references or sections you searched. Otherwise empty."),
+              missing: z.string().describe("For unsupported: what the evidence would need to say. Otherwise empty."),
+              outside_knowledge: z.boolean().describe("True if the verdict relies on anything not in the evidence."),
+            }),
+          )
+          .describe("Every material assertion. Together the quotes must cover every word of the claim that carries meaning."),
+        verdict: z.enum(VERDICTS).describe("supported only if every assertion is; contradicted if any is; else unsupported if any is; else unclear."),
+        explanation: z.string().describe("At most 25 words."),
+      }),
+    ),
+  });
+
+/** The full contract, checked locally: an assertion's kind must be one of ASSERTION_KINDS. */
+export const judgmentSchema = claimJudgmentSchema(z.enum(ASSERTION_KINDS));
+/**
+ * What the provider is asked for: the same schema with `kind` as free text, since Groq's strict validation
+ * rejected a whole call over one kind outside the list (the 10-31 diagnostic's D1). An unknown kind still
+ * fails judgmentSchema and validate(), so it makes the result invalid; nothing is normalized.
+ */
+export const providerJudgmentSchema = claimJudgmentSchema(z.string().describe(`Exactly one of: ${ASSERTION_KINDS.join(", ")}.`));
 export type Judgment = z.infer<typeof judgmentSchema>;
-export type JudgedClaim = Judgment["claims"][number];
+/** A judgment as the provider may return it, before the kinds are checked. */
+export type ProviderJudgment = z.infer<typeof providerJudgmentSchema>;
+export type JudgedClaim = ProviderJudgment["claims"][number];
 export type JudgedAssertion = JudgedClaim["assertions"][number];
 
 export const noteJudgmentSchema = z.object({
@@ -174,7 +186,7 @@ function logLines({ turns, responses }: HouseholdEvidence, { omitHours = [], onl
 }
 
 /** Every bracketed reference in a prompt, with the text of its line. */
-const referencedLines = (text: string) =>
+export const referencedLines = (text: string) =>
   new Map([...text.matchAll(/^\s*\[([^\]]+)\] (.*)$/gm)].map((match) => [match[1], match[2]]));
 
 /** The judge's message for a claim batch, and every line it may cite. */
@@ -313,10 +325,16 @@ export interface ValidatedClaim {
 }
 
 /** Checks a claim batch's judgment against the contract, claim by claim. */
-export function validate(batch: Batch, judgment: Judgment): { claims: ValidatedClaim[]; extra: string[] } {
-  const { lines } = batchPrompt(batch);
+export const validate = (batch: Batch, judgment: ProviderJudgment) => validateClaims(batchPrompt(batch).lines, batch.cases, judgment);
+
+/** Checks a judgment against the contract, given the lines it may cite and the claims it was given. */
+export function validateClaims(
+  lines: Map<string, string>,
+  cases: { id: string; claim: string }[],
+  judgment: ProviderJudgment,
+): { claims: ValidatedClaim[]; extra: string[] } {
   const byId = new Map(judgment.claims.map((claim) => [claim.id, claim]));
-  const claims = batch.cases.map(({ id, claim }): ValidatedClaim => {
+  const claims = cases.map(({ id, claim }): ValidatedClaim => {
     const judged = byId.get(id);
     if (!judged) return { id, invalid: ["no verdict for this claim"], boundaryViolations: [] };
     const invalid: string[] = [];
@@ -333,7 +351,8 @@ export function validate(batch: Batch, judgment: Judgment): { claims: ValidatedC
 
     const inBasis = BASIS_REFS[judged.basis];
     const enforced = judged.assertions.map((assertion, i) => {
-      const where = `assertion ${i + 1} (${assertion.kind})`;
+      const where = `assertion ${i + 1} (${assertion.kind.slice(0, 30)})`;
+      if (!(ASSERTION_KINDS as readonly string[]).includes(assertion.kind)) invalid.push(`${where}: unknown kind`);
       for (const problem of assertion.evidence.map((e) => quoteProblem(lines, e)).filter(Boolean)) invalid.push(`${where}: ${problem}`);
       const unknownSearched = assertion.searched.map(normalizeRef).filter((ref) => /^(Hour|Response|Baseline|Guidance)\b/.test(ref) && !lines.has(ref));
       if (unknownSearched.length) invalid.push(`${where}: searched unknown references ${unknownSearched.join(", ")}`);
@@ -354,7 +373,7 @@ export function validate(batch: Batch, judgment: Judgment): { claims: ValidatedC
     }
     return { id, judged, invalid, boundaryViolations, verdict: invalid.length ? undefined : derivedVerdict(enforced) };
   });
-  const extra = [...byId.keys()].filter((id) => !batch.cases.some((c) => c.id === id));
+  const extra = [...byId.keys()].filter((id) => !cases.some((c) => c.id === id));
   return { claims, extra };
 }
 
@@ -407,9 +426,9 @@ export interface CallRun<T> {
   /** The provider's error code, e.g. "tool_use_failed", when it gives one. */
   errorCode?: string;
   /** For a malformed tool call: the rejected generation's size and shape, never its content. */
-  failedGeneration?: { length: number; json: boolean; schemaIssues: string[] };
+  failedGeneration?: { length: number; json: boolean; schemaIssues: string[]; parseError?: JsonBreak };
   finishReason?: string;
-  /** Whether a returned tool call's arguments pass the schema locally, and the paths that don't. */
+  /** Whether a returned tool call's arguments pass the full schema locally (kinds included), and the paths that don't. */
   schemaValid?: boolean;
   schemaIssues?: string[];
   usage: { inputTokens: number; outputTokens: number };
@@ -420,18 +439,64 @@ export interface CallRun<T> {
 
 const issuePaths = (error: z.ZodError) => [...new Set(error.issues.map((issue) => issue.path.join(".") || "(root)"))].slice(0, 12);
 
-/** The shape of a generation the provider rejected, without keeping any of it. */
-function describeFailedGeneration(generation: string | undefined, schema: z.ZodType): CallRun<unknown>["failedGeneration"] {
-  if (generation === undefined) return undefined;
+/**
+ * Where and how text stops being JSON, without any of the text: clues to truncation, not proof of it. Output
+ * that ends inside a string or with structures still open looks cut off; a break well before the end doesn't.
+ */
+export interface JsonBreak {
+  /** Which text failed: the generation itself, or the arguments string inside a {name, arguments} call. */
+  layer: "generation" | "arguments";
+  /** That text's length in characters. */
+  length: number;
+  /** The parser's error position (the length, for unexpected end of input); undefined if it gave none. */
+  position?: number;
+  /** Whether the text ends inside a string. */
+  endsInString: boolean;
+  /** Objects and arrays still open at the end. */
+  unclosed: number;
+}
+
+export function jsonBreak(text: string, layer: JsonBreak["layer"] = "generation"): JsonBreak | undefined {
+  let message: string;
   try {
-    const parsed: unknown = JSON.parse(generation);
-    // Groq returns either the arguments or a {name, arguments} call.
-    const args = parsed && typeof parsed === "object" && "arguments" in parsed ? (parsed as { arguments: unknown }).arguments : parsed;
-    const checked = schema.safeParse(typeof args === "string" ? JSON.parse(args) : args);
-    return { length: generation.length, json: true, schemaIssues: checked.success ? [] : issuePaths(checked.error) };
-  } catch {
-    return { length: generation.length, json: false, schemaIssues: [] };
+    JSON.parse(text);
+    return undefined;
+  } catch (error) {
+    message = error instanceof Error ? error.message : "";
   }
+  // Only the number is read from the parser's message, which can quote the text.
+  const at = message.match(/at position (\d+)/);
+  const position = at ? Number(at[1]) : /unexpected end of json input/i.test(message) ? text.length : undefined;
+  let inString = false;
+  let escaped = false;
+  let depth = 0;
+  for (const char of text) {
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+    } else if (char === '"') inString = true;
+    else if (char === "{" || char === "[") depth++;
+    else if ((char === "}" || char === "]") && depth > 0) depth--;
+  }
+  return { layer, length: text.length, position, endsInString: inString, unclosed: depth };
+}
+
+/** The shape of a generation the provider rejected, without keeping any of it. */
+export function describeFailedGeneration(generation: string | undefined, schema: z.ZodType): CallRun<unknown>["failedGeneration"] {
+  if (generation === undefined) return undefined;
+  const outer = jsonBreak(generation);
+  if (outer) return { length: generation.length, json: false, schemaIssues: [], parseError: outer };
+  const parsed: unknown = JSON.parse(generation);
+  // Groq returns either the arguments or a {name, arguments} call.
+  let args = parsed && typeof parsed === "object" && "arguments" in parsed ? (parsed as { arguments: unknown }).arguments : parsed;
+  if (typeof args === "string") {
+    const inner = jsonBreak(args, "arguments");
+    if (inner) return { length: generation.length, json: false, schemaIssues: [], parseError: inner };
+    args = JSON.parse(args);
+  }
+  const checked = schema.safeParse(args);
+  return { length: generation.length, json: true, schemaIssues: checked.success ? [] : issuePaths(checked.error) };
 }
 
 async function call<T>(
@@ -439,10 +504,13 @@ async function call<T>(
   name: string,
   instructions: string,
   content: string,
+  /** What the provider is asked for and enforces. */
   schema: z.ZodType<T>,
   maxOutputTokens: number,
   /** 0 turns off the SDK's own retries (rate limits, server errors), for the diagnostic. */
   maxRetries?: number,
+  /** The full schema checked locally, when the provider's is looser. */
+  localSchema: z.ZodType = schema,
 ): Promise<CallRun<T>> {
   const started = Date.now();
   try {
@@ -461,7 +529,7 @@ async function call<T>(
     const finishReason = String(result.finishReason);
     const recorded = result.toolCalls.find((toolCall) => toolCall.toolName === "record");
     if (!recorded) return { name, status: "no tool call", finishReason, usage, ms: Date.now() - started, attempts: 1 };
-    const checked = schema.safeParse(recorded.input);
+    const checked = localSchema.safeParse(recorded.input);
     return {
       name,
       status: "completed",
@@ -491,10 +559,10 @@ async function call<T>(
 
 /** The synthetic diagnostic's claim call: the same instructions, schema, reasoning and allowance as a real claim call. */
 export const judgeClaimsText = (model: LanguageModel, name: string, content: string, maxRetries?: number) =>
-  call<Judgment>(model, name, JUDGE_INSTRUCTIONS, content, judgmentSchema, MAX_OUTPUT_TOKENS, maxRetries);
+  call<ProviderJudgment>(model, name, JUDGE_INSTRUCTIONS, content, providerJudgmentSchema, MAX_OUTPUT_TOKENS, maxRetries, judgmentSchema);
 
 export const judgeBatch = (model: LanguageModel, batch: Batch) =>
-  call<Judgment>(model, batch.name, JUDGE_INSTRUCTIONS, batchPrompt(batch).text, judgmentSchema, MAX_OUTPUT_TOKENS);
+  call<ProviderJudgment>(model, batch.name, JUDGE_INSTRUCTIONS, batchPrompt(batch).text, providerJudgmentSchema, MAX_OUTPUT_TOKENS, undefined, judgmentSchema);
 
 export const judgeNote = (model: LanguageModel, check: NoteCheck) =>
   call<NoteJudgment>(model, check.name, NOTE_INSTRUCTIONS, notePrompt(check).text, noteJudgmentSchema, NOTE_MAX_OUTPUT_TOKENS);

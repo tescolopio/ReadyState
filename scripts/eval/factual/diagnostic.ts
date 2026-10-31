@@ -5,7 +5,7 @@
  * instructions, schema, reasoning and output allowance, each varying one
  * factor. The content is invented and shares nothing with the case set.
  */
-import { MAX_OUTPUT_TOKENS, estimateInputTokens, type CallRun } from "./judge";
+import { MAX_OUTPUT_TOKENS, estimateInputTokens, referencedLines, validateClaims, type CallRun, type ProviderJudgment } from "./judge";
 
 const BASELINE = [
   "HOUSEHOLD BASELINE:",
@@ -79,8 +79,26 @@ export function diagnosticCalls(): DiagnosticCall[] {
   ];
 }
 
-/** The authorized cap on input and output tokens, charging a failed call at its full allowance. */
+/** The first diagnostic's cap on input and output tokens (D1–D3, 10-31), charging a failed call at its full allowance. */
 export const DIAGNOSTIC_CAP = 16_000;
+
+/**
+ * The second diagnostic (authorized 10-31): D1 and D3 again with `kind` as free text in the provider's schema,
+ * everything else unchanged, under a 10,000-token cap. It tests whether that one change helps completion.
+ */
+export const RELAXED_KIND_RUN = { calls: ["D1", "D3"], cap: 10_000 };
+
+/** The charge for a call: its full allowance unless the provider reported its usage. */
+export const chargeFor = (run: CallRun<unknown>, allowance: number) => {
+  const reported = run.usage.inputTokens + run.usage.outputTokens;
+  return run.status === "provider failure" || !run.usage.inputTokens || !run.usage.outputTokens ? Math.max(allowance, reported) : reported;
+};
+
+/** A diagnostic call's judgment checked against the full contract, using the lines and claims in its content. */
+export function validateDiagnostic(content: string, judgment: ProviderJudgment) {
+  const cases = [...content.matchAll(/^(D\d\d): (.*)$/gm)].map((match) => ({ id: match[1], claim: match[2] }));
+  return validateClaims(referencedLines(content), cases, judgment);
+}
 
 /**
  * Whether a failure would also break the calls after it: the model or key is wrong, a parameter is refused, the

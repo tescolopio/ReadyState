@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ALL_CASES, BATCHES, NOTE_CHECKS, type Batch } from "./cases";
 import {
+  ASSERTION_KINDS,
   JUDGE_INSTRUCTIONS,
   MAX_OUTPUT_TOKENS,
   NOTE_INSTRUCTIONS,
@@ -9,20 +10,25 @@ import {
   batchPrompt,
   checkNote,
   derivedVerdict,
+  describeFailedGeneration,
   estimateInputTokens,
+  jsonBreak,
+  judgmentSchema,
   noteLines,
   notePrompt,
+  providerJudgmentSchema,
+  referencedLines,
   uncoveredWords,
   untraceableNoteLines,
   validate,
   type CallStatus,
   type JudgedAssertion,
   type JudgedClaim,
-  type Judgment,
   type NoteJudgment,
+  type ProviderJudgment,
 } from "./judge";
 import { LABELS } from "./labels";
-import { DIAGNOSTIC_CAP, diagnosticCalls, stopsTheRun } from "./diagnostic";
+import { DIAGNOSTIC_CAP, RELAXED_KIND_RUN, chargeFor, diagnosticCalls, stopsTheRun, validateDiagnostic } from "./diagnostic";
 import { score, summarize } from "./score";
 
 describe("the G11 case set", () => {
@@ -137,7 +143,7 @@ const assertion = (verdict: JudgedAssertion["verdict"], quote: string, evidence:
 /** A real quotation from a line of the batch's prompt. */
 const quoteFrom = (of: Batch, ref: string) => ({ ref, quote: batchPrompt(of).lines.get(ref)!.slice(0, 40) });
 /** A valid judgment: every claim one assertion quoting all of it, supported by a real quotation. */
-function judgment(of: Batch, overrides: Record<string, Partial<JudgedClaim>> = {}): Judgment {
+function judgment(of: Batch, overrides: Record<string, Partial<JudgedClaim>> = {}): ProviderJudgment {
   const ref = of.evidence === "story" ? [...batchPrompt(of).lines.keys()].find((key) => key.endsWith(" outcome"))! : "Baseline: Has";
   return {
     claims: of.cases.map(({ id, claim }) => ({
@@ -155,7 +161,7 @@ function judgment(of: Batch, overrides: Record<string, Partial<JudgedClaim>> = {
 describe("validating a claim judgment", () => {
   const storyB = batch("alex story B");
   const claimOf = (id: string) => storyB.cases.find((c) => c.id === id)!.claim;
-  const resultFor = (j: Judgment, id: string) => validate(storyB, j).claims.find((c) => c.id === id)!;
+  const resultFor = (j: ProviderJudgment, id: string) => validate(storyB, j).claims.find((c) => c.id === id)!;
 
   it("derives the claim verdict from its assertions", () => {
     expect(derivedVerdict(["supported", "unsupported"])).toBe("unsupported");
@@ -209,6 +215,47 @@ describe("validating a claim judgment", () => {
     expect(resultFor(j, "C21").invalid).toEqual(["assertion 1 (state): supported without evidence"]);
     expect(resultFor(j, "C18").invalid).toEqual(["verdict supported contradicts its assertions (contradicted)"]);
     expect(resultFor(j, "C13").invalid).toEqual(["assertion 1 (state): unsupported without what was searched and what is missing"]);
+  });
+
+  it("lets the provider accept any kind, but invalidates an unknown kind locally without normalizing it", () => {
+    const withKind = (kind: string) =>
+      judgment(storyB, { C09: { assertions: [assertion("supported", claimOf("C09"), [quoteFrom(storyB, "Hour 72 outcome")], { kind })] } });
+    const j = withKind("location");
+    expect(providerJudgmentSchema.safeParse(j).success).toBe(true);
+    const strict = judgmentSchema.safeParse(j);
+    expect(strict.success).toBe(false);
+    expect(strict.error!.issues.map((issue) => issue.path.join("."))).toEqual([`claims.${storyB.cases.findIndex((c) => c.id === "C09")}.assertions.0.kind`]);
+    expect(resultFor(j, "C09")).toMatchObject({ invalid: ["assertion 1 (location): unknown kind"], verdict: undefined });
+    // Case variants of a listed kind aren't accepted either.
+    expect(resultFor(withKind("State"), "C09").invalid).toEqual(["assertion 1 (State): unknown kind"]);
+    for (const kind of ASSERTION_KINDS) {
+      expect(judgmentSchema.safeParse(withKind(kind)).success).toBe(true);
+      expect(resultFor(withKind(kind), "C09").invalid).toEqual([]);
+    }
+  });
+
+  it("still applies the evidence and coverage checks alongside an unknown kind", () => {
+    const j = judgment(storyB, {
+      C09: {
+        assertions: [assertion("contradicted", claimOf("C09"), [{ ref: "Hour 60 situation", quote: "power restored at Hour 54" }], { kind: "location" })],
+        verdict: "contradicted",
+      },
+      C25: {
+        assertions: [
+          assertion("supported", "A 1500-watt space heater", [quoteFrom(storyB, "Hour 72 outcome")], { kind: "equipment" }),
+          assertion("supported", "in the apartment repeatedly tripped the breaker", [{ ref: "Hour 61 outcome", quote: "x" }], { kind: "action" }),
+        ],
+      },
+    });
+    expect(resultFor(j, "C09").invalid).toEqual([
+      "assertion 1 (location): unknown kind",
+      'assertion 1 (location): quotation not in Hour 60 situation: "power restored at Hour 54"',
+    ]);
+    expect(resultFor(j, "C25").invalid).toEqual([
+      "claim words no assertion quotes: you, kept",
+      "assertion 1 (equipment): unknown kind",
+      "assertion 2 (action): unknown reference Hour 61 outcome",
+    ]);
   });
 
   it("counts a contradiction from outside knowledge as unsupported, and reports it (the heater/CO case)", () => {
@@ -329,5 +376,56 @@ describe("the provider diagnostic", () => {
     expect(stopsTheRun(failure("status 413, request too large"), true)).toContain("smallest call");
     expect(stopsTheRun(failure("status 413, request too large"), false)).toBeUndefined();
     expect(stopsTheRun(failure("status 400, other", "invalid_request_error"), true)).toContain("parameter was refused");
+  });
+
+  it("runs only D1 and D3 in the second diagnostic, within its 10,000-token cap", () => {
+    const second = calls.filter((c) => RELAXED_KIND_RUN.calls.includes(c.name));
+    expect(second.map((c) => c.name)).toEqual(["D1", "D3"]);
+    expect(second.reduce((sum, c) => sum + c.allowance, 0)).toBeLessThanOrEqual(RELAXED_KIND_RUN.cap);
+  });
+
+  it("charges the full allowance whenever usage isn't reported", () => {
+    const run = (status: CallStatus, inputTokens: number, outputTokens: number) => ({ name: "D1", status, usage: { inputTokens, outputTokens }, ms: 0, attempts: 1 });
+    expect(chargeFor(run("provider failure", 0, 0), 4000)).toBe(4000);
+    expect(chargeFor(run("completed", 0, 0), 4000)).toBe(4000);
+    expect(chargeFor(run("completed", 3000, 0), 4000)).toBe(4000);
+    expect(chargeFor(run("completed", 3000, 900), 4000)).toBe(3900);
+  });
+
+  it("validates a diagnostic judgment against its own lines and claims", () => {
+    const d1 = calls[0];
+    const quote = { ref: "Hour 6 outcome", quote: referencedLines(d1.content).get("Hour 6 outcome")!.slice(0, 30) };
+    const claimsIn = [...d1.content.matchAll(/^(D\d\d): (.*)$/gm)].map((m) => ({ id: m[1], claim: m[2] }));
+    const j: ProviderJudgment = {
+      claims: claimsIn.map(({ id, claim }) => ({ id, claim, basis: "story", assertions: [assertion("supported", claim, [quote])], verdict: "supported", explanation: "x" })),
+    };
+    expect(validateDiagnostic(d1.content, j).claims.map((c) => c.invalid)).toEqual([[], []]);
+    j.claims[1].assertions[0].kind = "vehicle";
+    expect(validateDiagnostic(d1.content, j).claims[1].invalid).toEqual(["assertion 1 (vehicle): unknown kind"]);
+  });
+});
+
+describe("describing a rejected generation without its content", () => {
+  it("reports where JSON breaks, and whether it ends inside a string or open structure", () => {
+    expect(jsonBreak('{"claims":[{"id":"D01","claim":"The furn')).toEqual({ layer: "generation", length: 40, position: 40, endsInString: true, unclosed: 3 });
+    expect(jsonBreak('{"claims":[{"id":"D01"}]')).toMatchObject({ endsInString: false, unclosed: 1, position: 24 });
+    // A break well before the end, with everything closed, doesn't look cut off.
+    expect(jsonBreak('{"a":1 "b":2}')).toEqual({ layer: "generation", length: 13, position: 7, endsInString: false, unclosed: 0 });
+    // Brackets and escaped quotes inside strings don't count.
+    expect(jsonBreak('{"a":"x \\" [ {')).toMatchObject({ endsInString: true, unclosed: 1 });
+    expect(jsonBreak('{"a":1}')).toBeUndefined();
+  });
+
+  it("checks the arguments inside a {name, arguments} call, and keeps no text", () => {
+    const truncated = JSON.stringify({ name: "record", arguments: '{"claims":[{"id":"D01","quote":"secret words' });
+    const described = describeFailedGeneration(truncated, judgmentSchema)!;
+    expect(described).toEqual({
+      length: truncated.length,
+      json: false,
+      schemaIssues: [],
+      parseError: { layer: "arguments", length: 44, position: 44, endsInString: true, unclosed: 3 },
+    });
+    expect(JSON.stringify(described)).not.toContain("secret");
+    expect(describeFailedGeneration('{"claims":[]}', judgmentSchema)).toEqual({ length: 13, json: true, schemaIssues: [] });
   });
 });
