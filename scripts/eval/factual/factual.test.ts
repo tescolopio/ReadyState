@@ -28,7 +28,7 @@ import {
   type ProviderJudgment,
 } from "./judge";
 import { LABELS } from "./labels";
-import { DIAGNOSTIC_CAP, RELAXED_KIND_RUN, chargeFor, diagnosticCalls, stopsTheRun, validateDiagnostic } from "./diagnostic";
+import { CURRENT_RUN, DIAGNOSTIC_CAP, OUTPUT_LIMIT_RUN, RELAXED_KIND_RUN, TOKENS_PER_MINUTE, chargeFor, diagnosticCalls, stopsTheRun, validateDiagnostic } from "./diagnostic";
 import { score, summarize } from "./score";
 
 describe("the G11 case set", () => {
@@ -382,6 +382,19 @@ describe("the provider diagnostic", () => {
     const second = calls.filter((c) => RELAXED_KIND_RUN.calls.includes(c.name));
     expect(second.map((c) => c.name)).toEqual(["D1", "D3"]);
     expect(second.reduce((sum, c) => sum + c.allowance, 0)).toBeLessThanOrEqual(RELAXED_KIND_RUN.cap);
+  });
+
+  it("runs D3 alone in the third diagnostic with a 4,000-token output limit, within the 6,500 cap and the per-minute limit", () => {
+    expect(CURRENT_RUN).toBe(OUTPUT_LIMIT_RUN);
+    const third = diagnosticCalls(OUTPUT_LIMIT_RUN.maxOutputTokens).filter((c) => OUTPUT_LIMIT_RUN.calls.includes(c.name));
+    expect(third.map((c) => [c.name, c.maxOutputTokens])).toEqual([["D3", 4000]]);
+    // Same input as the earlier D3; only the output limit changes.
+    expect(third[0].content).toBe(calls[2].content);
+    expect(third[0].allowance).toBe(calls[2].allowance + 1600);
+    expect(third[0].allowance).toBeLessThanOrEqual(OUTPUT_LIMIT_RUN.cap);
+    expect(third[0].allowance).toBeLessThanOrEqual(TOKENS_PER_MINUTE);
+    // The claim calls themselves keep their allowance.
+    expect(MAX_OUTPUT_TOKENS).toBe(2400);
   });
 
   it("charges the full allowance whenever usage isn't reported", () => {

@@ -1,8 +1,9 @@
 /**
- * The G11 provider diagnostic (scripts/eval/factual/diagnostic.ts), second
- * run: D1 and D3 with `kind` as free text in the provider's schema, run one
- * at a time with no retries, under a 10,000-token cap. The first run (D1–D3,
- * 16,000) is commit 722c648. It measures call completion and local
+ * The G11 provider diagnostic (scripts/eval/factual/diagnostic.ts): runs
+ * CURRENT_RUN's synthetic claim calls one at a time with no retries, under its
+ * cap. Now the third run, D3 with a 4,000-token output limit (6,500 cap); the
+ * first (D1–D3, 16,000) is commit 722c648 and the second (D1 and D3, kind as
+ * free text, 10,000) d8080a2. It measures call completion and local
  * validation, separately; not reliability or factual accuracy. Opt-in:
  *
  *   EVAL_DIAGNOSTIC=1 npm run eval -- scripts/eval/factual-diagnostic.eval.ts
@@ -22,7 +23,7 @@ import { describe, expect, it } from "vitest";
 
 import { resolveModel } from "@/lib/providers";
 
-import { RELAXED_KIND_RUN, chargeFor, diagnosticCalls, stopsTheRun, validateDiagnostic } from "./factual/diagnostic";
+import { CURRENT_RUN, TOKENS_PER_MINUTE, chargeFor, diagnosticCalls, stopsTheRun, validateDiagnostic } from "./factual/diagnostic";
 import { judgeClaimsText, type CallRun, type ProviderJudgment } from "./factual/judge";
 
 const ENABLED = process.env.EVAL_DIAGNOSTIC === "1";
@@ -32,10 +33,11 @@ const outDir = path.join("eval-results", `${new Date().toISOString().replace(/[:
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 describe.skipIf(!ENABLED)("G11 provider diagnostic, call completion only", () => {
-  it("runs D1 and D3 within the cap", async () => {
-    const CAP = RELAXED_KIND_RUN.cap;
-    const calls = diagnosticCalls().filter((call) => RELAXED_KIND_RUN.calls.includes(call.name));
-    process.stdout.write(`\nDiagnostic plan: ${calls.map((c) => `${c.name} ≤${c.allowance}`).join(", ")}; worst case ${calls.reduce((s, c) => s + c.allowance, 0)} of ${CAP}.\n`);
+  it("runs the current diagnostic within its cap", async () => {
+    const CAP = CURRENT_RUN.cap;
+    const calls = diagnosticCalls(CURRENT_RUN.maxOutputTokens).filter((call) => CURRENT_RUN.calls.includes(call.name));
+    for (const c of calls) if (c.allowance > TOKENS_PER_MINUTE) throw new Error(`${c.name}'s allowance ${c.allowance} exceeds the per-minute limit`);
+    process.stdout.write(`\nDiagnostic plan (${CURRENT_RUN.name}): ${calls.map((c) => `${c.name} ≤${c.allowance} (output limit ${c.maxOutputTokens})`).join(", ")}; worst case ${calls.reduce((s, c) => s + c.allowance, 0)} of ${CAP}.\n`);
     if (DRY_RUN) return;
 
     if (!process.env.GROQ_API_KEY) {
@@ -75,7 +77,7 @@ describe.skipIf(!ENABLED)("G11 provider diagnostic, call completion only", () =>
       }
       if (runs.length) await sleep(PAUSE_MS);
       const before = providerCalls;
-      const run = await judgeClaimsText(model, planned.name, planned.content, 0);
+      const run = await judgeClaimsText(model, planned.name, planned.content, 0, planned.maxOutputTokens);
       run.providerCalls = providerCalls - before;
       const charge = chargeFor(run, planned.allowance);
       charged += charge;
@@ -96,9 +98,9 @@ describe.skipIf(!ENABLED)("G11 provider diagnostic, call completion only", () =>
     writeFileSync(
       path.join(outDir, "diagnostic.md"),
       [
-        "# G11 provider diagnostic, kind as free text (call completion and local validation, not factual accuracy)",
+        `# G11 provider diagnostic, ${CURRENT_RUN.name} (call completion and local validation, not factual accuracy)`,
         "",
-        `Model ${meta.model}, code ${meta.revision}. ${runs.length} call(s), ${providerCalls} provider call(s), no retries; ${Math.round(meta.elapsedMs / 1000)} s elapsed.`,
+        `Model ${meta.model}, code ${meta.revision}. ${runs.length} call(s), ${providerCalls} provider call(s), no retries; output limit ${CURRENT_RUN.maxOutputTokens}; ${Math.round(meta.elapsedMs / 1000)} s elapsed.`,
         "",
         `**Tokens:** ${reported} reported; ${charged} conservatively charged against the ${CAP} cap (a call without reported usage is charged at its full allowance; the charge is budget accounting, not measured usage).`,
         "",

@@ -66,12 +66,14 @@ export interface DiagnosticCall {
   varies: string;
   content: string;
   allowance: number;
+  maxOutputTokens: number;
 }
 
 const section = (text: string) => `${BASELINE}\n\nEXERCISE LOG ("Response after Hour N" is the participant's own message; the next hour's outcome follows from it):\n${text}`;
 
-export function diagnosticCalls(): DiagnosticCall[] {
-  const make = (name: string, varies: string, content: string) => ({ name, varies, content, allowance: estimateInputTokens(content) + MAX_OUTPUT_TOKENS });
+/** The calls, with the claim call's output allowance unless a run raises it; the allowance counts input and the whole output limit. */
+export function diagnosticCalls(maxOutputTokens = MAX_OUTPUT_TOKENS): DiagnosticCall[] {
+  const make = (name: string, varies: string, content: string) => ({ name, varies, content, maxOutputTokens, allowance: estimateInputTokens(content) + maxOutputTokens });
   return [
     make("D1", "baseline: the claim schema, a short synthetic log, 2 claims", `${section(log(HOURS.slice(0, 4)))}\n\n${claims(TWO_CLAIMS)}`),
     make("D2", "input size: the synthetic log padded to a real story call's size, 2 claims", `${section(log([...HOURS, ...LATER], 10))}\n\n${claims(TWO_CLAIMS)}`),
@@ -86,7 +88,20 @@ export const DIAGNOSTIC_CAP = 16_000;
  * The second diagnostic (authorized 10-31): D1 and D3 again with `kind` as free text in the provider's schema,
  * everything else unchanged, under a 10,000-token cap. It tests whether that one change helps completion.
  */
-export const RELAXED_KIND_RUN = { calls: ["D1", "D3"], cap: 10_000 };
+export const RELAXED_KIND_RUN = { name: "kind as free text", calls: ["D1", "D3"], cap: 10_000, maxOutputTokens: MAX_OUTPUT_TOKENS };
+
+/**
+ * The third diagnostic (authorized 10-31): D3 alone with the output limit raised from 2,400 to 4,000 tokens, under
+ * a 6,500-token cap; input, prompt, schema, model, reasoning and validation unchanged. It tests whether the output
+ * allowance is too small for five detailed claims. A diagnostic allowance only: the claim calls keep MAX_OUTPUT_TOKENS.
+ */
+export const OUTPUT_LIMIT_RUN = { name: "D3 with a 4,000-token output limit", calls: ["D3"], cap: 6_500, maxOutputTokens: 4_000 };
+
+/** The run the diagnostic eval performs. */
+export const CURRENT_RUN = OUTPUT_LIMIT_RUN;
+
+/** Groq's per-minute limit, which counts each request's input and its whole output limit. */
+export const TOKENS_PER_MINUTE = 8_000;
 
 /** The charge for a call: its full allowance unless the provider reported its usage. */
 export const chargeFor = (run: CallRun<unknown>, allowance: number) => {

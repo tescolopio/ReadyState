@@ -557,9 +557,9 @@ async function call<T>(
   }
 }
 
-/** The synthetic diagnostic's claim call: the same instructions, schema, reasoning and allowance as a real claim call. */
-export const judgeClaimsText = (model: LanguageModel, name: string, content: string, maxRetries?: number) =>
-  call<ProviderJudgment>(model, name, JUDGE_INSTRUCTIONS, content, providerJudgmentSchema, MAX_OUTPUT_TOKENS, maxRetries, judgmentSchema);
+/** The synthetic diagnostic's claim call: the same instructions, schema and reasoning as a real claim call, and its allowance unless a diagnostic raises it. */
+export const judgeClaimsText = (model: LanguageModel, name: string, content: string, maxRetries?: number, maxOutputTokens = MAX_OUTPUT_TOKENS) =>
+  call<ProviderJudgment>(model, name, JUDGE_INSTRUCTIONS, content, providerJudgmentSchema, maxOutputTokens, maxRetries, judgmentSchema);
 
 export const judgeBatch = (model: LanguageModel, batch: Batch) =>
   call<ProviderJudgment>(model, batch.name, JUDGE_INSTRUCTIONS, batchPrompt(batch).text, providerJudgmentSchema, MAX_OUTPUT_TOKENS, undefined, judgmentSchema);
