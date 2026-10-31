@@ -1,0 +1,412 @@
+{
+  "note": "Alex (synthetic eval household): the 13 turns replayed by every Alex debrief rerun since 2026-10-30 (eval-results/2026-10-30T22-39-01-019Z). responses[i] is the participant message after turns[i]. The baseline is rebuilt from lib/test-households.ts.",
+  "turns": [
+    {
+      "feedback": null,
+      "narrative_response": "A sudden, citywide power outage hits after a heavy thunderstorm. The lights in your fourth‑floor apartment go out, the electric heating system stops, and the building's elevator ceases operation, leaving you stranded on the floor you live on. Your phone shows no signal for the utility company's outage map, and the building lobby lights are also dark.",
+      "time_elapsed": "Hour 0",
+      "hours_elapsed": 0,
+      "new_inject": "With the heat off and the temperature outside dropping to near freezing, you feel the apartment getting colder. Your stored water (1 gal) is limited, and you have only two days of non‑perishable food. The elevator is stuck, so leaving the building will require using the stairs. You also notice that the building’s common area does not have any visible emergency lighting.",
+      "critical_alerts": [],
+      "suggested_actions": [],
+      "response_options": [
+        "I retrieve my flashlights and headlamps, turn off all unnecessary electrical devices to conserve any remaining battery power, and gather the warm blankets I have to layer around me while I wait for power to return.",
+        "I carefully make my way down the stairwell to the lobby to see if the building manager or a neighbor is present, and ask about the outage status and any available communal heating or information.",
+        "I use my phone power bank to charge my phone, then call the utility company for an estimated time of restoration and check online for any emergency alerts.",
+        "I open the refrigerator to see if the food inside is still cold enough to eat, and start consuming perishable items to stretch my limited food supply."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You turned off unnecessary electrical devices to preserve battery power.",
+          "You retrieved flashlights/headlamps for illumination.",
+          "You gathered the warm blankets you have to layer for immediate warmth."
+        ],
+        "consider": [
+          "You have no reliable way to receive outage updates (no battery‑powered radio or backup alerts).",
+          "Water is limited to 1 gal; you should begin rationing now to stretch it toward the 3‑day guideline.",
+          "With electric heat off, indoor temperature will continue to fall; blankets alone may not prevent hypothermia as night progresses.",
+          "The building lacks emergency lighting; consider checking the lobby for any backup lights or a generator.",
+          "Plan a safe evacuation route now in case the outage extends and you need to relocate, keeping in mind the stairs are the only exit.",
+          "Missing basic kit items (first‑aid, whistle, dust masks, etc.) could become critical if you encounter injury or need to signal for help."
+        ],
+        "why": "Maintaining situational awareness without power requires a radio or other alerts; water rationing prevents dehydration. As indoor temps drop below 50 °F, hypothermia risk rises, especially without a heat source. Knowing exit routes and having signaling tools prepares you for a prolonged outage or evacuation."
+      },
+      "narrative_response": "You switch off all nonessential appliances, preserving the limited charge in your phone power banks. The flashlights and headlamps click on, casting a dim glow over the apartment. You pull the blankets you have and wrap yourself in several layers, feeling a modest rise in warmth. Outside, the temperature falls to about 30 °F; the apartment’s interior temperature continues to drop, reaching the low 50s by early evening. Your 1‑gallon water supply is now earmarked for drinking only, and you decide to sip it sparingly. The building’s lobby remains dark, with no visible emergency lighting, and the elevator stays inoperative. You realize you have no way to receive outage updates, and the stairs are the only means to exit the building if needed. As night deepens, you start to feel the chill despite the blankets, and you worry about staying warm through the night.",
+      "time_elapsed": "Hour 6",
+      "hours_elapsed": 6,
+      "new_inject": "Around midnight, you hear a faint creaking from the hallway outside your unit. When you peek through the doorway, you see that a water pipe in the building's common area has burst, flooding the hallway with cold water that is quickly spreading toward your apartment door. The water is icy and the floor becomes slick, and you notice that the water level is rising toward the threshold of your door.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Add a battery‑powered NOAA weather radio to your emergency kit for outage updates.",
+        "Store at least 3 gallons of water per person for a 3‑day emergency and practice water‑rationing early in an outage."
+      ],
+      "response_options": [
+        "I seal the gap under my door with towels and plastic sheeting I find in the bathroom to keep the water out, then stay in the apartment and try to stay warm with my blankets.",
+        "I quickly grab my flashlight and head down the stairs to the lobby to look for building staff or any emergency equipment that might help stop the leak.",
+        "I leave my apartment immediately, using the stairs despite the cold, to seek shelter with a neighbor on a lower floor who might have a working heater.",
+        "I turn on the bathtub faucet and let the warm water run to melt the ice on the floor, hoping it will keep the hallway from freezing over."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You used a flashlight to navigate in the dark and moved toward the lobby to seek assistance."
+        ],
+        "consider": [
+          "The stairs can be extremely slippery with icy water; proceeding without securing footing risks falls and injury.",
+          "Closing and sealing your apartment door, using towels or clothing to create a barrier, can slow water entry while you await help.",
+          "If a water shut‑off valve is accessible in the hallway or building utility area, turning it off can limit further flooding.",
+          "Contacting building management or emergency services (e.g., dialing 311 or 911 for a major water leak) provides professional response and reduces personal exposure.",
+          "Preserving your limited drinking water by protecting it from contamination and considering alternative sources (e.g., melt ice safely) is critical."
+        ],
+        "why": "Slipping on icy stairs can cause injury, and uncontrolled water can quickly damage electrical systems and increase hypothermia risk. Sealing the entry and shutting off the source limits water damage and buys time for help. Professional responders have the equipment to stop a burst pipe safely."
+      },
+      "narrative_response": "You descend the stairs, flashlight beam cutting through the dark. The stair treads are slick with a thin film of icy water; you pause, place a towel from your bag on the first step, and carefully make your way down, slipping slightly but catching yourself before falling. Reaching the lobby, you find the common area dimly lit by emergency exit signs, but no staff are present. A wall-mounted emergency phone box displays a 311 number for building maintenance; you dial using your phone, which still has about 15% battery left. The operator informs you that a maintenance crew is en route but may take an hour due to the outage. While waiting, you locate a hallway utility panel and, after locating the main water shut‑off valve for the floor (a large lever), you turn it off, slowing the flow into the burst pipe. Returning to your unit, you close the apartment door tightly, place several towels and a folded blanket at the base to create a makeshift dam, and pull the blankets around you for warmth. You set your headlamp on a nearby table to conserve the flashlight battery, and sip the remaining water sparingly. The hallway water continues to rise but the shut‑off valve has reduced the flow, buying you time as the temperature outside remains near freezing.",
+      "time_elapsed": "Hour 12",
+      "hours_elapsed": 12,
+      "new_inject": "An hour later, the hallway water level has risen to the point where it reaches the bottom of your apartment door, and cold water begins to seep under the threshold, making the floor inside your unit wet and increasing the chill. You notice a faint smell of mildew and hear a low humming from the building's emergency generator that has just started, but the generator is located in a basement area you cannot access without the elevator. Your phone battery is now at 5%, and the flashlight battery is low. You must decide how to stay warm and safe, or whether to evacuate via the stairs, which are still partially flooded.",
+      "critical_alerts": [
+        "Potential hypothermia risk as indoor temperature is low (50°F) and water intrusion may make the environment colder and damp."
+      ],
+      "suggested_actions": [
+        "Add a battery‑powered or hand‑crank NOAA weather radio to your emergency kit for outage updates.",
+        "Store at least two additional gallons of water in sealed containers for a minimum three‑day supply."
+      ],
+      "response_options": [
+        "I stay inside, use extra blankets, seal the door further with towels, and try to conserve heat while waiting for help, hoping the generator will eventually restore power.",
+        "I gather my essential items, put on my warmest clothing, and attempt to evacuate down the stairs to a nearby shelter, despite the water on the steps.",
+        "I call 911 to report the flooding and possible electrical hazards, and wait for emergency responders while staying near the door in case they need to rescue me.",
+        "I use my phone's remaining battery to search online for instructions on how to create an improvised insulation barrier with my blankets and furniture, then set them up to keep the cold out."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "Calling 911 for professional assistance with flooding and possible electrical hazards.",
+          "Staying near the door in case responders need to locate you."
+        ],
+        "consider": [
+          "Conserving the remaining phone battery for later communication or emergency alerts.",
+          "Moving to a dry, higher‑elevation area of the apartment to reduce exposure to cold water and dampness.",
+          "Using towels, blankets, and any available insulation to create a barrier and retain body heat.",
+          "Planning an evacuation route that avoids the slick stairs and assessing whether you have a safe exit before water rises further."
+        ],
+        "why": "Maintaining communication capability can be critical if responders are delayed, and staying dry and warm reduces the risk of hypothermia. Positioning yourself away from water and insulating with blankets improves survivability while you await help."
+      },
+      "narrative_response": "You dial 911 and explain the flooding, water seeping under your door, and the possibility of electrical hazards. The dispatcher acknowledges the call, advises you to stay calm, and says that the fire department and utility crews are en route but may be delayed due to the outage. After the brief call, your phone battery drops to 2% and powers off, leaving you with no cellular connectivity. The water continues to creep under the door, wetting the floor inside your unit. The temperature drops to roughly 45 °F, and the damp environment makes you feel colder. You pull the blankets tighter around yourself, spread a few towels on the floor to keep your feet dry, and decide what to do next.",
+      "time_elapsed": "Hour 18",
+      "hours_elapsed": 18,
+      "new_inject": "The water has now risen to ankle level inside your apartment, making the floor slippery and cold. You notice a faint crackling sound from a nearby electrical outlet, suggesting a possible short. The hallway stairs remain partially flooded, and the building generator hums weakly, but the emergency lighting is flickering. You have a limited supply of blankets and towels, no heat source, and no phone battery left. You must decide whether to stay where you are, attempt to move to a drier part of the unit, or evacuate down the slick stairs to the lobby.",
+      "critical_alerts": [
+        "Risk of hypothermia as indoor temperature is now ~45‑50°F and the floor is wet, increasing conductive heat loss."
+      ],
+      "suggested_actions": [
+        "Add a battery‑powered or hand‑crank NOAA weather radio to your emergency kit.",
+        "Store at least two extra gallons of water per person and a compact emergency blanket for each occupant."
+      ],
+      "response_options": [
+        "I move to the bedroom on the far side of the apartment, lay towels on the floor, wrap myself in blankets, and wait for responders while staying as dry and warm as possible.",
+        "I gather my bag, take the remaining water, and carefully descend the flooded stairs to exit the building and seek shelter elsewhere.",
+        "I locate a fire extinguisher in the hallway and use it to spray the outlet showing the crackling, then stay in the apartment and wait for help.",
+        "I stack towels and blankets along the door threshold to form a tighter barrier, then stay near the door to keep an eye on the water level while conserving heat."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You attempted to create a barrier with towels and blankets to keep water out, which shows awareness of water intrusion."
+        ],
+        "consider": [
+          "You did not address the visible electrical hazard; turning off the circuit breaker could prevent a fire.",
+          "Staying near the door while water continues to rise may increase exposure to cold and wet conditions, heightening hypothermia risk.",
+          "You have no dry area to retain body heat; moving to a drier part of the unit (e.g., bathroom) or evacuating would reduce heat loss."
+        ],
+        "why": "Blocking water at the threshold is a good immediate step, but an active electrical short can ignite, and wet floors dramatically increase heat loss, making hypothermia more likely. Shutting off electricity and seeking a dry space are standard safety priorities."
+      },
+      "narrative_response": "You spread the towels and blankets across the doorway, forming a makeshift barrier. For a short time the water slows, but the icy flood continues to push under the barrier and soon reaches ankle level inside your apartment. The crackling sound from the nearby outlet escalates into a brief spark, causing the building's emergency generator to hiccup and the hallway emergency lights to flicker out. The temperature in your unit drops to the low 40s°F. Your blankets become damp, losing much of their insulating value, and you begin to shiver despite the layers. With the phone dead and no way to call for help, the risk of hypothermia is rising, and the electrical short presents a fire danger. You must decide whether to try to shut off the electricity and move to a drier spot, evacuate down the water‑logged stairs, or stay put and hope rescue arrives.",
+      "time_elapsed": "Hour 24",
+      "hours_elapsed": 24,
+      "new_inject": "The water has now risen to about waist height inside your apartment, and the crackling outlet has produced a small spark that briefly ignited nearby insulation, though the fire was extinguished by the flood water. The building's emergency generator has stopped, leaving the hallway in darkness. You can see the apartment's main circuit breaker panel near the entryway. Your blankets and towels are damp, and you are shivering. You must either (a) turn off the circuit breaker and move to a drier area of the unit, (b) attempt to evacuate down the water‑filled stairs to the lobby, (c) stay where you are and add more insulation, or (d) try to access a balcony or fire escape if reachable.",
+      "critical_alerts": [
+        "Hypothermia risk increasing as indoor temperature drops to ~40‑45°F and water is now waist‑high, causing rapid conductive heat loss.",
+        "Potential electrical fire hazard from the crackling outlet; power should be shut off immediately."
+      ],
+      "suggested_actions": [
+        "Identify the location of your apartment's main circuit breaker and turn it off whenever water contacts an outlet or you suspect a short.",
+        "Store at least three gallons of water per person (e.g., three 1‑gal containers) in your emergency kit to meet the 3‑day minimum."
+      ],
+      "response_options": [
+        "I locate the circuit breaker panel, flip the main switch off to stop the electrical hazard, gather any dry clothing I can find, and move to the bathroom where the floor is less flooded to stay as warm and dry as possible.",
+        "I decide the water is getting too high, so I carefully make my way down the slick stairs, carrying the dry blankets with me, and head to the lobby to find a safer, warmer place and seek assistance.",
+        "I stay where I am, pile additional wet towels and blankets on the floor to create a makeshift insulated platform, and wait for emergency responders to arrive, hoping the water won't rise further.",
+        "I climb onto the balcony railing and attempt to cross to the fire escape, using the balcony as a dry route to get out of the flooded apartment."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You correctly identified and shut off the circuit breaker, removing the immediate electrical fire hazard.",
+          "You moved to a less flooded area (the bathroom) and gathered dry clothing to reduce conductive heat loss."
+        ],
+        "consider": [
+          "You still lack a reliable heat source; consider using body heat, layering dry clothing, and insulating the floor with dry towels or a sleeping bag if available.",
+          "Plan for possible evacuation if water continues to rise, and think about ways to signal for help (e.g., tapping walls, using a whistle).",
+          "Your dry clothing may become wet soon; identify a way to keep a dry space or create a barrier to slow water ingress."
+        ],
+        "why": "Turning off power prevents sparks and potential fire, while moving to a drier spot and using dry layers helps retain body heat, both essential for avoiding hypothermia in a cold, wet environment."
+      },
+      "narrative_response": "You locate the main circuit breaker panel and flip the main switch off, stopping the crackling outlet and preventing further sparks. The hallway lights flicker out as the building's generator shuts down completely. You gather the few dry shirts and socks you can find, layer them, and head to the bathroom where the floor is still relatively dry. Using towels and any remaining dry blankets, you create a small insulated area on the bathroom floor. The water outside the bathroom continues to rise, reaching waist height in the living area and beginning to creep toward the bathroom doorway. The temperature in the unit has slipped to the high 30s °F, and despite your layered clothing you begin to shiver. You hear faint footsteps in the hallway, but no clear voices. Your phone is dead, and you have no means to call for help. You must decide how to stay warm and safe as the water rises further.",
+      "time_elapsed": "Hour 30",
+      "hours_elapsed": 30,
+      "new_inject": "Water is now seeping under the bathroom door, and the floor inside the bathroom is becoming damp. The hallway remains dark, and you can hear distant muffled voices but no clear assistance. Your dry clothing is starting to feel cold, and you are beginning to feel numbness in your fingers. You need to choose your next move to avoid hypothermia and stay safe.",
+      "critical_alerts": [
+        "Hypothermia risk escalating as indoor temperature drops to ~38‑40°F and water is waist‑high, causing rapid heat loss.",
+        "Electrical fire hazard mitigated by turning off breaker, but water may reach the bathroom soon."
+      ],
+      "suggested_actions": [
+        "Store a set of dry clothing and a compact sleeping bag in a waterproof container near your main living space for future outages.",
+        "Keep a battery‑powered or hand‑crank NOAA weather radio and an extra flashlight with spare batteries in a waterproof bag."
+      ],
+      "response_options": [
+        "I stay in the bathroom, add more dry towels and blankets to insulate the floor, and try to tap on the wall to signal for help.",
+        "I quickly gather all the dry clothing I can find, wrap myself tightly, and attempt to evacuate down the water‑filled stairs to the lobby, hoping the water isn’t too deep.",
+        "I look for a fire escape or balcony that might be reachable from my unit and try to climb out to a safer, drier area.",
+        "I stay where I am, huddle with my dry clothing, and wait for rescue, conserving my energy and body heat."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You correctly turned off the main breaker, eliminating the electrical fire hazard.",
+          "You gathered dry clothing and attempted to move to a safer location, showing awareness of the need to stay dry."
+        ],
+        "consider": [
+          "Assess water depth and lighting before attempting to navigate dark, water‑filled stairs, as slipping can cause injury and further heat loss.",
+          "Look for alternative ways to signal for help (e.g., shout, use a whistle, tap on walls) before leaving a sheltering area.",
+          "Consider creating a tighter barrier at the bathroom door or finding a higher, drier space while you await assistance."
+        ],
+        "why": "Turning off the breaker stops a fire risk, but moving through waist‑deep, dark water without a light or knowledge of depth can cause falls, injuries, and rapid heat loss, worsening hypothermia."
+      },
+      "narrative_response": "You push open the bathroom door and step onto the stairwell. The stairs are waist‑high with cold water and no illumination. As you descend, a foot slips on the slick surface; you catch yourself on the railing but lose a pair of dry socks and become soaked up to your calves. You make it to the lobby, where the hallway lights have gone out and only a dim emergency glow from a few exit signs remains. The lobby floor is also wet, and the building’s generator is still offline, leaving the interior at near‑freezing temperatures. You are now drenched, shivering, and your fingers feel numb. No one else is visible, and the building’s intercom system is silent. You must decide how to stay warm and get help while you are soaked and exposed to the cold.",
+      "time_elapsed": "Hour 36",
+      "hours_elapsed": 36,
+      "new_inject": "You are in the building lobby, soaked, cold, and without a working phone. The hallway is dark, the generator remains off, and outside temperatures are below freezing. Emergency personnel have not yet arrived. You need to find a way to warm up, signal for assistance, and secure shelter. What do you do next?",
+      "critical_alerts": [
+        "Hypothermia risk escalating as you are now wet and exposed to ~38‑40°F temperatures; you may develop severe hypothermia if you cannot warm up quickly."
+      ],
+      "suggested_actions": [
+        "Store a few emergency thermal blankets in an easily reachable location for future power outages.",
+        "Keep a minimum of three gallons of water per person on hand for a 3‑day outage."
+      ],
+      "response_options": [
+        "I stay in the lobby, look for any emergency blankets or dry towels, and try to insulate myself against the cold while shouting for help.",
+        "I return to my apartment to retrieve any remaining dry supplies and attempt to seal the bathroom door again, hoping the water will not reach me before help arrives.",
+        "I leave the building entirely, stepping out onto the icy street to find a neighbor’s house or a community warming center where I can get warm and dry.",
+        "I locate the building’s intercom or fire alarm pull station and use it to alert building staff or emergency responders to my location."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You recognized the need to leave the cold lobby and seek a warmer location."
+        ],
+        "consider": [
+          "Remove wet socks, shoes, and any other soaked clothing as soon as possible to reduce conductive heat loss.",
+          "Cover yourself with dry material (towels, blankets) before stepping into the wind to limit wind‑chill effects.",
+          "Move quickly but safely to the nearest shelter; lingering on icy streets increases hypothermia risk.",
+          "Signal for help using a loud voice, a whistle (if available), or by tapping on doors, since your phone is dead.",
+          "Once inside a warm place, call emergency services from a working phone and request assistance for your flooded apartment."
+        ],
+        "why": "Wet clothing and exposure to sub‑freezing air dramatically accelerate body heat loss, so removing moisture and finding shelter quickly are the most effective ways to prevent severe hypothermia. Signaling for help compensates for a dead phone, and contacting responders ensures professional assistance for the building emergency."
+      },
+      "narrative_response": "You push open the lobby door and step onto the icy sidewalk. The wind bites through your soaked clothes, and the cold makes your teeth chatter. You quickly pull off your wet socks and shoes, wrapping your feet in a dry towel you managed to keep in your pocket. You hunch your shoulders, keep moving toward the nearest lit window you see across the street, and knock loudly on the neighbor’s door. After a few moments, a neighbor opens, sees your shivering state, and immediately ushers you inside. Inside the neighbor’s warm apartment, you change into a dry t‑shirt and sweater they provide, sit on a heated floor, and wrap yourself in a thick blanket. The neighbor offers a spare phone; you call 911 to report the flooding and request assistance for your apartment. The operator confirms help is on the way. You spend the next several hours warming up, sipping hot tea, and staying out of the wind. Your hypothermia risk is now mitigated, though you remain concerned about your flooded home.",
+      "time_elapsed": "Hour 42",
+      "hours_elapsed": 42,
+      "new_inject": "While you are warming up at your neighbor’s apartment, you hear a faint rumble from the building’s generator; the building management informs you that the generator may be repaired within a few hours, but power could be restored later tonight. You must decide whether to stay with your neighbor until power returns, return to your flooded unit to retrieve essential items, or seek a community warming center that may have more resources. Additionally, you have limited dry clothing and no personal water supply left. What do you do next?",
+      "critical_alerts": [
+        "Hypothermia risk remains high as you are wet and exposed to near‑freezing temperatures; immediate actions to reduce heat loss are essential."
+      ],
+      "suggested_actions": [
+        "Keep a sealed waterproof bag with a change of dry clothing and a blanket in an easily accessible location.",
+        "Store a few chemical hand‑warmers or a small emergency heat pack for situations where you become wet and cold."
+      ],
+      "response_options": [
+        "I stay with my neighbor, use their phone to stay in contact with emergency services, and wait for the building’s power to be restored before returning home.",
+        "I thank my neighbor and head back to my apartment to gather my important documents, medication, and any remaining dry clothing before the water rises further.",
+        "I ask my neighbor to help me locate the nearest community warming center, then travel there together to stay warm and access additional supplies.",
+        "I decide to stay in the lobby area of the building, hoping that emergency responders will arrive soon, and try to keep warm by huddling with the neighbor’s dry blankets."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You recognized the need to stay warm and sought the neighbor’s blankets."
+        ],
+        "consider": [
+          "You mis‑identified your location – you are currently in the neighbor’s apartment, not the building lobby; returning to the cold, water‑filled lobby increases heat loss.",
+          "You have no dry clothing or water supply; retrieving at least a dry set and some water is critical before the cold worsens.",
+          "You did not arrange a reliable way to signal for help (e.g., using a spare phone or a whistle) while you wait."
+        ],
+        "why": "Staying in a cold, wet environment without adequate insulation accelerates conductive heat loss and can quickly lead to hypothermia. Dry clothing and a water source are essential basic needs, and a clear communication method ensures responders can locate you."
+      },
+      "narrative_response": "You decide to head back toward the building lobby, leaving the neighbor’s warm apartment. The lobby remains dark, the generator is still offline, and the floor is ankle‑deep with icy water. You huddle with the neighbor’s dry blankets, but the wet floor and cold air sap your body heat. After about 30 minutes you begin to feel intense shivering, numb fingers, and a mild headache – early signs of hypothermia. Without a phone or other signaling device, you cannot alert responders directly. You manage to crawl to the lobby doorway and wave a spare flashlight you found, hoping emergency personnel will see you. The cold continues to worsen your condition, and you realize you need professional medical attention if your core temperature drops further.",
+      "time_elapsed": "Hour 48",
+      "hours_elapsed": 48,
+      "new_inject": "A pair of emergency responders finally arrive, hearing your flashlight signal. They offer to transport you to a warming center or to a medical triage area. Meanwhile, the building’s generator sputters back to life, briefly lighting the hallway, but the water in your apartment continues to rise, threatening to damage belongings. You must choose whether to (a) accept the responders’ offer and go to the warming center for medical monitoring, (b) return to your apartment with the responders to retrieve essential items (documents, medication) before the water reaches the ceiling, (c) stay in the lobby with the responders until the generator stabilizes and a dry area can be established, or (d) decline assistance and wait for the building management to provide a portable heater in the lobby.",
+      "critical_alerts": [
+        "Hypothermia risk escalating: you are wet, exposed to near‑freezing temperatures in the building lobby with no heat source. Immediate warming measures are needed to prevent mild hypothermia."
+      ],
+      "suggested_actions": [
+        "Store at least three days' worth of water in sealed containers for future outages.",
+        "Acquire a hand‑crank or battery‑powered NOAA weather radio and keep extra batteries on hand."
+      ],
+      "response_options": [
+        "I accept the responders’ offer and go to the warming center for medical monitoring and a dry place to rest.",
+        "I ask the responders to take me back to my apartment so I can grab my important documents and medication before the water rises further.",
+        "I stay in the lobby with the responders, hoping the generator will stay on long enough to set up a dry shelter area there.",
+        "I decline the responders’ help for now and wait for the building management to bring a portable heater into the lobby so I can stay put."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You recognized the escalating hypothermia risk and chose the safest option by accepting professional assistance to a warming center."
+        ],
+        "consider": [
+          "Plan for retrieving essential items (medication, important documents) after you are stabilized.",
+          "Establish a way to stay informed about the building’s situation (e.g., a battery‑powered NOAA radio) and maintain a basic emergency kit for future outages."
+        ],
+        "why": "Addressing hypothermia quickly prevents health deterioration, while a follow‑up plan for critical belongings and communication ensures you don’t lose essential resources and stay informed during prolonged emergencies."
+      },
+      "narrative_response": "The responders arrive, see your flashlight signal, and quickly wrap you in a thermal blanket before escorting you to a nearby community warming center. Inside, the space is heated, with medical volunteers monitoring your temperature and offering warm drinks. Your shivering subsides, and your core temperature stabilizes. While you rest, the building’s generator finally comes back online, lighting the hallway and allowing staff to begin pumping out the floodwater. You are informed that the water in your apartment is still rising but will be stopped within the hour. The responders hand you a card with the center’s contact number and a list of available resources. You spend a few hours recuperating and discussing next steps with the medical staff.",
+      "time_elapsed": "Hour 54",
+      "hours_elapsed": 54,
+      "new_inject": "After you have warmed up and your condition is stable, you must decide how to handle the situation at your apartment. The building management offers to send a crew to clear the water and protect your belongings, but they need a decision from you: (a) Return to your apartment with the responders to retrieve essential items (documents, medication) before the water reaches the ceiling; (b) Stay at the warming center and let the building staff handle the water removal and item salvage on your behalf; (c) Request that a friend or family member bring you fresh water, dry clothing, and a basic emergency kit to the warming center while you wait; or (d) Attempt to go back to your apartment alone later, without assistance, to collect items yourself.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Assemble a basic emergency kit that includes a battery‑powered NOAA weather radio, a first aid kit, extra blankets, and a manual can opener.",
+        "Store at least three gallons of water per person for future outages, and rotate the supply regularly."
+      ],
+      "response_options": [
+        "I ask the responders to escort me back to my apartment so I can grab my medication and important documents before the water gets any higher.",
+        "I stay at the warming center and let the building staff take care of the water removal and protect my belongings, planning to retrieve them later once the flood is cleared.",
+        "I call a nearby friend and ask them to bring me bottled water, dry clothes, and a basic emergency kit to the warming center while I rest.",
+        "I decide to go back to my apartment later on my own, without any help, to collect my items once the water has stopped rising."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You chose the safest option by staying at the warming center, avoiding further exposure to cold and preventing hypothermia."
+        ],
+        "consider": [
+          "You did not arrange for a personal water supply or dry clothing to replace what was lost in the flood.",
+          "You left essential items (documents, medication) in the apartment without confirming a plan for their retrieval or protection.",
+          "You have not addressed the gaps identified in the inventory check (e.g., lack of a basic emergency kit, water, extra blankets)."
+        ],
+        "why": "Staying at the warming center protects your health, but without water, dry clothing, and a kit you remain vulnerable if you need to return home or face another emergency. Securing essential items and supplies now reduces the chance of loss or delayed recovery later."
+      },
+      "narrative_response": "You remain at the community warming center while building staff begin pumping out the floodwater from your apartment. The crew works through the night, and by early morning the water level in your unit is back to floor level. The building's generator has come back online, restoring limited electric heat; the hallway temperature is still near 45 °F. Management informs you that most of the standing water has been removed, but the ceiling in the living area shows signs of a slow leak and the interior walls are damp. Your personal belongings are still in the unit, and the staff will move them to a secure storage room once the drying process begins. You have a few hours to rest, drink warm fluids, and discuss next steps with the medical volunteers. The center’s volunteer offers to help you coordinate a friend or family member to bring water, dry clothing, and a basic emergency kit, if you wish.",
+      "time_elapsed": "Hour 60",
+      "hours_elapsed": 60,
+      "new_inject": "Building management reports that the flood water has been cleared, but your apartment now has a ceiling leak and damp walls. Power is restored but the building’s central heating is slow to recover, keeping indoor temperatures around 45 °F. You must decide how to proceed: (a) Return to your apartment now with staff assistance to assess damage and retrieve essential items; (b) Request temporary lodging in a nearby shelter while you arrange for a professional cleaning service and wait for the apartment to dry; (c) Stay at the warming center another day, using the time to gather water, dry clothing, and a basic emergency kit from a friend before returning; or (d) Attempt to move back into the apartment immediately, using any available electric space heater (if you can locate one) despite the cold and ongoing dampness.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Obtain at least 3 days’ worth of water (≈3 gal) and a set of dry clothing to replace what was lost in the flood.",
+        "Assemble a basic emergency kit (flashlight, extra batteries, manual can opener, first‑aid supplies, whistle, dust mask) to meet the inventory gaps."
+      ],
+      "response_options": [
+        "I return to my apartment now with the building staff to see what can be saved and collect my documents and medication.",
+        "I ask the warming center to arrange temporary shelter elsewhere while I schedule a professional cleaning crew and let the apartment dry before I go back.",
+        "I stay at the warming center for another day and have a friend bring me bottled water, dry clothes, and a basic emergency kit before I head back.",
+        "I go back to my apartment alone right away, find an electric space heater in the unit, and try to heat the space despite the low temperature."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You arranged for a friend to bring essential supplies (water, dry clothing, basic emergency kit)",
+          "You chose to remain at the warming center, avoiding exposure to cold and damp conditions"
+        ],
+        "consider": [
+          "Plan for safe heating in the apartment once you return (e.g., safe electric space heater or waiting for central heat)",
+          "Address the ceiling leak and damp walls to prevent mold growth and further damage",
+          "Add missing preparedness items such as a battery‑ or hand‑crank NOAA radio, extra blankets, and CO detectors for future outages"
+        ],
+        "why": "Securing water, dry clothing, and a basic kit directly addresses the most critical supply gaps identified in the inventory check. However, without a plan for safe heating and moisture control, you risk hypothermia on return or long‑term damage from mold."
+      },
+      "narrative_response": "You spend the night at the community warming center. A few hours later, your friend arrives with several bottles of water, a set of clean, dry clothing, and a basic emergency kit that includes a first‑aid kit, manual can opener, extra batteries, a whistle, and a small hand‑crank radio. The volunteers provide warm soup and tea, and you rest while the building staff finish moving your belongings to a secure storage room. The staff confirm that the water has been pumped out, the ceiling leak is still present but being monitored, and the building’s central heating should be fully operational within the next six hours. You feel hydrated, warmed, and better prepared for the next steps.",
+      "time_elapsed": "Hour 66",
+      "hours_elapsed": 66,
+      "new_inject": "In the early morning, building management informs you that the central heating system will be fully restored in about six hours, but the ceiling leak in your apartment has not been fully repaired and the walls remain damp. You must decide how to proceed with returning to your home or finding alternative shelter.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Add a battery‑ or hand‑crank NOAA weather radio to your emergency kit.",
+        "Obtain a safe, UL‑listed portable electric heater for future power outages."
+      ],
+      "response_options": [
+        "I will stay at the warming center for another day, waiting for the heating to be fully restored and for the building to complete the repairs before moving back.",
+        "I return to my apartment now with staff assistance, using a safe electric space heater I locate and placing towels to absorb remaining moisture while I retrieve my essential items.",
+        "I request temporary lodging at a nearby shelter and arrange for a professional cleaning and drying service to handle the ceiling leak and damp walls before I move back.",
+        "I move back into the apartment immediately, setting up any available electric heater and using my dry clothes and blankets to stay warm, despite the ongoing dampness."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You used the dry clothing and blankets you received from your friend.",
+          "You attempted to set up an electric heater while awaiting the central heating restoration."
+        ],
+        "consider": [
+          "Confirm that a portable electric heater is actually available before relying on it; many apartments do not keep one on hand.",
+          "Check the electrical load on the circuit before plugging in a high‑wattage heater to avoid tripping breakers or creating a fire hazard.",
+          "Maintain a way to monitor indoor temperature and your own body temperature while waiting for central heat.",
+          "Plan for alternative warming methods (e.g., hot water bottles, layered clothing, physical activity) in case the heater cannot be used safely."
+        ],
+        "why": "Using a high‑wattage heater on an unknown circuit can overload the system, leading to power loss or fire danger. In a cold, damp apartment, even modest heat loss can quickly progress to mild hypothermia, so you need reliable warming strategies and temperature monitoring."
+      },
+      "narrative_response": "You return to your fourth‑floor apartment at about 45 °F with damp walls from the recent flood. Using the dry clothing and blankets your friend brought, you bundle up and feel a little warmer. You locate a small 1500‑watt space heater stored in the building’s maintenance closet and plug it into an outlet near the living‑room sofa. Within about 10 minutes the circuit breaker trips, cutting power to the heater and the apartment lights. You call the building’s maintenance staff, who reset the breaker after a brief wait. The heater runs for a short time before the breaker trips again, forcing you to shut it off. With the central heating still offline, you spend the next several hours wrapped in blankets, doing light activity to generate body heat. After six hours, the building’s central heating system comes back online, raising the indoor temperature to a comfortable 68 °F. You remain in the apartment, staying warm with your blankets and dry clothing, and avoid any serious hypothermia symptoms.",
+      "time_elapsed": "Hour 72",
+      "hours_elapsed": 72,
+      "new_inject": "",
+      "critical_alerts": [
+        "Hypothermia risk: cold, damp environment; monitor body temperature and seek additional heat if you feel chilled."
+      ],
+      "suggested_actions": [
+        "Keep a portable, battery‑powered heating source (e.g., hand‑warmers or a battery‑operated heat pack) for situations where electric heat is unavailable.",
+        "Create a simple temperature‑monitoring plan: keep a thermometer, check indoor temperature every hour, and have a plan to move to a warmer location if it drops below 55 °F."
+      ],
+      "response_options": [],
+      "scenario_status": "complete"
+    }
+  ],
+  "responses": [
+    "I retrieve my flashlights and headlamps, turn off all unnecessary electrical devices to conserve any remaining battery power, and gather the warm blankets I have to layer around me while I wait for power to return.",
+    "I quickly grab my flashlight and head down the stairs to the lobby to look for building staff or any emergency equipment that might help stop the leak.",
+    "I call 911 to report the flooding and possible electrical hazards, and wait for emergency responders while staying near the door in case they need to rescue me.",
+    "I stack towels and blankets along the door threshold to form a tighter barrier, then stay near the door to keep an eye on the water level while conserving heat.",
+    "I locate the circuit breaker panel, flip the main switch off to stop the electrical hazard, gather any dry clothing I can find, and move to the bathroom where the floor is less flooded to stay as warm and dry as possible.",
+    "I quickly gather all the dry clothing I can find, wrap myself tightly, and attempt to evacuate down the water‑filled stairs to the lobby, hoping the water isn’t too deep.",
+    "I leave the building entirely, stepping out onto the icy street to find a neighbor’s house or a community warming center where I can get warm and dry.",
+    "I decide to stay in the lobby area of the building, hoping that emergency responders will arrive soon, and try to keep warm by huddling with the neighbor’s dry blankets.",
+    "I accept the responders’ offer and go to the warming center for medical monitoring and a dry place to rest.",
+    "I stay at the warming center and let the building staff take care of the water removal and protect my belongings, planning to retrieve them later once the flood is cleared.",
+    "I stay at the warming center for another day and have a friend bring me bottled water, dry clothes, and a basic emergency kit before I head back.",
+    "I move back into the apartment immediately, setting up any available electric heater and using my dry clothes and blankets to stay warm, despite the ongoing dampness.",
+    ""
+  ]
+}

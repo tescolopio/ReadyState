@@ -1,0 +1,85 @@
+{
+  "note": "Alex debrief drafts captured at 12:04 UTC on 2026-10-31 (code 97045b5), synthetic eval household. Both were rejected; neither was displayed. Not yet added to lib/debrief-replay.test.ts: need_to_know[1] in both is a known false positive (a supply duration read as an interval).",
+  "first": {
+    "summary": "The exercise demonstrated that an extended power outage can leave you without heat for days, quickly deplete insufficient water supplies, and expose you to hypothermia when warm bedding is lacking. Gaps in your emergency kit limited your ability to manage utilities and stay informed. While you took appropriate actions—turning off electricity, seeking a warming center, and obtaining dry clothing—the lack of adequate water, blankets, and kit items created avoidable risks.",
+    "went_well": [
+      "You turned off unnecessary electrical devices and the main breaker to reduce hazard (Hour 30).",
+      "You called 911 promptly when flood and electrical hazards appeared (Hour 18).",
+      "You sought and utilized a warming center, avoiding severe hypothermia (Hour 48‑54).",
+      "You coordinated with a friend to bring dry clothing and water to the warming center (Hour 66)."
+    ],
+    "need_to_know": [
+      "The power outage lasted at least 60 hours before any central heating was available, and temperatures remained near 45 °F for several days (Hour 60, Hour 66, Hour 72).",
+      "Your stored water (1 gallon) would have been exhausted after about one day, well short of the 3‑day recommendation (Household baseline).",
+      "Without a dedicated emergency kit, you lacked tools for safe utility shut‑off, communication, and basic medical care (Inventory check gaps, Hours 6‑72).",
+      "Using a 1500‑watt space heater repeatedly tripped the circuit breaker, indicating that the apartment’s electrical circuit could not support high‑wattage heating devices (Hour 72)."
+    ],
+    "do_better": [
+      {
+        "action": "Store at least three gallons of water for a one‑person household.",
+        "evidence": "Baseline listed only 1 gallon of stored water, below the 3‑day minimum (Household baseline).",
+        "why": "Provides enough drinking water for the recommended 1 gal/day during a multi‑day outage, preventing dehydration."
+      },
+      {
+        "action": "Acquire a warm blanket or sleeping bag for each occupant.",
+        "evidence": "Inventory check noted no warm blankets; cold indoor temperatures (Hour 0, Hour 24) and wet conditions created hypothermia risk.",
+        "why": "Improves personal insulation, reducing the chance of hypothermia when heating is unavailable."
+      },
+      {
+        "action": "Create a basic emergency kit containing a battery‑or hand‑crank NOAA radio, first‑aid supplies, extra batteries, manual can opener, whistle, dust mask, plastic sheeting, duct tape, moist towelettes, garbage bags, and a wrench or pliers.",
+        "evidence": "Inventory gaps identified missing 10 of 12 basic kit items; none were obtained during the exercise (throughout Hours 6‑72).",
+        "why": "Equips you to receive alerts, perform basic first aid, and manage utilities and shelter needs when power and services are down."
+      }
+    ],
+    "supply_checklist": []
+  },
+  "repair": {
+    "summary": "The exercise showed that an extended power outage left you without heat for many hours, highlighted that your stored water and blanket supplies were below recommended levels, and demonstrated how missing emergency‑kit items limited your ability to manage utilities and stay informed. Your actions—shutting off electricity, seeking a warming center, and obtaining dry clothing—helped prevent severe hypothermia, but the gaps you identified created avoidable risks.",
+    "went_well": [
+      "You turned off unnecessary electrical devices and the main breaker to reduce electrical hazard (Hour 30).",
+      "You called 911 promptly when flooding and potential electrical danger appeared (Hour 18).",
+      "You used a warming center, which kept you safe from hypothermia while the building’s heating was unavailable (Hours 48‑54).",
+      "You arranged for a friend to bring dry clothing, water, and a basic emergency kit to the warming center (Hour 66)."
+    ],
+    "need_to_know": [
+      "Power was restored at Hour 60, but central heating did not fully recover until about six hours later (between Hour 60 and Hour 72), leaving indoor temperature around 45 °F during that period (Hours 60, 72).",
+      "With only 1 gallon of stored water (baseline) and a recommendation of 1 gallon per day, the water supply would have been exhausted after roughly one day, i.e., by around Hour 24, well before the 72‑hour outage ended (Baseline, Hour 24).",
+      "Because the household lacked a basic emergency kit (inventory check gaps), you had limited tools for safe utility shut‑off, receiving weather alerts, and basic first‑aid, which constrained your response during the early phases of the outage (Inventory check, Hours 6‑30).",
+      "The cold, damp environment after the flood increased hypothermia risk; using dry clothing and blankets helped maintain body heat, but adequate insulation would reduce that risk in future outages (Hours 24, 30, 48)."
+    ],
+    "do_better": [
+      {
+        "action": "Store at least three gallons of water for a one‑person household.",
+        "evidence": "Baseline listed only 1 gallon of stored water, below the 3‑day minimum (Household baseline).",
+        "why": "Provides enough drinking water for the recommended 1 gal/day during a multi‑day outage, preventing dehydration."
+      },
+      {
+        "action": "Acquire a warm blanket or sleeping bag for each occupant.",
+        "evidence": "Inventory check noted no warm blankets; indoor temperatures were near 45 °F after power returned (Hours 60‑72).",
+        "why": "Improves personal insulation, reducing the chance of hypothermia when heating is unavailable."
+      },
+      {
+        "action": "Assemble a basic emergency kit that includes the missing items identified in the inventory check.",
+        "evidence": "Inventory check identified 10 of 12 basic kit items missing; none were obtained during the exercise (Hours 6‑72).",
+        "why": "Equips you to receive alerts, perform basic first aid, and manage utilities and shelter needs during power outages."
+      }
+    ],
+    "supply_checklist": [
+      "Additional 2 gallons of water (to reach 3‑day minimum)",
+      "Warm blanket or sleeping bag",
+      "Battery‑or hand‑crank NOAA weather radio",
+      "First‑aid kit",
+      "Extra batteries",
+      "Manual can opener",
+      "Whistle",
+      "Dust mask",
+      "Plastic sheeting",
+      "Duct tape",
+      "Moist towelettes",
+      "Garbage bags and ties",
+      "Wrench or pliers",
+      "Local maps",
+      "Hand sanitizer"
+    ]
+  }
+}

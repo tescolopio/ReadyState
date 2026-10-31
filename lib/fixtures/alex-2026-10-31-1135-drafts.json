@@ -1,0 +1,91 @@
+{
+  "note": "Alex debrief drafts captured at 11:35 UTC on 2026-10-31 (code 1196054), synthetic eval household. The first was rejected; the repair passed the checks then and was displayed.",
+  "first": {
+    "summary": "The exercise showed that you responded well to immediate hazards—turning off power, calling emergency services, and seeking a warming center—preventing injury despite flooding and cold. However, gaps in water storage, personal heat supplies, and a complete emergency kit limited your ability to stay safe and self‑sufficient during the outage. Future preparation should focus on securing enough water, proper warm clothing, and a basic kit to cover essential needs when utilities are unavailable.",
+    "went_well": [
+      "You promptly turned off the main breaker to eliminate the electrical hazard (Hour 30).",
+      "You called 911 and reported the flooding, initiating emergency response (Hour 18).",
+      "You sought and accepted assistance from responders, moving to a warming center before hypothermia set in (Hour 48‑54).",
+      "You used dry clothing and borrowed blankets to maintain body heat while awaiting central heating (Hour 72)."
+    ],
+    "need_to_know": [
+      "Without power, the building’s central heating can remain below safe indoor temperatures (45 °F) for many hours; rely on layered clothing and non‑electrical heat sources (derived from Hour 66‑72).",
+      "High‑wattage electric heaters can trip circuit breakers repeatedly in an older building’s wiring (observed at Hour 72).",
+      "Water intrusion can leave walls damp for days, increasing mold risk; prompt drying and ventilation are essential (observed at Hour 60)."
+    ],
+    "do_better": [
+      {
+        "action": "Store at least three gallons of water per person for a three‑day outage.",
+        "evidence": "Baseline stored only 1 gallon (Hour 0) and water needs were below the 3‑day minimum.",
+        "why": "Ensures you have enough drinking water when municipal supply is unavailable."
+      },
+      {
+        "action": "Acquire a warm sleeping bag or heavy blanket for each resident and keep them in an easily reachable location.",
+        "evidence": "Baseline lacked warm blankets (inventory gaps) and you relied on a friend’s blankets at the warming center (Hour 48‑72).",
+        "why": "Provides reliable personal heat without electricity, reducing hypothermia risk."
+      },
+      {
+        "action": "Assemble a basic emergency kit that includes a battery‑powered or hand‑crank NOAA radio, first‑aid supplies, a manual can opener, extra batteries, a whistle, dust masks, plastic sheeting, duct tape, moist towelettes, garbage bags with ties, a wrench/pliers, and local maps.",
+        "evidence": "Inventory check identified 10 of 12 basic kit items missing (Hour 0) and none were used during the outage.",
+        "why": "Equips you to receive alerts, treat minor injuries, and perform essential repairs during prolonged outages."
+      }
+    ],
+    "supply_checklist": [
+      "Water containers (minimum 3 gal per person)",
+      "Warm sleeping bags or heavy blankets",
+      "Battery‑powered or hand‑crank NOAA radio",
+      "First‑aid kit",
+      "Manual can opener",
+      "Extra AA/AAA batteries",
+      "Whistle",
+      "Dust masks (N95 or similar)",
+      "Plastic sheeting",
+      "Duct tape",
+      "Moist towelettes",
+      "Garbage bags with ties",
+      "Wrench or pliers",
+      "Local area maps"
+    ]
+  },
+  "repair": {
+    "summary": "The exercise demonstrated that you handled immediate dangers effectively—shutting off power, calling 911, and using a warming center prevented injury during the flood and cold. However, the limited water supply, lack of personal heat sources, and an incomplete emergency kit left you reliant on outside help and exposed to hypothermia risk. Improving water storage, warm bedding, and a basic kit will increase self‑sufficiency in future outages.",
+    "went_well": [
+      "You promptly turned off the main breaker to eliminate the electrical hazard (Hour 30).",
+      "You called 911 and reported the flooding, initiating emergency response (Hour 18).",
+      "You sought and accepted assistance from responders, moving to a warming center before hypothermia set in (Hour 48‑54).",
+      "You used dry clothing and borrowed blankets to maintain body heat while awaiting central heating (Hour 72)."
+    ],
+    "need_to_know": [
+      "Without power, the building’s central heating can remain below safe indoor temperatures (45 °F) for many hours; rely on layered clothing and non‑electrical heat sources (derived from Hours 66‑72).",
+      "Water intrusion can leave walls damp for days, increasing mold risk; prompt drying and ventilation are essential (observed at Hour 60)."
+    ],
+    "do_better": [
+      {
+        "action": "Store at least three gallons of water per person for a three‑day outage.",
+        "evidence": "Baseline stored only 1 gallon (Hour 0) and water needs were below the 3‑day minimum.",
+        "why": "Ensures you have enough drinking water when municipal supply is unavailable."
+      },
+      {
+        "action": "Acquire a warm sleeping bag or heavy blanket for each resident and keep them in an easily reachable location.",
+        "evidence": "Baseline lacked warm blankets (inventory gaps) and you relied on a friend’s blankets at the warming center (Hour 48‑72).",
+        "why": "Provides reliable personal heat without electricity, reducing hypothermia risk."
+      }
+    ],
+    "supply_checklist": [
+      "Water containers (minimum 3 gal per person)",
+      "Warm sleeping bags or heavy blankets",
+      "Battery‑powered or hand‑crank NOAA radio",
+      "First‑aid kit",
+      "Manual can opener",
+      "Extra AA/AAA batteries",
+      "Whistle",
+      "Dust masks (N95 or similar)",
+      "Plastic sheeting",
+      "Duct tape",
+      "Moist towelettes",
+      "Garbage bags with ties",
+      "Wrench or pliers",
+      "Local area maps"
+    ]
+  }
+}

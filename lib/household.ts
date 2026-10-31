@@ -267,6 +267,20 @@ export const SCENARIOS = {
 } as const;
 export type ScenarioId = keyof typeof SCENARIOS;
 
+/** One-line situations for the exercise library and the website. */
+export const SCENARIO_SUMMARIES: Record<ScenarioId, string> = {
+  surprise: "ReadyState picks an emergency that fits your region and season.",
+  "power-outage": "The power goes out and stays out: food, light, heating or cooling, and keeping devices charged.",
+  "winter-storm": "Snow and ice close roads and may cut the power: staying warm safely and checking on others.",
+  "heat-wave": "Days of dangerous heat: keeping people and pets cool, especially if the power fails.",
+  flood: "Water is rising nearby: when to leave, what to take and what to do about utilities.",
+  wildfire: "Smoke and a fire nearby: indoor air, go-bags and leaving early.",
+  hurricane: "A storm with days of warning: preparing, deciding whether to leave, and the aftermath.",
+  earthquake: "Shaking without warning: the first minutes, then utilities, injuries and aftershocks.",
+  tornado: "A warning with minutes to act: where to shelter and what comes after.",
+  "boil-water": "Tap water isn't safe to drink: water for drinking, cooking, hygiene and pets.",
+};
+
 export interface HouseholdProfile {
   people: Person[];
   pets: Pet[];

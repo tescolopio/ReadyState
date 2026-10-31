@@ -1,7 +1,7 @@
-import { APICallError, RetryError } from "ai";
+import { APICallError, RetryError, StreamProviderError } from "ai";
 import { describe, expect, it } from "vitest";
 
-import { describeProviderError, retryAfterSeconds } from "@/lib/provider-errors";
+import { describeProviderError, failureSummary, isSchemaSlip, providerErrorDetails, retryAfterSeconds } from "@/lib/provider-errors";
 
 const apiError = (statusCode: number, responseBody = "", responseHeaders: Record<string, string> = {}) =>
   new APICallError({
@@ -38,6 +38,12 @@ describe("describeProviderError", () => {
     );
   });
 
+  it("says a few seconds for a sub-second wait, as Groq sends in milliseconds", () => {
+    expect(describeProviderError(apiError(429, "on tokens per minute (TPM). Please try again in 277.499999ms."), "hosted")).toBe(
+      "The model provider is limiting requests right now. Wait a few seconds and submit again.",
+    );
+  });
+
   it("points self-hosters at their key, model or the provider", () => {
     expect(describeProviderError(apiError(401), "self-hosted")).toContain("rejected the API key");
     expect(describeProviderError(apiError(404), "self-hosted")).toContain("doesn't recognize the selected model");
@@ -51,10 +57,50 @@ describe("describeProviderError", () => {
     );
   });
 
+  it("recognizes a malformed turn reported mid-stream", () => {
+    const midStream = new StreamProviderError({
+      message: "tool call validation failed: parameters for tool generate_turn did not match schema",
+      code: "tool_use_failed",
+      statusCode: 400,
+    });
+    expect(isSchemaSlip(midStream)).toBe(true);
+    expect(describeProviderError(midStream, "hosted")).toBe("The model returned an incomplete turn. Submit your response again.");
+    expect(isSchemaSlip(apiError(400, "context length exceeded"))).toBe(false);
+  });
+
+  it("reads the wait from the message, then the retry-after header", () => {
+    expect(retryAfterSeconds(dailyLimit)).toBeCloseTo(275.616);
+    expect(retryAfterSeconds(apiError(429, "", { "retry-after": "12" }))).toBe(12);
+    expect(retryAfterSeconds(apiError(429, "Please try again in 277.499999ms."))).toBeCloseTo(0.2775);
+    expect(retryAfterSeconds(apiError(429, "Please try again in 1.065s."))).toBeCloseTo(1.065);
+    expect(retryAfterSeconds(apiError(429))).toBeUndefined();
+    expect(retryAfterSeconds(new Error("boom"))).toBeUndefined();
+  });
+
   it("falls back to a generic message for anything else", () => {
     expect(describeProviderError(new Error("boom"), "self-hosted")).toBe(
       "Something went wrong generating this turn. Please try again.",
     );
+  });
+});
+
+describe("failureSummary", () => {
+  it("gives the status and kind, never the provider's text", () => {
+    expect(failureSummary(new RetryError({ message: "Failed", reason: "maxRetriesExceeded", errors: [dailyLimit] }))).toBe("status 429, rate limit");
+    expect(failureSummary(dailyLimit)).not.toContain("org_secret123");
+    expect(failureSummary(apiError(400, '{"error":{"code":"tool_use_failed","message":"Tool call validation failed"}}'))).toBe("status 400, malformed tool call");
+    expect(failureSummary(apiError(413, '{"error":{"message":"Request too large for model in organization org_x"}}'))).toBe("status 413, request too large");
+    expect(failureSummary(new Error("boom"))).toBe("Error");
+  });
+});
+
+describe("providerErrorDetails", () => {
+  it("returns the error code and the rejected generation, but not the message", () => {
+    const body = '{"error":{"message":"Failed in organization org_secret123","type":"invalid_request_error","code":"tool_use_failed","failed_generation":"{\\"claims\\":[]}"}}';
+    const details = providerErrorDetails(new RetryError({ message: "Failed", reason: "maxRetriesExceeded", errors: [apiError(400, body)] }));
+    expect(details).toEqual({ code: "tool_use_failed", failedGeneration: '{"claims":[]}' });
+    expect(JSON.stringify(details)).not.toContain("org_secret123");
+    expect(providerErrorDetails(apiError(500, "not json"))).toEqual({});
   });
 });
 

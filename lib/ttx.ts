@@ -1,6 +1,8 @@
 import { tool, type InferUITools, type UIDataTypes, type UIMessage } from "ai";
 import { z } from "zod";
 
+import type { DebriefCapture } from "@/lib/debrief-capture";
+
 /** The exercise runs for this many in-game hours. */
 export const TARGET_DURATION_HOURS = 72;
 
@@ -60,6 +62,24 @@ export const turnSchema = z.object({
 });
 
 /**
+ * One debrief improvement. The parts are separate so each can be checked:
+ * the action for being one step, the evidence for citing what happened.
+ */
+const improvementSchema = z.object({
+  action: z
+    .string()
+    .describe(
+      'One concrete next step, in one sentence, e.g. "Freeze two water jugs this week to use as ice and drinking water". One action, not a list of supplies: individual supplies go in supply_checklist.',
+    ),
+  evidence: z
+    .string()
+    .describe(
+      'The exercise event or household fact it comes from, e.g. "Hour 18: the cooler warming" or "household profile: 1 gallon of water stored".',
+    ),
+  why: z.string().describe("One short sentence on why it matters, tied to that evidence."),
+});
+
+/**
  * End-of-exercise debrief. There's no win or lose (decision D8): it answers
  * "what do I need to know?" and "what can I/we do better?".
  */
@@ -73,18 +93,23 @@ export const afterActionReportSchema = z.object({
   need_to_know: z
     .array(z.string())
     .describe(
-      'What this household needs to know about its own situation, learned from the exercise: dependencies, timings and risks, stated factually (e.g. "Without power, your cooler keeps the insulin in range for about a day if the ice is replaced").',
+      'What this household needs to know about its own situation, learned from the exercise: dependencies, timings and risks, stated factually. End each with where it comes from, e.g. "Without power, your cooler keeps the insulin in range for about a day if the ice is replaced (from Hour 18: the cooler warming)".',
     ),
   do_better: z
+    .array(improvementSchema)
+    .describe("At most three improvements, most important first. Fewer is fine: never pad the list to reach three."),
+  supply_checklist: z
     .array(z.string())
-    .describe(
-      'What the household can do better: concrete changes to plans, skills or supplies, most important first, phrased as actions (e.g. "Freeze water jugs to use as ice and drinking water").',
-    ),
+    .describe("Optional: individual supplies worth gathering, one per item, for a household that wants a fuller list. Empty if the improvements cover it."),
 });
 
 export type TurnOutput = z.infer<typeof turnSchema>;
 export type TurnFeedback = z.infer<typeof feedbackSchema>;
 export type AfterActionReport = z.infer<typeof afterActionReportSchema>;
+export type Improvement = z.infer<typeof improvementSchema>;
+
+/** An improvement as one line, for plain-text reports. */
+export const improvementText = ({ action, evidence, why }: Improvement) => `${action} Why: ${why} (from ${evidence})`;
 
 /**
  * Structured "tools" the model is forced to call. They simply echo their
@@ -106,8 +131,43 @@ export const ttxTools = {
   }),
 };
 
+/** An improvement the server dropped after the repair, and the checks it failed (lib/debrief-checks.ts, omitKitImprovement). */
+export interface OmittedImprovement {
+  action: string;
+  checks: string[];
+}
+
+export const OMITTED_IMPROVEMENT_NOTICE = "One suggested improvement was omitted because it didn't meet our quality checks.";
+
+/**
+ * What the server reports about the model calls behind a response, for the
+ * eval. Never shown to participants, except the omitted-improvement notice.
+ */
+export interface TtxMetadata {
+  /** Actual tokens, as the provider reported them. */
+  usage?: { inputTokens?: number; outputTokens?: number };
+  /** Every provider call, including the SDK's silent retries after a rate limit. */
+  providerCalls?: number;
+  /** Retries after a malformed tool call (work item G4). */
+  schemaRetries?: number;
+  /** Debrief repairs after failed content checks (0 or 1). */
+  debriefRepairs?: number;
+  /**
+   * The debrief's result against lib/debrief-checks.ts: the implemented
+   * checks, not a verification of safety or accuracy. `failedFirst` lists
+   * what the first attempt failed, before its repair; `stillFailing`, what a
+   * rejected repair still failed. Sent with the error, too, when a debrief is
+   * rejected. `omittedImprovement` is set when the server dropped a kit-list
+   * improvement the repair kept; it is the one field the page shows, as
+   * OMITTED_IMPROVEMENT_NOTICE.
+   */
+  debriefChecks?: { passedImplementedChecks: boolean; failedFirst: string[]; stillFailing?: string[]; omittedImprovement?: OmittedImprovement };
+  /** Every debrief draft and what it failed, only when a local eval asks for it (lib/debrief-capture.ts). Never displayed. */
+  debriefCapture?: DebriefCapture;
+}
+
 export type TtxUIMessage = UIMessage<
-  never,
+  TtxMetadata,
   UIDataTypes,
   InferUITools<typeof ttxTools>
 >;
@@ -174,16 +234,60 @@ const messageText = (message: TtxUIMessage) =>
     .join("")
     .trim();
 
+/** What the participant sent, in order: the household baseline first, then each response. */
+/** What the exercise page sends to ask for the debrief; it isn't a participant action. */
+export const DEBRIEF_REQUEST = "The exercise is over. Please prepare the debrief.";
+
+/**
+ * The baseline and the participant's response after each completed turn: `responses[i]` follows `turns[i]`, or is
+ * empty if none did. Messages are walked in order, as `buildExercisePrompt` does, so a resent response after a failed
+ * turn replaces the first rather than shifting every later one; the debrief request isn't counted.
+ */
+export function participantResponses(messages: TtxUIMessage[]): { baseline: string; responses: string[] } {
+  let baseline: string | undefined;
+  const responses: string[] = [];
+  let turns = 0;
+  for (const message of messages) {
+    if (message.role === "user") {
+      const text = messageText(message);
+      if (!text || text === DEBRIEF_REQUEST) continue;
+      if (baseline === undefined) baseline = text;
+      else if (turns > 0) responses[turns - 1] = text;
+      continue;
+    }
+    if (message.role !== "assistant") continue;
+    for (const part of message.parts) {
+      if (part.type === "tool-generate_turn" && completedOutput<TurnOutput>(part)) turns++;
+    }
+  }
+  return { baseline: baseline ?? "", responses: Array.from({ length: turns }, (_, i) => responses[i] ?? "") };
+}
+
 const alertsLine = (alerts: string[]) =>
   alerts.length ? alerts.join("; ") : "none";
+
+/** Earlier turns kept as full log lines; anything older gets one short line (work item G6). */
+export const RECENT_LOG_TURNS = 4;
+
+/** Text cut to about `max` characters at a word boundary. */
+const clip = (text: string, max: number) => {
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (flat.length <= max) return flat;
+  const cut = flat.slice(0, max);
+  const space = cut.lastIndexOf(" ");
+  return `${space > max / 2 ? cut.slice(0, space) : cut}…`;
+};
+
+const firstSentence = (text: string) => text.match(/^.*?[.!?](\s|$)/)?.[0].trim() ?? text;
 
 /**
  * Builds the compact model prompt for the next call. Instead of replaying the
  * whole chat (where every turn appears twice, as tool call and echoed result),
  * it sends the baseline, a one-line log entry per older turn, the latest turn
  * in full and the participant's pending action. Older narratives are dropped:
- * the actions, injects and alerts carry the state the model needs, and the
- * prompt grows by a line per turn instead of a full transcript.
+ * the actions, injects and alerts carry the state the model needs. Past the
+ * last few turns, entries shrink to the action and the inject's first
+ * sentence, so a long game grows by a short line per turn.
  */
 export function buildExercisePrompt(messages: TtxUIMessage[]): string {
   let baseline: string | undefined;
@@ -213,7 +317,12 @@ export function buildExercisePrompt(messages: TtxUIMessage[]): string {
   const latest = exchanges.at(-1);
   const older = exchanges.slice(0, -1);
   if (older.length) {
-    const log = older.map(({ action, turn }) => {
+    const firstRecent = older.length - RECENT_LOG_TURNS;
+    const log = older.map(({ action, turn }, index) => {
+      if (index < firstRecent) {
+        const did = action ? `Participant: ${clip(action, 100)} | ` : "";
+        return `- ${turn.time_elapsed}: ${did}Inject: ${clip(firstSentence(turn.new_inject), 140)}`;
+      }
       const did = action ? `Participant: ${action} | ` : "";
       return `- ${turn.time_elapsed}: ${did}Inject: ${turn.new_inject} | Alerts: ${alertsLine(turn.critical_alerts)}`;
     });

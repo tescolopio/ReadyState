@@ -14,6 +14,20 @@
     ]
   },
   {
+    "id": "outage-appropriate-heating",
+    "prompt": "In a power outage, recommend warmth that works without grid power: layers, blankets, sleeping bags, gathering in one small room, hand warmers, or going to a warming center. Don't recommend an electric heater for outages, and don't present a battery-powered heater as practical.",
+    "detect": [
+      "\\belectric (space )?heaters?\\b.{0,80}\\b(power )?outages?\\b",
+      "\\bbattery[-\\u2010\\u2011 ](powered|operated) (space )?heaters?\\b"
+    ],
+    "exceptWhen": "\\b(don't|do not|not|never|avoid|instead of|rather than)\\b[^.;]{0,40}\\b(electric|battery)|\\bheaters?\\b[^.;]{0,60}\\b(won't|will not|can't|cannot|doesn't|does not|don't|do not|needs? (grid )?power|(is|are) useless)\\b",
+    "status": "draft",
+    "sources": [
+      "ready-gov-power-outages"
+    ],
+    "notes": "Added after an eval debrief recommended a UL-listed electric heater 'for future power outages' and a battery-powered heater (eval finding 16)."
+  },
+  {
     "id": "credit-protective-actions",
     "prompt": "Credit protective actions such as shutting off gas after a suspected leak, evacuating, or calling for help, even when they make other things harder.",
     "status": "draft",

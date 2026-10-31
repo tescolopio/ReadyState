@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "ReadyState",
     short_name: "ReadyState",
     description: "AI-powered tabletop exercises for household emergency preparedness.",
-    start_url: "/exercise",
+    start_url: "/journal",
     display: "standalone",
     background_color: "#f6f2e9",
     theme_color: "#245c50",
