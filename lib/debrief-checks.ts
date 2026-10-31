@@ -177,12 +177,12 @@ const GENERIC_KIT = /\b(kits?|go[- ‑]bags?|supplies|preparedness items)\b/i;
 
 /** Heat that needs grid power. */
 const GRID_HEAT =
-  /\b(space heaters?|electric (space )?heaters?|plug[- ‑]in heaters?|ceramic heaters?|oil[- ‑]filled (radiators?|heaters?)|(low|high)[- ‑]wattage (space )?heaters?|\d+[- ‑]?(w|watts?)\b[^.]{0,20}\bheaters?|electric blankets?|heated blankets?|heating pads?)\b/i;
+  /\b(space heaters?|electric (space )?heaters?|plug[- ‑]in heaters?|ceramic heaters?|oil[- ‑]filled (radiators?|heaters?)|(low|high)[- ‑]wattage (space )?(heaters?|heat|heating|heat sources?)|\d+[- ‑]?(w|watts?)\b[^.]{0,20}\bheaters?|electric blankets?|heated blankets?|heating pads?)\b/i;
 /** Electrical gear a breaker trip might tempt a purchase of. */
 const GRID_GEAR = /\b(surge protectors?|extension cords?|power strips?|circuits?)\b/i;
 /** A recommendation, in the present or imperative; "You used…" recounts. */
 const RECOMMENDS =
-  /\b(get|buy|obtain|acquire|purchase|use|keep|have|consider|choose|add|invest in|pick up|rely on|bring|plug in|run|such as|e\.g\.)\b/i;
+  /\b(get|buy|obtain|acquire|purchase|use|keep|have|consider|choose|add|invest in|pick up|rely on|bring|plug in|run|ensure|ensuring|install|such as|e\.g\.)\b/i;
 /** Says grid heat won't help: "Electric heating … is unavailable during a power outage" (Alex, 2026-10-31). */
 const UNAVAILABLE = /\b(unavailable|useless|won't (work|run|help)|doesn't (work|run|help)|don't (work|run|help)|can't (work|run)|stops? working)\b/i;
 const NOT_ADVICE = /\b(don't|do not|never|avoid|won't|will not|doesn't|does not|can't|cannot|not|instead of|rather than|useless|unavailable)\b/i;

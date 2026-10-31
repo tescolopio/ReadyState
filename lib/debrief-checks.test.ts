@@ -396,6 +396,13 @@ describe("checkDebrief: scenario context for heating", () => {
     expect(checkDebrief(heater, turns, { baseline: "Emergency to practice: winter storm." })).toHaveLength(2);
   });
 
+  it("flags low-wattage heat in the summary, with no heater named (captured first draft, 2026-10-31 04:07)", () => {
+    const summary = "Installing smoke/CO detectors and ensuring a reliable source of low‑wattage heat or alternative warming methods would further reduce risk in future outages.";
+    expect(checkDebrief({ ...base, summary }, alexTurns, outage).map((p) => [p.check, p.field, p.matched])).toEqual([
+      ["outage-grid-heat", "summary", "low‑wattage heat"],
+    ]);
+  });
+
   it("doesn't apply without an outage, or to a warning against grid heat", () => {
     expect(checkDebrief(heater, alexTurns, { baseline: "Emergency to practice: winter storm." })).toEqual([]);
     const warning = { ...base, need_to_know: ["A space heater won't help when the power is out (Hour 12)."] };
