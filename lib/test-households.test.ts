@@ -13,7 +13,7 @@ const containsWord = (text: string, word: string) =>
 /** Exactly what the wizard sends for a profile. */
 const outgoing = (id: string) => {
   const { profile } = TEST_HOUSEHOLDS.find((household) => household.id === id)!;
-  return maskInput(engineBaseline(profile), { alwaysMask: privateTerms(profile), dryRun: true });
+  return engineBaseline(profile, (text) => maskInput(text, { alwaysMask: privateTerms(profile), dryRun: true }));
 };
 
 describe("test households", () => {

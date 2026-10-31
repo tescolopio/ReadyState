@@ -1,0 +1,580 @@
+[
+  {
+    "id": "water.supply",
+    "topic": "Water",
+    "statement": "Store at least 1 gallon of water per person per day for at least 3 days; aim for 2 weeks if possible.",
+    "quote": "Store at least 1 gallon of water per person, per day for 3 days.",
+    "values": {
+      "gallonsPerPersonPerDay": 1,
+      "minimumDays": 3,
+      "goalDays": 14
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "cdc-water-supply",
+      "ready-gov-water"
+    ],
+    "notes": "CDC: \"Try to store a 2-week supply if possible.\" Ready.gov says \"for several days\" without a number.",
+    "brief": "Water: 1 gal/person/day; minimum 3 days, goal 2 weeks."
+  },
+  {
+    "id": "water.more-needed",
+    "topic": "Water",
+    "statement": "Store more water for pregnant or nursing people, children, people who are sick, pets and hot climates. In very hot weather, water needs can double.",
+    "quote": "In very hot temperatures, water needs can double.",
+    "values": {
+      "hotWeatherMultiplier": 2
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "ready-gov-water",
+      "cdc-water-supply"
+    ],
+    "when": {
+      "any": [
+        {
+          "fact": "scenario",
+          "in": [
+            "heat-wave"
+          ]
+        },
+        {
+          "fact": "needs.kinds",
+          "includes": "pregnant"
+        },
+        {
+          "fact": "people.ageRanges",
+          "includesAny": [
+            "infant",
+            "child"
+          ]
+        },
+        {
+          "fact": "pets.count",
+          "gt": 0
+        }
+      ]
+    },
+    "brief": "More water for pregnancy, nursing, children, illness, pets, heat; needs can double in extreme heat."
+  },
+  {
+    "id": "water.drinking-need",
+    "topic": "Water",
+    "statement": "A normally active person needs about three-quarters of a gallon of fluid a day. Don't ration drinking water unless authorities say to.",
+    "quote": "Never ration drinking water unless ordered to do so by authorities.",
+    "values": {
+      "fluidGallonsPerDay": 0.75
+    },
+    "status": "draft",
+    "sources": [
+      "ready-gov-water"
+    ]
+  },
+  {
+    "id": "water.rotation",
+    "topic": "Water",
+    "statement": "Replace water you stored yourself (not commercially bottled) every 6 months.",
+    "quote": "replace the water every 6 months.",
+    "values": {
+      "replaceMonths": 6
+    },
+    "status": "draft",
+    "sources": [
+      "cdc-water-supply",
+      "ready-gov-water"
+    ]
+  },
+  {
+    "id": "water.boil",
+    "topic": "Water treatment",
+    "statement": "Boil water at a rolling boil for at least 1 minute; above 5,000 feet, boil for 3 minutes.",
+    "quote": "At altitudes above 5,000 feet (1,000 meters), boil water for three minutes.",
+    "values": {
+      "boilMinutes": 1,
+      "highAltitudeBoilMinutes": 3,
+      "highAltitudeFeet": 5000
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "epa-water-disinfection",
+      "ready-gov-water"
+    ],
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "boil-water",
+        "flood",
+        "hurricane",
+        "earthquake",
+        "surprise"
+      ]
+    },
+    "brief": "Boil water 1 minute (3 minutes above 5,000 ft)."
+  },
+  {
+    "id": "water.bleach",
+    "topic": "Water treatment",
+    "statement": "With plain unscented bleach, use 8 drops per gallon of 6% bleach or 6 drops of 8.25% bleach, double for cloudy or very cold water, stir and wait 30 minutes. Never use scented, color-safe or cleaner-added bleach.",
+    "quote": "Double the amount of bleach if the water is cloudy, colored, or very cold.",
+    "values": {
+      "dropsPerGallon6Percent": 8,
+      "dropsPerGallon8Percent": 6,
+      "waitMinutes": 30
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "epa-water-disinfection"
+    ],
+    "notes": "Boiling or bleach doesn't remove chemicals or heavy metals (EPA).",
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "boil-water",
+        "flood",
+        "hurricane",
+        "earthquake",
+        "surprise"
+      ]
+    },
+    "brief": "Unscented bleach: 8 drops/gal (6%) or 6 drops (8.25%), double if cloudy, wait 30 min."
+  },
+  {
+    "id": "food.supply",
+    "topic": "Food",
+    "statement": "Keep at least a 3-day supply of non-perishable food that needs no refrigeration or cooking, plus a manual can opener; aim for 2 weeks for staying home.",
+    "quote": "a three-day supply of nonperishable food and manual can opener",
+    "values": {
+      "minimumDays": 3,
+      "goalDays": 14
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "fema-basic-kit",
+      "ready-gov-food",
+      "red-cross-kit"
+    ],
+    "notes": "The 2-week figure is the Red Cross's (stay-at-home kit; cited, not quoted). Ready.gov says \"at least a several-day supply\". No current federal page found stating 2 weeks of food.",
+    "brief": "Food: at least 3 days non-perishable, no-cook; 2 weeks to stay home; manual can opener."
+  },
+  {
+    "id": "food.refrigerator",
+    "topic": "Food safety",
+    "statement": "A closed refrigerator keeps food safe for about 4 hours without power. Throw out refrigerated perishables (meat, poultry, fish, eggs, leftovers) after 4 hours without power, or after 2 hours above 40 °F.",
+    "values": {
+      "fridgeSafeHours": 4,
+      "dangerTempF": 40,
+      "dangerHours": 2
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "cdc-power-outage",
+      "ready-gov-food"
+    ],
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "power-outage",
+        "winter-storm",
+        "heat-wave",
+        "hurricane",
+        "surprise"
+      ]
+    },
+    "brief": "Closed fridge safe ~4 h without power; discard perishables after 4 h out, or 2 h above 40 °F."
+  },
+  {
+    "id": "food.freezer",
+    "topic": "Food safety",
+    "statement": "A full, closed freezer keeps food frozen for about 48 hours (24 hours if half full). Thawed food that still has ice crystals or is at 40 °F or below can be refrozen or cooked.",
+    "values": {
+      "fullFreezerHours": 48,
+      "halfFreezerHours": 24
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "cdc-power-outage",
+      "ready-gov-food"
+    ],
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "power-outage",
+        "winter-storm",
+        "heat-wave",
+        "hurricane",
+        "surprise"
+      ]
+    },
+    "brief": "Closed full freezer ~48 h (half full 24 h); food with ice crystals or at 40 °F or below can be refrozen."
+  },
+  {
+    "id": "food.dry-ice",
+    "topic": "Food safety",
+    "statement": "25 pounds of dry ice keeps a 10-cubic-foot freezer below freezing for 3 to 4 days. Handle it with dry, heavy gloves and keep it off food.",
+    "quote": "Twenty-five pounds of dry ice will keep a 10 cubic foot freezer below freezing for three to four days.",
+    "values": {
+      "pounds": 25,
+      "cubicFeet": 10,
+      "days": 3
+    },
+    "status": "draft",
+    "sources": [
+      "ready-gov-food"
+    ]
+  },
+  {
+    "id": "medication.supply",
+    "topic": "Medication",
+    "statement": "Keep a 7- to 10-day emergency supply of prescription and over-the-counter medications, and an up-to-date list of all prescriptions with doses.",
+    "quote": "Create a 7 to 10-day emergency supply of prescription & over-the-counter medications.",
+    "values": {
+      "minimumDays": 7,
+      "goalDays": 10
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "cdc-prepare-your-health-rx",
+      "red-cross-kit"
+    ],
+    "notes": "The Red Cross lists a 7-day supply. Needs D6 medical review.",
+    "when": {
+      "fact": "needs.kinds",
+      "includesAny": [
+        "daily-medication",
+        "refrigerated-medication"
+      ]
+    },
+    "brief": "Medication: keep a 7 to 10 day supply and a written list of prescriptions and doses."
+  },
+  {
+    "id": "medication.refrigerated",
+    "topic": "Medication",
+    "statement": "If power is out for a day or more, refrigerated medication should be replaced unless its label says otherwise; if a life depends on it, keep using it until a new supply is available.",
+    "values": {
+      "outageDays": 1
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "cdc-power-outage"
+    ],
+    "notes": "Needs D6 medical review.",
+    "when": {
+      "fact": "needs.kinds",
+      "includes": "refrigerated-medication"
+    },
+    "brief": "Refrigerated medication unrefrigerated a day or more: replace unless the label allows; if life-sustaining, keep using until replaced."
+  },
+  {
+    "id": "medication.insulin",
+    "topic": "Medication",
+    "statement": "Insulin vials and cartridges can be kept unrefrigerated between 59 °F and 86 °F for up to 28 days. Keep it cool but never frozen, out of direct heat and sun; frozen insulin must not be used. Check blood sugar more often if insulin got hotter than 86 °F.",
+    "quote": "between 59°F and 86°F for up to 28 days",
+    "values": {
+      "minF": 59,
+      "maxF": 86,
+      "days": 28
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "fda-insulin-emergency",
+      "cdc-insulin-emergency"
+    ],
+    "notes": "Limits vary by product (some pens differ); check the label. Needs D6 medical review.",
+    "when": {
+      "fact": "needs.kinds",
+      "includes": "refrigerated-medication"
+    },
+    "brief": "Insulin vials: up to 28 days at 59 to 86 °F; never freeze; keep from heat and sun; check blood sugar more if over 86 °F."
+  },
+  {
+    "id": "infant.formula",
+    "topic": "Infants",
+    "statement": "Ready-to-feed formula is the safest choice in an emergency because it needs no water. Mix powdered formula only with bottled or boiled-and-cooled water, use it within 2 hours, and without refrigeration make fresh formula for each feeding.",
+    "quote": "Ready-to-feed infant formula (RTF) is the safest option for formula feeding during an emergency or disaster.",
+    "values": {
+      "useWithinHours": 2
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "cdc-infant-feeding",
+      "ready-gov-food"
+    ],
+    "when": {
+      "fact": "people.ageRanges",
+      "includes": "infant"
+    },
+    "brief": "Infants: ready-to-feed formula is safest; mix powder only with bottled or boiled water; use within 2 h."
+  },
+  {
+    "id": "co.generator",
+    "topic": "Carbon monoxide",
+    "statement": "Run generators and other engines only outdoors, at least 20 feet from windows, doors and vents, never in a home, basement or garage even with doors open. Never heat a home with a gas range or oven, or use a grill, camp stove or lantern indoors.",
+    "quote": "Never use a generator inside your home or garage, even if doors and windows are open.",
+    "values": {
+      "generatorFeet": 20
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "cdc-power-outage",
+      "cdc-carbon-monoxide"
+    ],
+    "brief": "Generators outdoors only, 20+ ft from windows, doors, vents; never in home or garage; never heat with a gas oven, grill or camp stove indoors."
+  },
+  {
+    "id": "co.detector",
+    "topic": "Carbon monoxide",
+    "statement": "Have battery or battery-backup carbon monoxide detectors near every sleeping area, especially when a generator or fuel-burning appliance is in use.",
+    "values": {},
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "cdc-power-outage",
+      "cdc-carbon-monoxide"
+    ],
+    "when": {
+      "any": [
+        {
+          "fact": "home.burnsFuel",
+          "equals": true
+        },
+        {
+          "fact": "scenario",
+          "in": [
+            "power-outage",
+            "winter-storm",
+            "heat-wave",
+            "hurricane",
+            "surprise"
+          ]
+        }
+      ]
+    },
+    "brief": "CO detectors (battery or battery-backup) near sleeping areas."
+  },
+  {
+    "id": "fire.candles",
+    "topic": "Fire",
+    "statement": "Use flashlights and battery lanterns instead of candles; if you must use candles, never leave them unattended.",
+    "values": {},
+    "status": "draft",
+    "sources": [
+      "cdc-power-outage"
+    ]
+  },
+  {
+    "id": "cold.hypothermia",
+    "topic": "Cold",
+    "statement": "Hypothermia signs: shivering, exhaustion, confusion, fumbling hands, memory loss, slurred speech, drowsiness (in babies, bright red cold skin and very low energy). A body temperature below 95 °F is an emergency. Hypothermia can happen above 40 °F if someone is wet and chilled.",
+    "values": {
+      "emergencyBelowF": 95
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "cdc-hypothermia",
+      "cdc-power-outage"
+    ],
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "winter-storm",
+        "power-outage",
+        "surprise"
+      ]
+    },
+    "brief": "Hypothermia: shivering, confusion, slurred speech, drowsiness; below 95 °F is an emergency; can occur above 40 °F if wet."
+  },
+  {
+    "id": "cold.frostbite",
+    "topic": "Cold",
+    "statement": "Frostbite signs: white or grayish, firm, waxy or numb skin. Rewarm in warm, not hot, water; don't rub it, walk on frostbitten feet, or use a heating pad, stove or fireplace, because numb skin burns easily.",
+    "values": {},
+    "status": "draft",
+    "sources": [
+      "cdc-frostbite"
+    ],
+    "notes": "First-aid detail; the model should still refer people to medical care (safety rule refer-medical-emergencies)."
+  },
+  {
+    "id": "heat.illness",
+    "topic": "Heat",
+    "statement": "Heat stroke is an emergency: body temperature 103 °F or higher, hot skin, fast strong pulse, confusion or fainting. Call 911 and cool the person. Heat exhaustion (heavy sweating, cold clammy skin, weak pulse, nausea) needs a cool place and sips of water, and medical help if symptoms worsen or last over an hour. Fans may not prevent heat illness when it's very hot.",
+    "values": {
+      "heatStrokeF": 103,
+      "exhaustionHours": 1
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "cdc-heat-illness",
+      "cdc-power-outage"
+    ],
+    "notes": "Some CDC materials give 104 °F; 103 °F is the more conservative figure.",
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "heat-wave",
+        "power-outage",
+        "surprise"
+      ]
+    },
+    "brief": "Heat stroke (103 °F+, hot skin, confusion): call 911 and cool. Heat exhaustion: cool place, sip water, get help if over 1 h. Fans may not be enough."
+  },
+  {
+    "id": "flood.water",
+    "topic": "Flood",
+    "statement": "Never walk or drive into flood water: 6 inches of fast-moving water can knock an adult down, 12 inches can carry away most cars, and 2 feet can carry away SUVs and pickups.",
+    "quote": "A mere 6 inches of fast-moving flood water can knock over an adult.",
+    "values": {
+      "knockDownInches": 6,
+      "carInches": 12,
+      "truckInches": 24
+    },
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "nws-flood-safety"
+    ],
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "flood",
+        "hurricane",
+        "surprise"
+      ]
+    },
+    "brief": "Never enter flood water: 6 in knocks adults down, 12 in floats most cars, 2 ft carries SUVs."
+  },
+  {
+    "id": "earthquake.shaking",
+    "topic": "Earthquake",
+    "statement": "During shaking: Drop, Cover and Hold On. Don't run outside or stand in doorways. Afterwards, expect aftershocks, check for gas leaks, don't enter damaged buildings, and near the coast move inland or uphill right away in case of a tsunami.",
+    "quote": "If you are inside, stay and do not run outside; avoid doorways.",
+    "values": {},
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "ready-gov-earthquakes"
+    ],
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "earthquake",
+        "surprise"
+      ]
+    },
+    "brief": "Earthquake: Drop, Cover, Hold On; don't run outside or use doorways; expect aftershocks; near coasts move to high ground."
+  },
+  {
+    "id": "smoke.protection",
+    "topic": "Wildfire smoke",
+    "statement": "Staying indoors in a room closed off from outside air, with a portable air cleaner, is the most effective protection from smoke. Outdoors, only a NIOSH-approved N95 or P100 respirator helps; cloth and paper masks don't filter smoke.",
+    "values": {},
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "epa-wildfire-smoke"
+    ],
+    "when": {
+      "any": [
+        {
+          "fact": "scenario",
+          "in": [
+            "wildfire",
+            "surprise"
+          ]
+        },
+        {
+          "fact": "needs.kinds",
+          "includes": "air-quality"
+        }
+      ]
+    },
+    "brief": "Smoke: stay in a closed room with an air cleaner; outdoors only N95/P100 helps, not cloth masks."
+  },
+  {
+    "id": "pets.evacuate",
+    "topic": "Pets",
+    "statement": "If you're told to evacuate, take your pets. Many public shelters and hotels don't accept them, so plan where they can go. Keep several days of food and water for each pet, a collar with ID and a leash, and get pets microchipped.",
+    "quote": "Many public shelters and hotels do not allow pets inside.",
+    "values": {},
+    "prompt": true,
+    "status": "draft",
+    "sources": [
+      "ready-gov-pets"
+    ],
+    "notes": "Ready.gov says \"several days\" of pet food and water without a number.",
+    "when": {
+      "fact": "pets.count",
+      "gt": 0
+    },
+    "brief": "Pets evacuate with you; many shelters refuse pets; keep food, water, ID, leash."
+  },
+  {
+    "id": "hygiene.hands",
+    "topic": "Hygiene",
+    "statement": "Wash hands with soap and the cleanest water available; when there's no soap and water, use hand sanitizer with at least 60% alcohol, which works poorly on visibly dirty hands.",
+    "values": {
+      "sanitizerAlcoholPercent": 60
+    },
+    "status": "draft",
+    "sources": [
+      "cdc-hygiene-emergency"
+    ]
+  },
+  {
+    "id": "kit.basic",
+    "topic": "Kit",
+    "statement": "Ready.gov's basic kit: water, food, a battery or hand-crank radio and NOAA weather radio, flashlight, first aid kit, extra batteries, whistle, dust mask, plastic sheeting and duct tape, moist towelettes with garbage bags and ties, a wrench or pliers for utilities, a manual can opener, local maps, and a phone with chargers and a backup battery.",
+    "values": {},
+    "status": "draft",
+    "sources": [
+      "ready-gov-kit"
+    ]
+  },
+  {
+    "id": "kit.additional",
+    "topic": "Kit",
+    "statement": "Also recommended: a sleeping bag or warm blanket for each person, prescription and non-prescription medications, glasses, infant supplies, pet food and water, cash, copies of important documents, a change of clothes and sturdy shoes, a fire extinguisher, matches in a waterproof container, and hygiene supplies.",
+    "quote": "Sleeping bag or warm blanket for each person",
+    "values": {},
+    "status": "draft",
+    "sources": [
+      "ready-gov-kit"
+    ]
+  },
+  {
+    "id": "electrical.downed-lines",
+    "topic": "Electrical",
+    "statement": "Never touch a fallen power line, and don't drive through standing water if downed power lines are in it.",
+    "brief": "Never touch fallen power lines or drive through water with lines in it.",
+    "values": {},
+    "prompt": true,
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "power-outage",
+        "winter-storm",
+        "hurricane",
+        "flood",
+        "surprise"
+      ]
+    },
+    "status": "draft",
+    "sources": [
+      "cdc-power-outage"
+    ]
+  }
+]

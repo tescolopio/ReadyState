@@ -125,20 +125,23 @@ export default function TtxDashboard() {
 
   // Sanitizes raw text before it reaches chat state / the API. The household's
   // names and medication names are always masked, even in typed responses.
-  const submitText = (raw: string, profile: HouseholdProfile = household) => {
+  const maskFor = (profile: HouseholdProfile) => (text: string) =>
+    maskInput(text, { alwaysMask: [...usePrivacyStore.getState().alwaysMask, ...privateTerms(profile)] });
+  const submitText = (raw: string) => {
     const text = raw.trim();
     if (!text || inputLocked) return;
     setInput("");
-    const alwaysMask = [...usePrivacyStore.getState().alwaysMask, ...privateTerms(profile)];
-    void sendMessage({ text: maskInput(text, { alwaysMask }) });
+    void sendMessage({ text: maskFor(household)(text) });
   };
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     submitText(input);
   };
   const startWithHousehold = (profile: HouseholdProfile) => {
+    if (inputLocked) return;
     setWizardOpen(false);
-    submitText(engineBaseline(profile), profile);
+    // Only the household part is masked; the official guidance is public text.
+    void sendMessage({ text: engineBaseline(profile, maskFor(profile)) });
   };
   // Guided responses fill the box rather than sending, so the participant can edit them.
   const chooseOption = (option: string) => {

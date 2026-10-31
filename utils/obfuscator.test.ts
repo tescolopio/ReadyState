@@ -137,3 +137,12 @@ describe("masking regressions from the test households", () => {
     expect(maskInput("Call him at (206) 555-0142.")).toBe("Call him at [Phone 1].");
   });
 });
+
+describe("masking regressions from the guidance text", () => {
+  beforeEach(() => usePrivacyStore.getState().clearMappings());
+
+  it("doesn't read an abbreviation after a capitalized word as a city and state", () => {
+    expect(maskInput("Battery CO detectors near sleeping areas.")).toBe("Battery CO detectors near sleeping areas.");
+    expect(maskInput("We moved to Denver CO 80203 last year.")).toBe("We moved to [Location 1] CO [Postcode 1] last year.");
+  });
+});

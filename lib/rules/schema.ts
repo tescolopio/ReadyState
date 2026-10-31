@@ -37,6 +37,7 @@ export type Condition =
   | { fact: string; includesAll: string[] }
   | { fact: string; includesAny: string[] }
   | { fact: string; gt: number }
+  | { fact: string; lt: number }
   | { fact: string; exists: boolean }
   | { all: Condition[] }
   | { any: Condition[] }
@@ -50,6 +51,7 @@ export const conditionSchema: z.ZodType<Condition> = z.lazy(() =>
     z.object({ fact: z.string(), includesAll: z.array(z.string()) }).strict(),
     z.object({ fact: z.string(), includesAny: z.array(z.string()) }).strict(),
     z.object({ fact: z.string(), gt: z.number() }).strict(),
+    z.object({ fact: z.string(), lt: z.number() }).strict(),
     z.object({ fact: z.string(), exists: z.boolean() }).strict(),
     z.object({ all: z.array(conditionSchema) }).strict(),
     z.object({ any: z.array(conditionSchema) }).strict(),
@@ -63,6 +65,8 @@ const findingFields = {
   findingId: z.string().optional(),
   area: z.enum(["Water", "Food", "Pets", "Medical", "Power", "Safety", "Kit", "Plan"]),
   kind: z.enum(["get", "plan"]),
+  /** The guidance record this rule implements; tests check its thresholds match. */
+  guidance: z.string().optional(),
   /** "need" runs the rule once per recorded need, adding person.* and need.* facts. */
   forEach: z.literal("need").optional(),
   when: conditionSchema.optional(),
@@ -130,6 +134,25 @@ export const safetyRuleSchema = z.object({
   ...review,
 });
 
+/**
+ * One authoritative fact, such as "1 gallon of water per person per day".
+ * `quote` is the source's exact words (US government works only; copyrighted
+ * sources are paraphrased in `statement`). Records with `prompt` are sent to
+ * the scenario engine when `when` holds for the household.
+ */
+export const guidanceSchema = z.object({
+  id: z.string(),
+  topic: z.string(),
+  statement: z.string(),
+  /** A compact form sent to the model (records with `prompt`), to keep each call small. */
+  brief: z.string().optional(),
+  quote: z.string().optional(),
+  values: z.record(z.string(), z.number()),
+  prompt: z.boolean().optional(),
+  when: conditionSchema.optional(),
+  ...review,
+});
+
 export const STAGES = ["warning", "first-hours", "first-day", "days-2-3"] as const;
 
 /** Something a sound response should cover at a stage of an emergency (G13, HSEEP critical tasks). */
@@ -147,3 +170,4 @@ export type Source = z.infer<typeof sourceSchema>;
 export type InventoryRule = z.infer<typeof inventoryRuleSchema>;
 export type SafetyRule = z.infer<typeof safetyRuleSchema>;
 export type LookFor = z.infer<typeof lookForSchema>;
+export type Guidance = z.infer<typeof guidanceSchema>;

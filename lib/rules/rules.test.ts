@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { NEEDS, SCENARIOS, SUPPLY_ITEMS } from "@/lib/household";
-import { INVENTORY_RULES, LOOK_FORS, SAFETY_RULES, SOURCES } from "@/lib/rules";
+import { GUIDANCE, INVENTORY_RULES, LOOK_FORS, SAFETY_RULES, SOURCES } from "@/lib/rules";
 import {
   NEED_FACTS,
   PROFILE_FACTS,
@@ -19,7 +19,7 @@ const SCENARIO_IDS = new Set(Object.keys(SCENARIOS));
 /** Placeholders the engine supplies itself when rendering. */
 const RENDER_FACTS = new Set(["days", "shortBy", "shortByGallons", "missingCount", "total", "missingList"]);
 
-const allRules = [...INVENTORY_RULES, ...SAFETY_RULES, ...LOOK_FORS];
+const allRules = [...INVENTORY_RULES, ...SAFETY_RULES, ...LOOK_FORS, ...GUIDANCE];
 
 /** Values a condition compares supplies, needs and scenarios against, which must be real ids. */
 function comparedIds(condition: Condition): Array<{ fact: string; value: string }> {
@@ -143,5 +143,50 @@ describe("safety detection, more cases", () => {
     expect(flags("Use the oven to warm the kitchen for a few hours.")).toBe(true);
     expect(flags("Run the propane heater in the living room overnight.")).toBe(true);
     expect(flags("Cook on the camp stove outdoors.")).toBe(false);
+  });
+});
+
+describe("guidance", () => {
+  const sourceById = new Map(SOURCES.map((source) => [source.id, source]));
+
+  it("has unique ids, known sources and known facts", () => {
+    const ids = GUIDANCE.map((record) => record.id);
+    expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+    expect(GUIDANCE.flatMap((r) => r.sources.filter((id) => !sourceById.has(id)).map((id) => `${r.id}: ${id}`))).toEqual([]);
+    const facts = GUIDANCE.flatMap((r) => (r.when ? conditionFacts(r.when) : []));
+    expect(facts.filter((fact) => !(fact in PROFILE_FACTS))).toEqual([]);
+  });
+
+  it("quotes only public-domain sources, never copyrighted ones", () => {
+    const bad = GUIDANCE.filter(
+      (r) => r.quote && !r.sources.some((id) => sourceById.get(id)?.license === "public-domain"),
+    ).map((r) => r.id);
+    expect(bad).toEqual([]);
+  });
+
+  it("gives every record sent to the model a short brief", () => {
+    expect(GUIDANCE.filter((r) => r.prompt && !r.brief).map((r) => r.id)).toEqual([]);
+    expect(GUIDANCE.filter((r) => r.brief && r.brief.split(/\s+/).length > 30).map((r) => r.id)).toEqual([]);
+  });
+
+  it("links inventory rules only to guidance that exists, with matching thresholds", () => {
+    const byId = new Map(GUIDANCE.map((record) => [record.id, record]));
+    const problems: string[] = [];
+    for (const rule of INVENTORY_RULES) {
+      if (!rule.guidance) continue;
+      const record = byId.get(rule.guidance);
+      if (!record) {
+        problems.push(`${rule.id}: no guidance "${rule.guidance}"`);
+        continue;
+      }
+      if (rule.type !== "supply") continue;
+      if (record.values.minimumDays !== undefined && record.values.minimumDays !== rule.minimum) {
+        problems.push(`${rule.id}: minimum ${rule.minimum} but ${record.id} says ${record.values.minimumDays}`);
+      }
+      if (record.values.goalDays !== undefined && rule.goal !== undefined && record.values.goalDays !== rule.goal) {
+        problems.push(`${rule.id}: goal ${rule.goal} but ${record.id} says ${record.values.goalDays}`);
+      }
+    }
+    expect(problems).toEqual([]);
   });
 });

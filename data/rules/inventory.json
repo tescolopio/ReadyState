@@ -19,8 +19,11 @@
       "partial": "Store about {shortByGallons} more gallons (1 gallon per person per day{pets.any?, plus extra for pets})."
     },
     "status": "draft",
-    "sources": ["ready-gov-kit"],
-    "notes": "One gallon per person per day; at least 3 days, 2 weeks for staying home."
+    "sources": [
+      "cdc-water-supply",
+      "ready-gov-water"
+    ],
+    "guidance": "water.supply"
   },
   {
     "id": "food",
@@ -42,28 +45,44 @@
       "partial": "Add about {shortBy} more of non-perishable food that needs no cooking."
     },
     "status": "draft",
-    "sources": ["ready-gov-kit"]
+    "sources": [
+      "fema-basic-kit",
+      "red-cross-kit"
+    ],
+    "guidance": "food.supply",
+    "notes": "3-day minimum: FEMA basic kit. 2-week goal: Red Cross stay-at-home kit (no current federal page found)."
   },
   {
     "id": "well-pump",
     "type": "check",
     "area": "Water",
     "kind": "plan",
-    "when": { "fact": "home.water", "equals": "well" },
-    "pass": { "fact": "hasBackupPower", "equals": true },
+    "when": {
+      "fact": "home.water",
+      "equals": "well"
+    },
+    "pass": {
+      "fact": "hasBackupPower",
+      "equals": true
+    },
     "failStatus": "partial",
     "reportOk": true,
     "finding": "A well pump stops without power, so tap water stops in an outage.",
     "action": "Store more water, or plan backup power that can run the pump safely.",
     "status": "draft",
-    "sources": ["ready-gov-power-outages"]
+    "sources": [
+      "ready-gov-power-outages"
+    ]
   },
   {
     "id": "pet-food",
     "type": "supply",
     "area": "Pets",
     "kind": "get",
-    "when": { "fact": "pets.count", "gt": 0 },
+    "when": {
+      "fact": "pets.count",
+      "gt": 0
+    },
     "metric": "petFood.days",
     "minimum": 3,
     "goal": 14,
@@ -79,19 +98,28 @@
       "partial": "Add about {shortBy} more of pet food, and water for them too."
     },
     "status": "draft",
-    "sources": ["ready-gov-pets"]
+    "sources": [
+      "ready-gov-pets"
+    ],
+    "notes": "Ready.gov says several days of pet food; the 3-day and 2-week thresholds mirror the human guidance. No authoritative pet-specific figure found."
   },
   {
     "id": "pet-shelter",
     "type": "check",
     "area": "Pets",
     "kind": "plan",
-    "when": { "fact": "pets.count", "gt": 0 },
+    "when": {
+      "fact": "pets.count",
+      "gt": 0
+    },
     "failStatus": "unknown",
     "finding": "Many emergency shelters don't accept pets.",
     "action": "Find pet-friendly shelters, hotels or friends along your evacuation route.",
     "status": "draft",
-    "sources": ["ready-gov-pets"]
+    "sources": [
+      "ready-gov-pets"
+    ],
+    "guidance": "pets.evacuate"
   },
   {
     "id": "medication-days",
@@ -100,12 +128,15 @@
     "findingId": "{person.id}-{need.kind}",
     "area": "Medical",
     "kind": "get",
-    "when": { "fact": "need.asksDays", "equals": true },
+    "when": {
+      "fact": "need.asksDays",
+      "equals": true
+    },
     "metric": "need.daysSupply",
     "minimum": 7,
     "messages": {
       "unknown": "{person.label}: {need.label}: days of supply not recorded.",
-      "short": "{person.label}: {need.label}: about {days} on hand, below the recommended 7.",
+      "short": "{person.label}: {need.label}: about {days} on hand, below the recommended 7 to 10.",
       "ok": "{person.label}: {need.label}: about {days} on hand."
     },
     "actions": {
@@ -113,8 +144,12 @@
       "short": "Ask the pharmacist or prescriber about an emergency supply or an early refill."
     },
     "status": "draft",
-    "sources": ["cdc-disability-kit"],
-    "notes": "CDC recommends at least a 7-day supply. Needs D6 medical review."
+    "sources": [
+      "cdc-prepare-your-health-rx",
+      "red-cross-kit"
+    ],
+    "notes": "CDC: 7 to 10 days. Needs D6 medical review.",
+    "guidance": "medication.supply"
   },
   {
     "id": "cold-chain-cooler",
@@ -125,15 +160,27 @@
     "kind": "get",
     "when": {
       "all": [
-        { "fact": "need.kind", "equals": "refrigerated-medication" },
-        { "not": { "fact": "supplies.have", "includes": "cooler" } }
+        {
+          "fact": "need.kind",
+          "equals": "refrigerated-medication"
+        },
+        {
+          "not": {
+            "fact": "supplies.have",
+            "includes": "cooler"
+          }
+        }
       ]
     },
     "failStatus": "missing",
     "finding": "{person.label}: {need.label}: no cooler recorded to keep it cold without power.",
     "action": "Keep a cooler and ice packs (or frozen water bottles) for medication, and a fridge thermometer.",
     "status": "draft",
-    "sources": ["cdc-disability-kit", "usda-power-outage-food"]
+    "sources": [
+      "cdc-power-outage",
+      "fda-insulin-emergency"
+    ],
+    "guidance": "medication.refrigerated"
   },
   {
     "id": "cold-chain-ice",
@@ -144,16 +191,29 @@
     "kind": "get",
     "when": {
       "all": [
-        { "fact": "need.kind", "equals": "refrigerated-medication" },
-        { "fact": "supplies.have", "includes": "cooler" }
+        {
+          "fact": "need.kind",
+          "equals": "refrigerated-medication"
+        },
+        {
+          "fact": "supplies.have",
+          "includes": "cooler"
+        }
       ]
     },
-    "pass": { "fact": "supplies.have", "includes": "ice-packs" },
+    "pass": {
+      "fact": "supplies.have",
+      "includes": "ice-packs"
+    },
     "failStatus": "missing",
     "finding": "{person.label}: {need.label}: no ice packs recorded to keep it cold without power.",
     "action": "Keep ice packs (or frozen water bottles) with the cooler for medication, and a fridge thermometer.",
     "status": "draft",
-    "sources": ["cdc-disability-kit", "usda-power-outage-food"]
+    "sources": [
+      "cdc-power-outage",
+      "fda-insulin-emergency"
+    ],
+    "guidance": "medication.refrigerated"
   },
   {
     "id": "device-power-none",
@@ -164,15 +224,24 @@
     "kind": "get",
     "when": {
       "all": [
-        { "fact": "need.kind", "equals": "powered-device" },
-        { "fact": "hasBackupPower", "equals": false }
+        {
+          "fact": "need.kind",
+          "equals": "powered-device"
+        },
+        {
+          "fact": "hasBackupPower",
+          "equals": false
+        }
       ]
     },
     "failStatus": "missing",
     "finding": "{person.label}: {need.label}: no backup power recorded.{need.kwhPerDay? It needs about {need.kwhPerDay} kWh a day.}",
     "action": "Get a battery backup sized for the device, and ask the manufacturer about battery options.",
     "status": "draft",
-    "sources": ["cdc-disability-kit", "ready-gov-disabilities"]
+    "sources": [
+      "cdc-disability-kit",
+      "ready-gov-disabilities"
+    ]
   },
   {
     "id": "device-power-runtime",
@@ -183,15 +252,23 @@
     "kind": "get",
     "when": {
       "all": [
-        { "fact": "need.kind", "equals": "powered-device" },
-        { "fact": "hasBackupPower", "equals": true }
+        {
+          "fact": "need.kind",
+          "equals": "powered-device"
+        },
+        {
+          "fact": "hasBackupPower",
+          "equals": true
+        }
       ]
     },
     "failStatus": "partial",
     "finding": "{person.label}: {need.label}: backup power is recorded; check how many hours it runs the device.{need.kwhPerDay? It needs about {need.kwhPerDay} kWh a day.}",
     "action": "Check your backup's capacity in watt-hours against the device, and test it under load.",
     "status": "draft",
-    "sources": ["cdc-disability-kit"]
+    "sources": [
+      "cdc-disability-kit"
+    ]
   },
   {
     "id": "utility-medical-list",
@@ -200,12 +277,17 @@
     "findingId": "{person.id}-utility-list",
     "area": "Plan",
     "kind": "plan",
-    "when": { "fact": "need.kind", "equals": "powered-device" },
+    "when": {
+      "fact": "need.kind",
+      "equals": "powered-device"
+    },
     "failStatus": "unknown",
     "finding": "{person.label}: {need.label}: power companies can't restore power faster for one home, but many keep a list of customers who rely on medical equipment.",
     "action": "Ask your power company about its medical-needs program, and plan where to go if an outage lasts longer than the battery.",
     "status": "draft",
-    "sources": ["ready-gov-disabilities"]
+    "sources": [
+      "ready-gov-disabilities"
+    ]
   },
   {
     "id": "stairs",
@@ -216,40 +298,63 @@
     "kind": "plan",
     "when": {
       "all": [
-        { "fact": "need.kind", "equals": "stairs" },
-        { "fact": "home.floors", "gt": 1 }
+        {
+          "fact": "need.kind",
+          "equals": "stairs"
+        },
+        {
+          "fact": "home.floors",
+          "gt": 1
+        }
       ]
     },
     "failStatus": "unknown",
     "finding": "{person.label}: {need.label}, in a {home.floors}-floor home.",
     "action": "Plan where they sleep and how they get out quickly, and who helps.",
     "status": "draft",
-    "sources": ["ready-gov-disabilities"]
+    "sources": [
+      "ready-gov-disabilities"
+    ]
   },
   {
     "id": "co-detector",
     "type": "check",
     "area": "Safety",
     "kind": "get",
-    "when": { "fact": "home.burnsFuel", "equals": true },
-    "pass": { "fact": "supplies.have", "includes": "co-detector" },
+    "when": {
+      "fact": "home.burnsFuel",
+      "equals": true
+    },
+    "pass": {
+      "fact": "supplies.have",
+      "includes": "co-detector"
+    },
     "failStatus": "missing",
     "finding": "Fuel-burning appliances or a generator, but no battery carbon monoxide detector recorded.",
     "action": "Install battery or battery-backup carbon monoxide detectors near sleeping areas.",
     "status": "draft",
-    "sources": ["cdc-carbon-monoxide"]
+    "sources": [
+      "cdc-power-outage",
+      "cdc-carbon-monoxide"
+    ],
+    "guidance": "co.detector"
   },
   {
     "id": "smoke-detector",
     "type": "check",
     "area": "Safety",
     "kind": "get",
-    "pass": { "fact": "supplies.have", "includes": "smoke-detector" },
+    "pass": {
+      "fact": "supplies.have",
+      "includes": "smoke-detector"
+    },
     "failStatus": "missing",
     "finding": "No smoke detectors recorded.",
     "action": "Install and test smoke detectors on every floor.",
     "status": "draft",
-    "sources": ["ready-gov-kit"]
+    "sources": [
+      "ready-gov-kit"
+    ]
   },
   {
     "id": "basic-kit",
@@ -257,61 +362,334 @@
     "area": "Kit",
     "kind": "get",
     "items": {
-      "weather-radio": "a battery or hand-crank weather radio",
+      "weather-radio": "a battery or hand-crank radio with NOAA weather alerts",
       "flashlights": "flashlights",
-      "batteries": "spare batteries",
       "first-aid": "a first aid kit",
+      "batteries": "extra batteries",
       "whistle": "a whistle",
-      "n95": "N95 masks",
-      "utility-tools": "a wrench to shut off utilities",
+      "n95": "dust masks",
+      "plastic-sheeting": "plastic sheeting and duct tape",
+      "sanitation": "moist towelettes, garbage bags and ties",
+      "utility-tools": "a wrench or pliers to turn off utilities",
       "can-opener": "a manual can opener",
-      "paper-map": "a paper map",
-      "power-bank": "a phone power bank"
+      "paper-map": "local maps",
+      "power-bank": "phone chargers and a backup battery"
     },
-    "shortAbove": 5,
+    "shortAbove": 6,
     "finding": "Missing {missingCount} of {total} basic kit items: {missingList}.",
     "action": "Add {missingList}.",
     "okFinding": "All basic kit items recorded.",
     "status": "draft",
-    "sources": ["ready-gov-kit"]
+    "sources": [
+      "ready-gov-kit"
+    ],
+    "guidance": "kit.basic"
   },
   {
     "id": "warmth",
     "type": "check",
     "area": "Kit",
     "kind": "get",
-    "when": { "fact": "scenario", "in": ["winter-storm", "power-outage"] },
-    "pass": { "fact": "supplies.have", "includesAny": ["sleeping-bags", "blankets"] },
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "winter-storm",
+        "power-outage"
+      ]
+    },
+    "pass": {
+      "fact": "supplies.have",
+      "includesAny": [
+        "sleeping-bags",
+        "blankets"
+      ]
+    },
     "failStatus": "missing",
-    "finding": "No extra blankets or sleeping bags recorded for a cold outage.",
-    "action": "Keep cold-rated sleeping bags or extra blankets for everyone.",
+    "finding": "No sleeping bag or warm blanket recorded for each person, for a cold outage.",
+    "action": "Keep a sleeping bag or warm blanket for each person.",
     "status": "draft",
-    "sources": ["ready-gov-winter"]
+    "sources": [
+      "ready-gov-kit"
+    ],
+    "guidance": "kit.additional"
   },
   {
     "id": "documents",
     "type": "check",
     "area": "Plan",
     "kind": "get",
-    "when": { "fact": "scenario", "in": ["wildfire", "hurricane", "flood"] },
-    "pass": { "fact": "supplies.have", "includes": "documents" },
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "wildfire",
+        "hurricane",
+        "flood"
+      ]
+    },
+    "pass": {
+      "fact": "supplies.have",
+      "includes": "documents"
+    },
     "failStatus": "missing",
     "finding": "No copies of important documents recorded, and this emergency may mean leaving quickly.",
     "action": "Keep copies of IDs, insurance and medical information in a go-bag or secure cloud storage.",
     "status": "draft",
-    "sources": ["ready-gov-kit"]
+    "sources": [
+      "ready-gov-kit"
+    ]
   },
   {
     "id": "water-treatment",
     "type": "check",
     "area": "Water",
     "kind": "get",
-    "when": { "fact": "scenario", "equals": "boil-water" },
-    "pass": { "fact": "supplies.have", "includesAny": ["water-filter", "bleach"] },
+    "when": {
+      "fact": "scenario",
+      "equals": "boil-water"
+    },
+    "pass": {
+      "fact": "supplies.have",
+      "includesAny": [
+        "water-filter",
+        "bleach"
+      ]
+    },
     "failStatus": "missing",
     "finding": "No way to treat water recorded.",
     "action": "Keep unscented bleach or purification tablets, and learn how to use them.",
     "status": "draft",
-    "sources": ["ready-gov-kit"]
+    "sources": [
+      "epa-water-disinfection"
+    ],
+    "guidance": "water.bleach"
+  },
+  {
+    "id": "hot-weather-water",
+    "type": "check",
+    "area": "Water",
+    "kind": "get",
+    "guidance": "water.more-needed",
+    "when": {
+      "all": [
+        {
+          "fact": "scenario",
+          "equals": "heat-wave"
+        },
+        {
+          "fact": "water.daysPerPerson",
+          "lt": 6
+        }
+      ]
+    },
+    "failStatus": "partial",
+    "finding": "In very hot weather water needs can double; at 2 gallons per person per day your water covers about {water.daysHotWeather}.",
+    "action": "Store extra water for the heat: plan on up to 2 gallons per person per day.",
+    "status": "draft",
+    "sources": [
+      "ready-gov-water"
+    ]
+  },
+  {
+    "id": "extra-water-needs",
+    "type": "check",
+    "area": "Water",
+    "kind": "plan",
+    "guidance": "water.more-needed",
+    "when": {
+      "any": [
+        {
+          "fact": "needs.kinds",
+          "includes": "pregnant"
+        },
+        {
+          "fact": "people.ageRanges",
+          "includes": "infant"
+        }
+      ]
+    },
+    "failStatus": "unknown",
+    "finding": "Pregnant or nursing people, and an infant's formula, need more water than the 1-gallon baseline.",
+    "action": "Store extra water beyond 1 gallon per person per day for them.",
+    "status": "draft",
+    "sources": [
+      "cdc-water-supply",
+      "ready-gov-water"
+    ]
+  },
+  {
+    "id": "infant-formula",
+    "type": "check",
+    "area": "Food",
+    "kind": "get",
+    "guidance": "infant.formula",
+    "when": {
+      "fact": "people.ageRanges",
+      "includes": "infant"
+    },
+    "pass": {
+      "fact": "supplies.have",
+      "includes": "formula"
+    },
+    "failStatus": "unknown",
+    "finding": "Infant in the household: no ready-to-feed formula recorded. If you formula-feed, it's the safest choice because it needs no water.",
+    "action": "If you formula-feed, keep ready-to-feed formula, bottles, diapers and wipes.",
+    "status": "draft",
+    "sources": [
+      "cdc-infant-feeding",
+      "ready-gov-kit"
+    ]
+  },
+  {
+    "id": "refrigerated-medication-label",
+    "type": "check",
+    "forEach": "need",
+    "findingId": "{person.id}-medication-label",
+    "area": "Medical",
+    "kind": "plan",
+    "guidance": "medication.insulin",
+    "when": {
+      "fact": "need.kind",
+      "equals": "refrigerated-medication"
+    },
+    "failStatus": "unknown",
+    "finding": "{person.label}: {need.label}: how long it can stay unrefrigerated depends on the product (insulin vials: up to 28 days at 59 to 86 °F).",
+    "action": "Check the label or ask the pharmacist how long it lasts unrefrigerated, and note when it was last kept cold.",
+    "status": "draft",
+    "sources": [
+      "fda-insulin-emergency",
+      "cdc-power-outage"
+    ],
+    "notes": "Needs D6 medical review."
+  },
+  {
+    "id": "medication-list",
+    "type": "check",
+    "area": "Medical",
+    "kind": "plan",
+    "guidance": "medication.supply",
+    "when": {
+      "fact": "needs.kinds",
+      "includesAny": [
+        "daily-medication",
+        "refrigerated-medication"
+      ]
+    },
+    "failStatus": "unknown",
+    "finding": "Someone relies on medication: a written list of prescriptions and doses helps get a refill away from home.",
+    "action": "Keep an up-to-date list of all prescriptions and doses with your kit.",
+    "status": "draft",
+    "sources": [
+      "cdc-prepare-your-health-rx"
+    ]
+  },
+  {
+    "id": "generator-distance",
+    "type": "check",
+    "area": "Safety",
+    "kind": "get",
+    "guidance": "co.generator",
+    "when": {
+      "fact": "home.backupPower",
+      "equals": "generator"
+    },
+    "pass": {
+      "fact": "supplies.have",
+      "includes": "extension-cord"
+    },
+    "failStatus": "partial",
+    "finding": "A portable generator must run outdoors at least 20 feet from windows, doors and vents; no long outdoor extension cord recorded.",
+    "action": "Get a heavy-duty outdoor extension cord over 20 feet long, and pick a dry spot at least 20 feet from the house.",
+    "status": "draft",
+    "sources": [
+      "cdc-power-outage"
+    ]
+  },
+  {
+    "id": "hand-hygiene",
+    "type": "check",
+    "area": "Kit",
+    "kind": "get",
+    "guidance": "hygiene.hands",
+    "pass": {
+      "fact": "supplies.have",
+      "includes": "hand-sanitizer"
+    },
+    "failStatus": "partial",
+    "finding": "No hand sanitizer recorded for when soap and water run short.",
+    "action": "Keep soap, and hand sanitizer with at least 60% alcohol.",
+    "status": "draft",
+    "sources": [
+      "cdc-hygiene-emergency",
+      "ready-gov-kit"
+    ]
+  },
+  {
+    "id": "flood-plan",
+    "type": "check",
+    "area": "Plan",
+    "kind": "plan",
+    "guidance": "flood.water",
+    "when": {
+      "fact": "scenario",
+      "in": [
+        "flood",
+        "hurricane"
+      ]
+    },
+    "failStatus": "unknown",
+    "finding": "Flood water is deceptive: 6 inches of moving water can knock an adult down and 12 inches can carry away most cars.",
+    "action": "Plan an evacuation route that avoids low roads and crossings, and agree that no one drives or walks through flood water.",
+    "status": "draft",
+    "sources": [
+      "nws-flood-safety"
+    ]
+  },
+  {
+    "id": "earthquake-plan",
+    "type": "check",
+    "area": "Plan",
+    "kind": "plan",
+    "guidance": "earthquake.shaking",
+    "when": {
+      "fact": "scenario",
+      "equals": "earthquake"
+    },
+    "failStatus": "unknown",
+    "finding": "In an earthquake, Drop, Cover and Hold On; don't run outside or stand in a doorway.",
+    "action": "Practice Drop, Cover and Hold On with everyone, and agree where to meet outside after the shaking stops.",
+    "status": "draft",
+    "sources": [
+      "ready-gov-earthquakes"
+    ]
+  },
+  {
+    "id": "smoke-room",
+    "type": "check",
+    "area": "Safety",
+    "kind": "get",
+    "guidance": "smoke.protection",
+    "when": {
+      "any": [
+        {
+          "fact": "scenario",
+          "equals": "wildfire"
+        },
+        {
+          "fact": "needs.kinds",
+          "includes": "air-quality"
+        }
+      ]
+    },
+    "pass": {
+      "fact": "supplies.have",
+      "includes": "air-cleaner"
+    },
+    "failStatus": "partial",
+    "finding": "Smoke: a closed-off room with a portable air cleaner is the most effective protection; no air cleaner recorded.",
+    "action": "Pick a room you can close off from outside air, get a portable air cleaner sized for it, and keep NIOSH N95 respirators for going outside.",
+    "status": "draft",
+    "sources": [
+      "epa-wildfire-smoke"
+    ]
   }
 ]

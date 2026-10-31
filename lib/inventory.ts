@@ -8,7 +8,7 @@
  * sources in data/rules/sources.json (see docs/architecture/rules.md).
  */
 import { describeHousehold, type HouseholdProfile } from "@/lib/household";
-import { INVENTORY_RULES } from "@/lib/rules";
+import { INVENTORY_RULES, describeGuidance, relevantGuidance } from "@/lib/rules";
 import { runInventoryRules, type Finding } from "@/lib/rules/engine";
 
 export type { Finding, FindingStatus } from "@/lib/rules/engine";
@@ -25,8 +25,14 @@ export function describeGaps(findings: Finding[]): string | undefined {
   return `Gaps found by the inventory check (test these in the exercise): ${open.map((finding) => finding.finding.replace(/\.$/, "")).join("; ")}.`;
 }
 
-/** Exactly what the scenario engine receives for a household: the profile summary and its gaps. */
-export function engineBaseline(profile: HouseholdProfile): string {
-  const gapLine = describeGaps(assessInventory(profile));
-  return [describeHousehold(profile), gapLine].filter(Boolean).join("\n");
+/**
+ * Exactly what the scenario engine receives for a household: the profile
+ * summary and its gaps, passed through `mask`, then the official guidance that
+ * applies to it. Guidance is public text, so it isn't masked (the masker
+ * would misread phrases like "Battery CO detectors" as a city and state).
+ */
+export function engineBaseline(profile: HouseholdProfile, mask: (text: string) => string = (text) => text): string {
+  const household = [describeHousehold(profile), describeGaps(assessInventory(profile))].filter(Boolean).join("\n");
+  const guidance = describeGuidance(relevantGuidance(profile));
+  return [mask(household), guidance].filter(Boolean).join("\n");
 }
