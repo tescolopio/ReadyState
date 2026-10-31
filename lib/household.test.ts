@@ -30,7 +30,7 @@ const sam: HouseholdProfile = {
 describe("describeHousehold", () => {
   it("describes people by age range and needs, never by name or medication", () => {
     const text = describeHousehold(sam);
-    expect(text).toContain("People (4): 2 adults, 1 child (2–12), 1 older adult (65+).");
+    expect(text).toContain("People: 2 adults, 1 child (2–12), 1 older adult (65+).");
     expect(text).toContain("Person 2 (adult): [Refrigerated Medication Dependent] (14 days of supply on hand).");
     expect(text).toContain("[Hardware Power Dependent] (about 60 W); needs help with stairs and carrying.");
     for (const local of ["Sam", "Priya", "Linh", "Ernesto", "Max", "Humalog", "ResMed"]) {
@@ -82,7 +82,7 @@ describe("describeHousehold plurals", () => {
         { id: "s", kind: "livestock" },
       ],
     });
-    expect(text).toContain("People (4): 2 children (2–12), 2 people of unknown age.");
+    expect(text).toContain("People: 2 children (2–12), 2 people of unknown age.");
     expect(text).toContain("Pets: 2 large dogs, 2 livestock.");
   });
 });

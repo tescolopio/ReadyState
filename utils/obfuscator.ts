@@ -23,9 +23,16 @@ const TAG_PATTERN = /\[[^\]]*\]/;
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Strips surrounding whitespace/punctuation that detectors keep (e.g. "Paris."). */
-const cleanEntity = (value: string) =>
-  value.replace(/^[\s"'([{]+|[\s"',.;:!?)\]}]+$/g, "");
+/**
+ * Strips surrounding whitespace/punctuation that detectors keep (e.g. "Paris.").
+ * Brackets that pair up inside the value stay, so "(206) 555-0142" keeps its "(".
+ */
+const cleanEntity = (value: string) => {
+  const stripped = value.replace(/^[\s"'[{]+|[\s"',.;:!?\]}]+$/g, "");
+  const leading = stripped.startsWith("(") && !stripped.includes(")");
+  const trailing = stripped.endsWith(")") && !stripped.includes("(");
+  return stripped.slice(leading ? 1 : 0, trailing ? -1 : undefined).replace(/^[\s"'[{]+|[\s"',.;:!?\]}]+$/g, "");
+};
 
 /** Matches either casing of each letter, so a pattern can be case-insensitive in one part only. */
 const anyCase = (word: string) =>
@@ -105,7 +112,8 @@ const NOT_NAMES = new Set(
     "their", "this", "that", "these", "those", "who", "also", "both", "in", "on", "at", "to",
     "for", "with", "from", "by", "no", "not", "yes", "all", "each", "every", "some", "one",
     "two", "three", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
-    "sunday", "mr", "mrs", "ms", "dr",
+    "sunday", "mr", "mrs", "ms", "dr", "people", "persons", "adults", "children", "kids", "teens",
+    "infants", "pets", "dogs", "cats", "animals", "household", "emergency", "location", "home", "notes",
   ],
 );
 
@@ -362,8 +370,9 @@ const nlpDetectors = (text: string): Detection[] => {
 /** "Tim Escolopio": extends a detected first name with the capitalized word after it. */
 const surnameDetectors = (text: string, people: string[]): Detection[] =>
   people.flatMap((person) => {
+    // Same line only: a name that ends one line isn't followed by a surname on the next.
     const pattern = new RegExp(
-      String.raw`(?<![\p{L}\p{N}_])${escapeRegExp(person)}\s+(${NAME})(?![\p{L}\p{N}_])`,
+      String.raw`(?<![\p{L}\p{N}_])${escapeRegExp(person)}[ \t]+(${NAME})(?![\p{L}\p{N}_])`,
       "gu",
     );
     return [...text.matchAll(pattern)]
