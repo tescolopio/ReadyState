@@ -5,7 +5,9 @@
  *
  *   EVAL_FACTUAL=1 EVAL_FACTUAL_SET=development npm run eval -- scripts/eval/factual.eval.ts
  *
- * EVAL_FACTUAL_SET is development, reserved or all (default development).
+ * EVAL_FACTUAL_SET is development, reserved, all, or pilot (default development).
+ * The pilot is the four defects the first run missed and their accurate
+ * rewrites, in four two-claim calls, with no note check (cases.ts PILOT_CALLS).
  * EVAL_FACTUAL_DRY_RUN=1 prints the plan and its token allowance without any
  * model call. It calls the provider directly with the server's env key, not
  * the ReadyState server. Claim batches are split to at most two claims a call
@@ -24,7 +26,7 @@ import { describe, expect, it } from "vitest";
 
 import { resolveModel } from "@/lib/providers";
 
-import { BATCHES, NOTE_CHECKS } from "./factual/cases";
+import { BATCHES, NOTE_CHECKS, pilotBatches } from "./factual/cases";
 import {
   MAX_OUTPUT_TOKENS,
   NOTE_INSTRUCTIONS,
@@ -61,7 +63,7 @@ interface PlannedCall {
 const inSet = (set: string) => (s: string) => set === "all" || s === set;
 
 /** The claim calls a set makes: its batches split to at most two claims each. */
-export const claimBatches = (set: string) => splitBatches(BATCHES.filter((batch) => inSet(set)(batch.set)));
+export const claimBatches = (set: string) => (set === "pilot" ? pilotBatches() : splitBatches(BATCHES.filter((batch) => inSet(set)(batch.set))));
 
 /** The calls a set makes, in order, and the most each may use. SDK retries are off: every provider call is one the plan counts. */
 export function plan(set: string): PlannedCall[] {
@@ -71,7 +73,7 @@ export function plan(set: string): PlannedCall[] {
       allowance: estimateInputTokens(batchPrompt(batch).text) + MAX_OUTPUT_TOKENS,
       run: (model: LanguageModel) => judgeBatch(model, batch, 0),
     })),
-    ...NOTE_CHECKS.filter((check) => inSet(set)(check.set)).map((check) => ({
+    ...NOTE_CHECKS.filter((check) => set !== "pilot" && inSet(set)(check.set)).map((check) => ({
       name: check.name,
       allowance: estimateInputTokens(notePrompt(check).text, NOTE_INSTRUCTIONS) + NOTE_MAX_OUTPUT_TOKENS,
       run: (model: LanguageModel) => judgeNote(model, check, 0),
@@ -88,6 +90,8 @@ describe.skipIf(!ENABLED)("G11 factual-consistency judge, eval only", () => {
       `\nPlan for ${SET}: ${calls.length} calls, ${ATTEMPTS} attempt(s) each: ${calls.map((c) => `${c.name} ≤${c.allowance}`).join(", ")}; worst case ${worstCase * ATTEMPTS} of a ${BUDGET}-token budget.\n`,
     );
     if (DRY_RUN) return;
+    // Preflight: every call charged at its full allowance must fit, or nothing runs.
+    if (worstCase * ATTEMPTS > BUDGET) throw new Error(`Worst case ${worstCase * ATTEMPTS} exceeds the ${BUDGET}-token budget; no calls made.`);
 
     if (!process.env.GROQ_API_KEY) {
       try {
@@ -179,15 +183,17 @@ function report(
       return [
         `## ${set}`,
         "",
-        `**Coverage of ${s.cases} cases:** provider failures ${s.coverage.providerFailures.length}; not run ${s.coverage.notRun.length}; invalid responses ${s.coverage.invalidResponses.length}; valid judgments ${s.coverage.validJudgments.length}.`,
+        `**Provider completion:** ${runs.filter((run) => run.status === "completed").length} of ${runs.length} call attempt(s) returned a tool call.`,
         "",
-        `**Overall, over every labeled case (missing and invalid results count as failures):** defects detected on the correct detail ${s.overall.defectsDetectedOnDetail}; accurate texts accepted ${s.overall.accurateAccepted}.`,
+        `**Valid-result coverage of ${s.cases} cases:** provider failures ${s.coverage.providerFailures.length}; not run ${s.coverage.notRun.length}; invalid responses ${s.coverage.invalidResponses.length}; valid judgments ${s.coverage.validJudgments.length}.`,
+        "",
+        `**Overall, over every labeled case (missing and invalid results count as failures):** defects detected on the exact false detail (every word of it quoted in a non-supported assertion) ${s.overall.defectsDetectedOnDetail}; accurate texts accepted ${s.overall.accurateAccepted}. These measure judgments against the labels, not call completion.`,
         "",
         "**Valid judgments:**",
         "",
         "| Result | Count | Cases |",
         "| --- | --- | --- |",
-        `| Defects detected on the correct detail | ${s.detected.length} | ${ids(s.detected)} |`,
+        `| Defects detected on the exact false detail | ${s.detected.length} | ${ids(s.detected)} |`,
         `| Defects detected on another detail | ${s.detectedOnAnotherDetail.length} | ${ids(s.detectedOnAnotherDetail)} |`,
         `| …misclassified (contradicted vs unsupported) | ${s.misclassified.length} | ${ids(s.misclassified)} |`,
         `| Missed defects (judged supported) | ${s.missed.length} | ${ids(s.missed)} |`,

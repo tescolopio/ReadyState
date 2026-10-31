@@ -337,7 +337,11 @@ function reportMarkdown({ household, baseline, turns, debrief, report, findings,
     "",
     `**What this household tests:** ${household.tests}`,
     "",
-    "## Checks",
+    "## Manual quality verdict",
+    "",
+    "Pending: record it in docs/testing after reading every displayed line. Passing the automated checks below, or the test runner passing this household, isn't a quality verdict.",
+    "",
+    "## Automated content checks",
     "",
     ...CHECK_CATEGORIES.flatMap((category) => {
       const found = byCategory(findings, category);
@@ -554,6 +558,8 @@ describe(`test households against ${BASE_URL}`, () => {
         "",
         "Completing an exercise is reported separately from its content: a run can finish and still have continuity, safety or suitability problems. Content checks are heuristics: passing means \"passed the implemented checks\", not verified safe or accurate. A valid citation shows the cited event exists, not that the advice describes it correctly. Findings from replayed turns are listed but not counted.",
         "",
+        "**The test runner's pass or fail is not a quality result.** It fails a household only on a privacy leak or a failed call, so a passing household can still have every content finding below and an unreviewed debrief.",
+        "",
         "**Manual review is a separate result.** The automated columns can all pass while the debrief fails a reading of every displayed line, including the checklist. The runner can't do that reading, so it's marked pending here; record it in docs/testing.",
         "",
         `| Household | ${CHECK_CATEGORIES.map((c) => CATEGORY_LABELS[c]).join(" | ")} | Manual review | Notes |`,
@@ -575,7 +581,8 @@ describe(`test households against ${BASE_URL}`, () => {
     const result = await play(household);
     results.push(result);
     writeFileSync(path.join(outDir, `${household.id}.md`), reportMarkdown(result));
-    // Privacy leaks and failed calls fail the run; other findings, grading language included, are for review.
+    // Only a privacy leak or a failed call fails the test runner. That's a gate on the run, not a quality result:
+    // content findings (grading language included) are reported for review, and the manual verdict is separate.
     expect(result.findings.filter((f) => f.category === "privacy" || (f.category === "completion" && /^Call \d+ failed:/.test(f.text)))).toEqual([]);
   });
 });

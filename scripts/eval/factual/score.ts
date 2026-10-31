@@ -40,15 +40,18 @@ export interface ScoredCase {
 
 const words = (text: string) => text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
 
-/** Whether an assertion the judge didn't support quotes the label's false detail. */
-function onFalseDetail(id: string, result: ValidatedClaim): boolean {
+/**
+ * Whether an assertion the judge didn't support quotes the label's whole false detail. Every word must be in that
+ * one assertion's quote (2026-10-31; it was half the words), so "you" alone doesn't count for "you kept".
+ */
+export function onFalseDetail(id: string, result: ValidatedClaim): boolean {
   const detail = LABELS[id].falseDetail;
   if (!detail) return true;
   const wanted = words(detail);
   return result.judged!.assertions.some((assertion) => {
     if (assertion.verdict === "supported") return false;
     const quoted = new Set(words(assertion.quote));
-    return wanted.filter((word) => quoted.has(word)).length >= Math.ceil(wanted.length / 2);
+    return wanted.every((word) => quoted.has(word));
   });
 }
 
