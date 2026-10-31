@@ -1,7 +1,7 @@
 import { APICallError, RetryError } from "ai";
 import { describe, expect, it } from "vitest";
 
-import { describeProviderError } from "@/lib/provider-errors";
+import { describeProviderError, retryAfterSeconds } from "@/lib/provider-errors";
 
 const apiError = (statusCode: number, responseBody = "", responseHeaders: Record<string, string> = {}) =>
   new APICallError({
@@ -55,5 +55,18 @@ describe("describeProviderError", () => {
     expect(describeProviderError(new Error("boom"), "self-hosted")).toBe(
       "Something went wrong generating this turn. Please try again.",
     );
+  });
+});
+
+describe("retryAfterSeconds", () => {
+  it("reads millisecond waits as milliseconds, not minutes", () => {
+    expect(retryAfterSeconds(apiError(429, "Please try again in 760ms."))).toBeCloseTo(0.76);
+    expect(describeProviderError(apiError(429, "Please try again in 760ms."), "hosted")).toBe(
+      "The model provider is limiting requests right now. Wait a few seconds and submit again.",
+    );
+  });
+
+  it("falls back to the Retry-After header when the message gives no number", () => {
+    expect(retryAfterSeconds(apiError(429, "Please try again in a moment.", { "retry-after": "30" }))).toBe(30);
   });
 });

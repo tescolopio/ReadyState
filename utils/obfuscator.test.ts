@@ -146,3 +146,29 @@ describe("masking regressions from the guidance text", () => {
     expect(maskInput("We moved to Denver CO 80203 last year.")).toBe("We moved to [Location 1] CO [Postcode 1] last year.");
   });
 });
+
+describe("masking fixes from the PR 18 review", () => {
+  beforeEach(() => usePrivacyStore.getState().clearMappings());
+
+  it("masks a name's words only in their own capitalization, so common words stay readable", () => {
+    const alwaysMask = [
+      { value: "Ash Ellis", kind: "Person" as const },
+      { value: "Ash", kind: "Person" as const, caseSensitive: true },
+      { value: "Ellis", kind: "Person" as const, caseSensitive: true },
+    ];
+    expect(maskInput("The ash is falling on the car.", { alwaysMask })).toBe("The ash is falling on the car.");
+    // The full name always takes [Person 1]; the first name gets its own tag once it appears.
+    expect(maskInput("Ash packs the go-bag.", { alwaysMask })).toBe("[Person 2] packs the go-bag.");
+    // A later message, with the word now in the ledger, still leaves the ordinary word alone.
+    expect(maskInput("More ash tonight; Ash stays inside.", { alwaysMask })).toBe("More ash tonight; [Person 2] stays inside.");
+  });
+
+  it("tags medical details as medical, not as people", () => {
+    expect(maskInput("Give him his Humira tonight.", { alwaysMask: [{ value: "Humira", kind: "Medical" }] })).toBe("Give him his [Medical 1] tonight.");
+  });
+
+  it("still masks a city before an unambiguous state code or after a comma", () => {
+    expect(maskInput("We live in Austin TX with two kids.")).toBe("We live in [Location 1] TX with two kids.");
+    expect(maskInput("We're near Salem, OR and the coast.")).toBe("We're near [Location 2], OR and the coast.");
+  });
+});

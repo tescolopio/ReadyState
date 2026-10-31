@@ -7,6 +7,7 @@
 import {
   AGE_RANGES,
   NEED_INFO,
+  backupRatings,
   type HouseholdProfile,
   type Need,
   type Person,
@@ -150,7 +151,7 @@ export function needFacts(person: Person, index: number, need: Need): Facts {
 
 /** Per-need facts that also depend on the home, such as battery runtime for a device. */
 export function needHomeFacts(profile: HouseholdProfile, need: Need): Facts {
-  const { backupWh } = profile.home;
+  const backupWh = backupRatings(profile.home).wh;
   if (!need.watts || !backupWh) return {};
   // Inverters lose some energy; 85% is a common planning figure.
   return { "need.backupHours": Math.round(((backupWh * 0.85) / need.watts) * 10) / 10 };

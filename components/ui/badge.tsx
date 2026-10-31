@@ -3,10 +3,10 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const variants = {
-  default: "border-transparent bg-zinc-100 text-zinc-900",
-  secondary: "border-transparent bg-zinc-800 text-zinc-100",
-  destructive: "border-transparent bg-red-600 text-white",
-  outline: "border-zinc-700 text-zinc-300",
+  default: "border-transparent bg-action text-on-action",
+  secondary: "border-transparent bg-action-soft text-ink",
+  destructive: "border-transparent bg-error-soft text-error",
+  outline: "border-line-strong text-ink-2",
 } as const;
 
 export interface BadgeProps extends React.ComponentProps<"span"> {
@@ -18,7 +18,7 @@ function Badge({ className, variant = "default", ...props }: BadgeProps) {
     <span
       data-slot="badge"
       className={cn(
-        "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold",
+        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold",
         variants[variant],
         className,
       )}

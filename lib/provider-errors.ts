@@ -10,17 +10,26 @@ const apiError = (error: unknown): APICallError | undefined => {
   return undefined;
 };
 
-/** "4m35.616s" or "12s" from a provider message, rounded up for people. */
-const waitFrom = (error: APICallError) => {
+/** "4m35.616s", "12s" or "277.5ms" from a provider message, in seconds; else the Retry-After header. */
+export function retryAfterSeconds(error: APICallError): number | undefined {
   const retryAfter = Number(error.responseHeaders?.["retry-after"]);
   const text = `${error.message} ${error.responseBody ?? ""}`;
-  const match = text.match(/try again in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?/i);
-  const seconds = match
-    ? Number(match[1] ?? 0) * 3600 + Number(match[2] ?? 0) * 60 + Number(match[3] ?? 0)
-    : Number.isFinite(retryAfter) && retryAfter > 0
-      ? retryAfter
-      : undefined;
+  const ms = text.match(/try again in ([\d.]+)ms/i);
+  // "m(?!s)" so "760ms" isn't read as 760 minutes.
+  const match = text.match(/try again in (?:(\d+)h)?(?:(\d+)m(?!s))?(?:([\d.]+)s)?/i);
+  const seconds = ms
+    ? Number(ms[1]) / 1000
+    : match?.slice(1).some(Boolean)
+      ? Number(match[1] ?? 0) * 3600 + Number(match[2] ?? 0) * 60 + Number(match[3] ?? 0)
+      : retryAfter;
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
+}
+
+/** The wait, rounded up for people. */
+const waitFrom = (error: APICallError) => {
+  const seconds = retryAfterSeconds(error);
   if (!seconds) return "a little while";
+  if (seconds < 5) return "a few seconds";
   if (seconds < 90) return `about ${Math.ceil(seconds)} seconds`;
   if (seconds < 5400) return `about ${Math.ceil(seconds / 60)} minutes`;
   return `about ${Math.ceil(seconds / 3600)} hours`;
