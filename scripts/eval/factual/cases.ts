@@ -79,6 +79,20 @@ export const BATCHES: Batch[] = [
     ],
   },
   {
+    // Accurate rewrites of three defects missed in the first run (C25, C16, C19), written 2026-10-31 for the pilot,
+    // after those defects' results were seen: development cases, not validation.
+    name: "alex story D",
+    set: "development",
+    household: "alex",
+    evidence: "story",
+    omitHours: [6, 12, 18, 24],
+    cases: [
+      { id: "C56", claim: "The story introduced a 1500-watt space heater from the building's maintenance closet." },
+      { id: "C57", claim: "Your stored water, about one day's worth, would have run out well before power returned at Hour 60." },
+      { id: "C58", claim: "The breaker tripped twice while the heater was running." },
+    ],
+  },
+  {
     name: "alex household and guidance",
     set: "development",
     household: "alex",
@@ -178,7 +192,51 @@ export const BATCHES: Batch[] = [
   },
 ];
 
+/**
+ * Fixture wording changed after a run. The run's artifacts keep the wording it judged, and its score stays as
+ * recorded; a later run judges the corrected wording.
+ */
+export const FIXTURE_CORRECTIONS = [
+  {
+    id: "C58",
+    date: "2026-10-31",
+    before: "The breaker tripped twice when you plugged in a 1500-watt space heater.",
+    after: "The breaker tripped twice while the heater was running.",
+    judgedBefore: "the pilot (code c9d3f86): supported, invalid result",
+    reason:
+      "\"When you plugged in\" compresses two sequences: the first trip about 10 minutes after plugging in, the second after a reset while the heater ran.",
+  },
+] as const;
+
 export const ALL_CASES = BATCHES.flatMap((batch) => batch.cases.map((c) => ({ ...c, set: batch.set, household: batch.household })));
+
+/**
+ * The bounded pilot (proposed 2026-10-31): the four defects the first run missed, each with its accurate rewrite,
+ * two claims a call. Every call pairs one defect with the rewrite of a different defect, so no call shows both
+ * versions of the same claim. All are Alex story claims, so every call carries the same evidence.
+ */
+export const PILOT_PAIRS = [
+  { defect: "C07", rewrite: "C09" },
+  { defect: "C25", rewrite: "C56" },
+  { defect: "C16", rewrite: "C57" },
+  { defect: "C19", rewrite: "C58" },
+] as const;
+
+export const PILOT_CALLS: string[][] = PILOT_PAIRS.map(({ defect }, i) => [defect, PILOT_PAIRS[(i + 1) % PILOT_PAIRS.length].rewrite]);
+
+/** The pilot's calls as claim batches, with the evidence settings of the rewrites' batch, "alex story D". */
+export function pilotBatches(): Batch[] {
+  const byId = new Map(ALL_CASES.map((c) => [c.id, c]));
+  const { set, household, evidence, omitHours } = BATCHES.find((batch) => batch.name === "alex story D")!;
+  return PILOT_CALLS.map((ids, i) => ({
+    name: `pilot ${i + 1} of ${PILOT_CALLS.length}`,
+    set,
+    household,
+    evidence,
+    omitHours,
+    cases: ids.map((id) => ({ id, claim: byId.get(id)!.claim })),
+  }));
+}
 
 /**
  * The story-facts note is checked in its own calls, not while judging claims

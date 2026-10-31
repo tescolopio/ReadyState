@@ -36,19 +36,31 @@ export interface ScoredCase {
   invalid: string[];
   boundaryViolations: string[];
   explanation?: string;
+  /**
+   * For a defect: its false detail and every assertion the judge didn't support, with what it cited or found missing.
+   * Quoting the whole detail is necessary for "detected" but not sufficient: whether the rejection challenges that
+   * detail, rather than another part of the quote, is confirmed by reading these.
+   */
+  review?: { valid: boolean; falseDetail: string; rejected: { quote: string; verdict: string; evidence: { ref: string; quote: string }[]; missing: string }[] };
 }
 
 const words = (text: string) => text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
 
-/** Whether an assertion the judge didn't support quotes the label's false detail. */
-function onFalseDetail(id: string, result: ValidatedClaim): boolean {
-  const detail = LABELS[id].falseDetail;
-  if (!detail) return true;
+/** A defect's false detail: the label's, or the whole claim when the label names none (the claim is false throughout). */
+const falseDetailOf = (id: string) => LABELS[id].falseDetail ?? ALL_CASES.find((c) => c.id === id)!.claim;
+
+/**
+ * Whether an assertion the judge didn't support quotes the defect's whole false detail. Every word must be in that
+ * one assertion's quote (2026-10-31; it was half the words), so "you" alone doesn't count for "you kept". A defect
+ * without a labeled detail needs the whole claim quoted in one rejection, not just any rejection.
+ */
+export function onFalseDetail(id: string, result: ValidatedClaim): boolean {
+  const detail = falseDetailOf(id);
   const wanted = words(detail);
   return result.judged!.assertions.some((assertion) => {
     if (assertion.verdict === "supported") return false;
     const quoted = new Set(words(assertion.quote));
-    return wanted.filter((word) => quoted.has(word)).length >= Math.ceil(wanted.length / 2);
+    return wanted.every((word) => quoted.has(word));
   });
 }
 
@@ -81,6 +93,16 @@ export function score(validated: ValidatedClaim[], status: Map<string, CallStatu
       invalid: result?.invalid ?? [],
       boundaryViolations: result?.boundaryViolations ?? [],
       explanation: result?.judged?.explanation,
+      review:
+        label.kind === "defect" && result?.judged
+          ? {
+              valid: outcome !== "invalid response",
+              falseDetail: falseDetailOf(id),
+              rejected: result.judged.assertions
+                .filter((a) => a.verdict !== "supported")
+                .map(({ quote, verdict, evidence, missing }) => ({ quote, verdict, evidence, missing })),
+            }
+          : undefined,
     };
   });
 }

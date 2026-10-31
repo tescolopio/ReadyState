@@ -40,6 +40,10 @@ export const LABELS: Record<string, Label> = {
   C23: { kind: "defect", label: "contradicted", type: "contradicted risk", basis: "story", falseDetail: "never at risk", source: "Hour 48 and Hour 72 hypothermia alerts" },
   C19: { kind: "defect", label: "unsupported", type: "causal conclusion", basis: "story", falseDetail: "cannot support", source: "12:04 and 04:07 first drafts" },
   C26: { kind: "ambiguous", type: "opinion of others' handling", basis: "story", source: "written for the case set" },
+  // Accurate rewrites for the pilot (2026-10-31), each correcting one missed defect's false detail.
+  C56: { kind: "accurate", label: "supported", type: "accurate rewrite (equipment provenance)", basis: "story", source: "rewrite of C25; Hour 72 outcome: \"You locate a small 1500-watt space heater stored in the building's maintenance closet\"; describes the story's introduction, not a household possession" },
+  C57: { kind: "accurate", label: "supported", type: "accurate rewrite (outage length)", basis: "story", source: "rewrite of C16; baseline Stored: about 1.0 days; Hour 60 situation: power is restored" },
+  C58: { kind: "accurate", label: "supported", type: "accurate rewrite (causal conclusion)", basis: "story", source: "rewrite of C19; Hour 72 outcome: plugged in, tripped, reset, tripped again while running; wording corrected after the pilot (FIXTURE_CORRECTIONS)" },
   C05: { kind: "defect", label: "unsupported", type: "electric heaters and CO (guidance)", basis: "guidance", falseDetail: "produce carbon monoxide", source: "04:07 first draft do_better[2].why; the supplied guidance doesn't say electric heaters produce CO" },
   C01: { kind: "accurate", label: "supported", type: "household fact", basis: "household", source: "baseline: Stored" },
   C08: { kind: "accurate", label: "supported", type: "guidance paraphrase", basis: "guidance", source: "guidance: CO detectors" },

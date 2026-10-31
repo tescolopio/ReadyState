@@ -2,6 +2,14 @@
  * An eval-only factual-consistency judge (work item G11). It is not used by
  * the server. It sees the claims and the evidence, never the manual labels.
  *
+ * EXPERIMENTAL, AND UNSUITABLE FOR SERVER USE. The 2026-10-31 pilot (four
+ * two-claim calls on gpt-oss-120b) returned no valid result for any of its
+ * eight claims and accepted every defect it judged as supported, so this
+ * model-and-contract combination was rejected as a debrief validator and its
+ * live runs stopped (docs/testing/eval-2026-10-28.md). It is kept, with its
+ * cases and results, as evaluation infrastructure. A test fails if app,
+ * server or shared code imports it.
+ *
  * The contract, revised twice on 2026-10-31:
  * - Each claim is split into material assertions. Each assertion quotes the
  *   exact span of the claim it covers, and together the quotes must cover

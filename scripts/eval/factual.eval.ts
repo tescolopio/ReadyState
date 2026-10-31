@@ -5,12 +5,15 @@
  *
  *   EVAL_FACTUAL=1 EVAL_FACTUAL_SET=development npm run eval -- scripts/eval/factual.eval.ts
  *
- * EVAL_FACTUAL_SET is development, reserved or all (default development).
+ * EVAL_FACTUAL_SET is development, reserved, all, or pilot (default development).
+ * The pilot is the four defects the first run missed and their accurate
+ * rewrites, in four two-claim calls, with no note check (cases.ts PILOT_CALLS).
  * EVAL_FACTUAL_DRY_RUN=1 prints the plan and its token allowance without any
  * model call. It calls the provider directly with the server's env key, not
  * the ReadyState server. Claim batches are split to at most two claims a call
- * (scripts/eval/factual/run.ts). A hard budget (EVAL_JUDGE_BUDGET, default
- * 25,000) stops it before any call whose allowance could exceed it. There are
+ * (scripts/eval/factual/run.ts). A hard budget (EVAL_JUDGE_BUDGET, required:
+ * the authorized cap, with no default) stops it before any call whose allowance
+ * could exceed it. There are
  * no retries, the SDK's included, unless EVAL_FACTUAL_ATTEMPTS is above 1. A
  * call without reported usage is charged at its full allowance: the charge is
  * budget accounting, not measured usage, and the report keeps the two apart.
@@ -24,7 +27,7 @@ import { describe, expect, it } from "vitest";
 
 import { resolveModel } from "@/lib/providers";
 
-import { BATCHES, NOTE_CHECKS } from "./factual/cases";
+import { BATCHES, NOTE_CHECKS, pilotBatches } from "./factual/cases";
 import {
   MAX_OUTPUT_TOKENS,
   NOTE_INSTRUCTIONS,
@@ -45,7 +48,8 @@ import { score, summarize, type ScoredCase } from "./factual/score";
 const ENABLED = process.env.EVAL_FACTUAL === "1";
 const DRY_RUN = process.env.EVAL_FACTUAL_DRY_RUN === "1";
 const SET = process.env.EVAL_FACTUAL_SET ?? "development";
-const BUDGET = Number(process.env.EVAL_JUDGE_BUDGET ?? 25_000);
+/** The authorized cap. No default: a run without an explicit cap makes no calls. */
+const BUDGET = process.env.EVAL_JUDGE_BUDGET ? Number(process.env.EVAL_JUDGE_BUDGET) : undefined;
 const ATTEMPTS = Number(process.env.EVAL_FACTUAL_ATTEMPTS ?? 1);
 /** Groq's limit is per minute; a pause between calls keeps a call from being refused for the previous one. */
 const PAUSE_MS = 62_000;
@@ -61,7 +65,7 @@ interface PlannedCall {
 const inSet = (set: string) => (s: string) => set === "all" || s === set;
 
 /** The claim calls a set makes: its batches split to at most two claims each. */
-export const claimBatches = (set: string) => splitBatches(BATCHES.filter((batch) => inSet(set)(batch.set)));
+export const claimBatches = (set: string) => (set === "pilot" ? pilotBatches() : splitBatches(BATCHES.filter((batch) => inSet(set)(batch.set))));
 
 /** The calls a set makes, in order, and the most each may use. SDK retries are off: every provider call is one the plan counts. */
 export function plan(set: string): PlannedCall[] {
@@ -71,7 +75,7 @@ export function plan(set: string): PlannedCall[] {
       allowance: estimateInputTokens(batchPrompt(batch).text) + MAX_OUTPUT_TOKENS,
       run: (model: LanguageModel) => judgeBatch(model, batch, 0),
     })),
-    ...NOTE_CHECKS.filter((check) => inSet(set)(check.set)).map((check) => ({
+    ...NOTE_CHECKS.filter((check) => set !== "pilot" && inSet(set)(check.set)).map((check) => ({
       name: check.name,
       allowance: estimateInputTokens(notePrompt(check).text, NOTE_INSTRUCTIONS) + NOTE_MAX_OUTPUT_TOKENS,
       run: (model: LanguageModel) => judgeNote(model, check, 0),
@@ -85,9 +89,12 @@ describe.skipIf(!ENABLED)("G11 factual-consistency judge, eval only", () => {
     const worstCase = calls.reduce((sum, c) => sum + c.allowance, 0);
     // Written directly: the test runner hides console output from passing tests.
     process.stdout.write(
-      `\nPlan for ${SET}: ${calls.length} calls, ${ATTEMPTS} attempt(s) each: ${calls.map((c) => `${c.name} ≤${c.allowance}`).join(", ")}; worst case ${worstCase * ATTEMPTS} of a ${BUDGET}-token budget.\n`,
+      `\nPlan for ${SET}: ${calls.length} calls, ${ATTEMPTS} attempt(s) each: ${calls.map((c) => `${c.name} ≤${c.allowance}`).join(", ")}; worst case ${worstCase * ATTEMPTS} of ${BUDGET ? `a ${BUDGET}-token budget` : "no budget (EVAL_JUDGE_BUDGET not set)"}.\n`,
     );
     if (DRY_RUN) return;
+    if (!BUDGET) throw new Error("Set EVAL_JUDGE_BUDGET to the authorized token cap; no calls made.");
+    // Preflight: every call charged at its full allowance must fit, or nothing runs.
+    if (worstCase * ATTEMPTS > BUDGET) throw new Error(`Worst case ${worstCase * ATTEMPTS} exceeds the ${BUDGET}-token budget; no calls made.`);
 
     if (!process.env.GROQ_API_KEY) {
       try {
@@ -137,7 +144,8 @@ describe.skipIf(!ENABLED)("G11 factual-consistency judge, eval only", () => {
     mkdirSync(outDir, { recursive: true });
     const meta = { model: `${resolved.provider}/${modelId}`, set: SET, budget: BUDGET, charged, reported, providerCalls, elapsedMs: Date.now() - started, revision: revision() };
     writeFileSync(path.join(outDir, "factual-judge.json"), JSON.stringify({ ...meta, runs, validated, notes, scored }, null, 2));
-    writeFileSync(path.join(outDir, "factual-judge.md"), report(meta, runs, scored, notes));
+    const setOf = new Map(claimBatches(SET).map((batch) => [batch.name, batch.set as string]));
+    writeFileSync(path.join(outDir, "factual-judge.md"), report(meta, runs, scored, notes, setOf));
     process.stdout.write(`Factual judge report written to ${path.resolve(outDir)}\n`);
     expect(charged).toBeLessThanOrEqual(BUDGET);
   });
@@ -161,6 +169,8 @@ function report(
   runs: CallRun<unknown>[],
   scored: ScoredCase[],
   notes: { name: string; status: CallStatus; result?: NoteCheckResult }[],
+  /** Each claim call's set, so a set's completion counts only its own claim calls. */
+  setOf: Map<string, string>,
 ) {
   const sets = [...new Set(scored.map((c) => c.set))];
   return [
@@ -176,18 +186,21 @@ function report(
     "",
     ...sets.flatMap((set) => {
       const s = summarize(scored, set);
+      const setRuns = runs.filter((run) => setOf.get(run.name) === set);
       return [
         `## ${set}`,
         "",
-        `**Coverage of ${s.cases} cases:** provider failures ${s.coverage.providerFailures.length}; not run ${s.coverage.notRun.length}; invalid responses ${s.coverage.invalidResponses.length}; valid judgments ${s.coverage.validJudgments.length}.`,
+        `**Provider completion:** ${setRuns.filter((run) => run.status === "completed").length} of ${setRuns.length} claim call attempt(s) returned a tool call (note checks are reported below).`,
         "",
-        `**Overall, over every labeled case (missing and invalid results count as failures):** defects detected on the correct detail ${s.overall.defectsDetectedOnDetail}; accurate texts accepted ${s.overall.accurateAccepted}.`,
+        `**Valid-result coverage of ${s.cases} cases:** provider failures ${s.coverage.providerFailures.length}; not run ${s.coverage.notRun.length}; invalid responses ${s.coverage.invalidResponses.length}; valid judgments ${s.coverage.validJudgments.length}.`,
+        "",
+        `**Overall, over every labeled case (missing and invalid results count as failures):** defects whose whole false detail a non-supported assertion quotes ${s.overall.defectsDetectedOnDetail} (necessary, not sufficient: whether each rejection challenges that detail is confirmed by hand, from the review table below); accurate texts accepted ${s.overall.accurateAccepted}. These measure judgments against the labels, not call completion.`,
         "",
         "**Valid judgments:**",
         "",
         "| Result | Count | Cases |",
         "| --- | --- | --- |",
-        `| Defects detected on the correct detail | ${s.detected.length} | ${ids(s.detected)} |`,
+        `| Defects whose whole false detail is quoted in a rejection (pending manual confirmation) | ${s.detected.length} | ${ids(s.detected)} |`,
         `| Defects detected on another detail | ${s.detectedOnAnotherDetail.length} | ${ids(s.detectedOnAnotherDetail)} |`,
         `| …misclassified (contradicted vs unsupported) | ${s.misclassified.length} | ${ids(s.misclassified)} |`,
         `| Missed defects (judged supported) | ${s.missed.length} | ${ids(s.missed)} |`,
@@ -208,6 +221,25 @@ function report(
         ? `- ${name}: planted line ${result.planted.detected ? "**detected**" : "not detected"} (marked inconsistent ${result.planted.markedInconsistent}, on the planted detail ${result.planted.onDetail}, refuting line quoted correctly ${result.planted.refutedCorrectly}); false alarms ${result.falseAlarms.join(", ") || "none"}; unchecked ${result.unchecked.join(", ") || "none"}; invalid quotations ${result.invalid.join("; ") || "none"}`
         : `- ${name}: ${status}`,
     ),
+    "",
+    "## Rejected assertions on defects, for manual review",
+    "",
+    "Does each rejection challenge the false detail itself, rather than another part of the quote?",
+    "",
+    "A rejection from an invalid result is listed for completeness but can't count as a detection.",
+    "",
+    "| Case | Result | False detail | Rejected assertion | Verdict | Evidence cited | Missing | Explanation |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ...scored
+      .filter((c) => c.review)
+      .flatMap((c) =>
+        c.review!.rejected.length
+          ? c.review!.rejected.map(
+              (r) =>
+                `| ${c.id} | ${c.review!.valid ? "valid" : "**invalid**"} | ${cell(c.review!.falseDetail)} | ${cell(r.quote)} | ${r.verdict} | ${cell(r.evidence.map((e) => `[${e.ref}] ${e.quote}`).join("; "))} | ${cell(r.missing)} | ${cell(c.explanation)} |`,
+            )
+          : [`| ${c.id} | ${c.review!.valid ? "valid" : "**invalid**"} | ${cell(c.review!.falseDetail)} | (none rejected) | | | | ${cell(c.explanation)} |`],
+      ),
     "",
     "## Every case",
     "",
