@@ -22,12 +22,13 @@ const providerFailure = (error: unknown): ProviderFailure | undefined => {
   return undefined;
 };
 
-/** "4m35.616s", "12s" or "277.5ms" from a provider message, in seconds. */
+/** "4m35.616s", "12s" or "277.5ms" from a provider message, in seconds; else the Retry-After header. */
 export function retryAfterSeconds(error: unknown): number | undefined {
   const failure = providerFailure(error);
   if (!failure) return undefined;
   const retryAfter = Number(failure.headers?.["retry-after"]);
   const ms = failure.text.match(/try again in ([\d.]+)ms/i);
+  // "m(?!s)" so "760ms" isn't read as 760 minutes.
   const match = failure.text.match(/try again in (?:(\d+)h)?(?:(\d+)m(?!s))?(?:([\d.]+)s)?/i);
   const seconds = ms
     ? Number(ms[1]) / 1000

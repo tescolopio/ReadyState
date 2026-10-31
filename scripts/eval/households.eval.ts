@@ -13,7 +13,7 @@ import { readUIMessageStream, type UIMessageChunk } from "ai";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { CAPTURE_HEADER, type DebriefCapture } from "@/lib/debrief-capture";
-import { privateTerms } from "@/lib/household";
+import { leakedTerms, privateTerms } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { PRIVACY_LEAKS, TEST_HOUSEHOLDS, type TestHousehold } from "@/lib/test-households";
 import { OMITTED_IMPROVEMENT_NOTICE, deriveTtxState, improvementText, type AfterActionReport, type TtxUIMessage, type TurnOutput } from "@/lib/ttx";
@@ -248,8 +248,10 @@ function check(result: Result, messages: TtxUIMessage[]) {
 
   // Privacy: nothing private in anything sent.
   const sent = participantText.join("\n");
-  const secrets = [...privateTerms(result.household.profile), ...(result.household.id === "privacy" ? PRIVACY_LEAKS : [])];
-  const leaked = secrets.filter((secret) => containsWord(sent, secret));
+  const leaked = [
+    ...leakedTerms(sent, privateTerms(result.household.profile)),
+    ...(result.household.id === "privacy" ? PRIVACY_LEAKS.filter((leak) => containsWord(sent, leak)) : []),
+  ];
   if (leaked.length) add("privacy", `Sent ${leaked.map((s) => `"${s}"`).join(", ")}`);
 
   // Structure: feedback after every response, options on every ongoing turn, a clock that moves.
@@ -575,7 +577,7 @@ describe(`test households against ${BASE_URL}`, () => {
     const result = await play(household);
     results.push(result);
     writeFileSync(path.join(outDir, `${household.id}.md`), reportMarkdown(result));
-    // Privacy leaks and failed calls fail the run; other findings are for review.
-    expect(result.findings.filter((f) => f.category === "privacy" || f.text.includes("failed"))).toEqual([]);
+    // Privacy leaks and failed calls fail the run; other findings, grading language included, are for review.
+    expect(result.findings.filter((f) => f.category === "privacy" || (f.category === "completion" && /^Call \d+ failed:/.test(f.text)))).toEqual([]);
   });
 });

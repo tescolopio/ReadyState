@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { describeHousehold, emptyProfile, hasProfile, type HouseholdProfile } from "@/lib/household";
+import { backupRatings, describeHousehold, emptyProfile, hasProfile, leakedTerms, privateTerms, type HouseholdProfile } from "@/lib/household";
 
 const sam: HouseholdProfile = {
   ...emptyProfile(),
@@ -84,5 +84,40 @@ describe("describeHousehold plurals", () => {
     });
     expect(text).toContain("People: 2 children (2–12), 2 people of unknown age.");
     expect(text).toContain("Pets: 2 large dogs, 2 livestock.");
+  });
+});
+
+describe("privateTerms", () => {
+  it("lists each item of a medication list on its own, tagged as medical", () => {
+    const profile: HouseholdProfile = {
+      ...emptyProfile(),
+      people: [{ id: "k", localName: "Kamala", ageRange: "older-adult", needs: [{ kind: "refrigerated-medication", localDetail: "Lisinopril and metformin" }] }],
+    };
+    const medical = privateTerms(profile).filter((term) => term.kind === "Medical").map((term) => term.value);
+    expect(medical).toEqual(["Lisinopril and metformin", "Lisinopril", "metformin"]);
+    expect(leakedTerms("I'll refill her metformin.", privateTerms(profile))).toEqual(["metformin"]);
+  });
+
+  it("matches a name's words case-sensitively, the whole name in any case", () => {
+    const profile: HouseholdProfile = { ...emptyProfile(), people: [{ id: "a", localName: "Ash Ellis", ageRange: "adult", needs: [] }] };
+    expect(privateTerms(profile)).toEqual([
+      { value: "Ash Ellis", kind: "Person" },
+      { value: "Ash", kind: "Person", caseSensitive: true },
+      { value: "Ellis", kind: "Person", caseSensitive: true },
+    ]);
+    expect(leakedTerms("the ash is falling", privateTerms(profile))).toEqual([]);
+    expect(leakedTerms("ash ellis is here", privateTerms(profile))).toEqual(["Ash Ellis"]);
+  });
+});
+
+describe("backupRatings", () => {
+  it("ignores a battery capacity left over from an earlier backup choice", () => {
+    const home = { backupPower: "generator" as const, backupWatts: 3500, backupWh: 2048 };
+    expect(backupRatings(home)).toEqual({ watts: 3500, wh: undefined });
+    expect(backupRatings({ ...home, backupPower: "none" })).toEqual({ watts: undefined, wh: undefined });
+    expect(backupRatings({ ...home, backupPower: "battery" })).toEqual({ watts: 3500, wh: 2048 });
+    const text = describeHousehold({ ...sam, home: { ...sam.home, ...home } });
+    expect(text).toContain("about 3500 W");
+    expect(text).not.toContain("2048");
   });
 });

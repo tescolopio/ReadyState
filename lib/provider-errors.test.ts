@@ -103,3 +103,16 @@ describe("providerErrorDetails", () => {
     expect(providerErrorDetails(apiError(500, "not json"))).toEqual({});
   });
 });
+
+describe("retryAfterSeconds", () => {
+  it("reads millisecond waits as milliseconds, not minutes", () => {
+    expect(retryAfterSeconds(apiError(429, "Please try again in 760ms."))).toBeCloseTo(0.76);
+    expect(describeProviderError(apiError(429, "Please try again in 760ms."), "hosted")).toBe(
+      "The model provider is limiting requests right now. Wait a few seconds and submit again.",
+    );
+  });
+
+  it("falls back to the Retry-After header when the message gives no number", () => {
+    expect(retryAfterSeconds(apiError(429, "Please try again in a moment.", { "retry-after": "30" }))).toBe(30);
+  });
+});

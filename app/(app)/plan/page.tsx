@@ -69,8 +69,9 @@ export default function PlanPage() {
           </h2>
           <p className="text-sm text-ink-2">From comparing your supplies with Ready.gov and CDC guidance. Add the ones you want to act on.</p>
           <ul className="space-y-2">
-            {untracked.map((finding) => (
-              <li key={finding.id} className="flex flex-wrap items-start justify-between gap-3 rounded-panel border border-line bg-surface p-4">
+            {untracked.map((finding, index) => (
+              // Rules can share a finding id (one per person, several needs), so the position keeps keys unique.
+              <li key={`${finding.id}-${index}`} className="flex flex-wrap items-start justify-between gap-3 rounded-panel border border-line bg-surface p-4">
                 <div className="min-w-0 flex-1 basis-64">
                   <p>
                     <span className="mr-2 rounded border border-line-strong px-1.5 py-0.5 text-xs font-semibold text-ink-2">

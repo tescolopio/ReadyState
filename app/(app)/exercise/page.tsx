@@ -494,7 +494,7 @@ function StartPanel({
         )}
       </div>
       <p className="text-sm text-ink-3">
-        Names, places, addresses and contact details are replaced with tags like [Person 1] before anything leaves your browser.
+        Names, medication and device names, places, addresses and contact details are replaced with tags like [Person 1] before anything leaves your browser.
       </p>
     </section>
   );

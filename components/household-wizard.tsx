@@ -17,6 +17,7 @@ import {
   SETTINGS,
   SUPPLY_ITEMS,
   WATER_SOURCE,
+  backupRatings,
   hasProfile,
   newId,
   privateTerms,
@@ -166,10 +167,11 @@ export function InventoryCheck({ findings }: { findings: Finding[] }) {
         Inventory check · {open.length} to work on, {covered} covered
       </p>
       <ul className="space-y-2">
-        {findings.map((finding) => {
+        {findings.map((finding, index) => {
           const status = STATUS_LABELS[finding.status];
           return (
-            <li key={finding.id} className="flex gap-2 rounded-control border border-line p-2 text-sm">
+            // Rules can share a finding id (one per person, several needs), so the position keeps keys unique.
+            <li key={`${finding.id}-${index}`} className="flex gap-2 rounded-control border border-line p-2 text-sm">
               <span
                 className={`h-fit shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${status.className}`}
               >
@@ -538,7 +540,11 @@ export function HouseholdWizard({
             label="Backup power"
             options={BACKUP_POWER}
             value={profile.home.backupPower}
-            onChange={(backupPower) => update({ ...profile, home: { ...profile.home, backupPower } })}
+            onChange={(backupPower) => {
+              // Drop ratings the new choice hides, so they can't reach the rules or the model.
+              const home = { ...profile.home, backupPower };
+              update({ ...profile, home: { ...home, backupWatts: backupRatings(home).watts, backupWh: backupRatings(home).wh } });
+            }}
           />
           {profile.home.backupPower && profile.home.backupPower !== "none" && (
             <NumberField
