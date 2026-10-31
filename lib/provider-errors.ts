@@ -64,6 +64,27 @@ export function isSchemaSlip(error: unknown): boolean {
 }
 
 /**
+ * The provider's error code and, for a rejected tool call, the generation it
+ * rejected, for eval diagnostics. Callers must not store or print the
+ * generation; the message text, which can carry account details, isn't
+ * returned at all.
+ */
+export function providerErrorDetails(error: unknown): { code?: string; failedGeneration?: string } {
+  const unwrap = (e: unknown): unknown => (RetryError.isInstance(e) ? unwrap(e.lastError) : e instanceof Error && e.cause && !APICallError.isInstance(e) ? unwrap(e.cause) : e);
+  const inner = unwrap(error);
+  if (!APICallError.isInstance(inner) || !inner.responseBody) return {};
+  try {
+    const body = JSON.parse(inner.responseBody) as { error?: { code?: unknown; failed_generation?: unknown } };
+    return {
+      code: typeof body.error?.code === "string" ? body.error.code : undefined,
+      failedGeneration: typeof body.error?.failed_generation === "string" ? body.error.failed_generation : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+/**
  * A provider failure's status and kind, without any of its text, for eval
  * logs: the raw text can carry account or organization details.
  */

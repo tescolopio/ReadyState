@@ -1,7 +1,7 @@
 import { APICallError, RetryError, StreamProviderError } from "ai";
 import { describe, expect, it } from "vitest";
 
-import { describeProviderError, failureSummary, isSchemaSlip, retryAfterSeconds } from "@/lib/provider-errors";
+import { describeProviderError, failureSummary, isSchemaSlip, providerErrorDetails, retryAfterSeconds } from "@/lib/provider-errors";
 
 const apiError = (statusCode: number, responseBody = "", responseHeaders: Record<string, string> = {}) =>
   new APICallError({
@@ -91,5 +91,15 @@ describe("failureSummary", () => {
     expect(failureSummary(apiError(400, '{"error":{"code":"tool_use_failed","message":"Tool call validation failed"}}'))).toBe("status 400, malformed tool call");
     expect(failureSummary(apiError(413, '{"error":{"message":"Request too large for model in organization org_x"}}'))).toBe("status 413, request too large");
     expect(failureSummary(new Error("boom"))).toBe("Error");
+  });
+});
+
+describe("providerErrorDetails", () => {
+  it("returns the error code and the rejected generation, but not the message", () => {
+    const body = '{"error":{"message":"Failed in organization org_secret123","type":"invalid_request_error","code":"tool_use_failed","failed_generation":"{\\"claims\\":[]}"}}';
+    const details = providerErrorDetails(new RetryError({ message: "Failed", reason: "maxRetriesExceeded", errors: [apiError(400, body)] }));
+    expect(details).toEqual({ code: "tool_use_failed", failedGeneration: '{"claims":[]}' });
+    expect(JSON.stringify(details)).not.toContain("org_secret123");
+    expect(providerErrorDetails(apiError(500, "not json"))).toEqual({});
   });
 });

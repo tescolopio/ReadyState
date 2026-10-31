@@ -23,7 +23,7 @@ import { z } from "zod";
 import { storyDefects } from "@/lib/debrief-checks";
 import alexReplay from "@/lib/fixtures/alex-replay-turns.json";
 import { engineBaseline } from "@/lib/inventory";
-import { failureSummary } from "@/lib/provider-errors";
+import { failureSummary, providerErrorDetails } from "@/lib/provider-errors";
 import { GUIDANCE } from "@/lib/rules";
 import { storyFacts, storyFactsBriefing } from "@/lib/story-facts";
 import { TEST_HOUSEHOLDS } from "@/lib/test-households";
@@ -402,11 +402,36 @@ export interface CallRun<T> {
   name: string;
   status: CallStatus;
   result?: T;
+  /** Status and kind only (failureSummary): never the provider's text. */
   error?: string;
+  /** The provider's error code, e.g. "tool_use_failed", when it gives one. */
+  errorCode?: string;
+  /** For a malformed tool call: the rejected generation's size and shape, never its content. */
+  failedGeneration?: { length: number; json: boolean; schemaIssues: string[] };
+  finishReason?: string;
+  /** Whether a returned tool call's arguments pass the schema locally, and the paths that don't. */
+  schemaValid?: boolean;
+  schemaIssues?: string[];
   usage: { inputTokens: number; outputTokens: number };
   ms: number;
   attempts: number;
   providerCalls?: number;
+}
+
+const issuePaths = (error: z.ZodError) => [...new Set(error.issues.map((issue) => issue.path.join(".") || "(root)"))].slice(0, 12);
+
+/** The shape of a generation the provider rejected, without keeping any of it. */
+function describeFailedGeneration(generation: string | undefined, schema: z.ZodType): CallRun<unknown>["failedGeneration"] {
+  if (generation === undefined) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(generation);
+    // Groq returns either the arguments or a {name, arguments} call.
+    const args = parsed && typeof parsed === "object" && "arguments" in parsed ? (parsed as { arguments: unknown }).arguments : parsed;
+    const checked = schema.safeParse(typeof args === "string" ? JSON.parse(args) : args);
+    return { length: generation.length, json: true, schemaIssues: checked.success ? [] : issuePaths(checked.error) };
+  } catch {
+    return { length: generation.length, json: false, schemaIssues: [] };
+  }
 }
 
 async function call<T>(
@@ -416,6 +441,8 @@ async function call<T>(
   content: string,
   schema: z.ZodType<T>,
   maxOutputTokens: number,
+  /** 0 turns off the SDK's own retries (rate limits, server errors), for the diagnostic. */
+  maxRetries?: number,
 ): Promise<CallRun<T>> {
   const started = Date.now();
   try {
@@ -426,18 +453,45 @@ async function call<T>(
       // Unchanged from the first run, so a run measures the method change alone.
       reasoning: "low",
       maxOutputTokens,
+      ...(maxRetries === undefined ? {} : { maxRetries }),
       tools: { record: tool({ description: "Record your judgment.", inputSchema: schema }) },
       toolChoice: { type: "tool", toolName: "record" },
     });
     const usage = { inputTokens: result.totalUsage.inputTokens ?? 0, outputTokens: result.totalUsage.outputTokens ?? 0 };
+    const finishReason = String(result.finishReason);
     const recorded = result.toolCalls.find((toolCall) => toolCall.toolName === "record");
-    if (!recorded) return { name, status: "no tool call", usage, ms: Date.now() - started, attempts: 1 };
-    return { name, status: "completed", result: recorded.input as T, usage, ms: Date.now() - started, attempts: 1 };
+    if (!recorded) return { name, status: "no tool call", finishReason, usage, ms: Date.now() - started, attempts: 1 };
+    const checked = schema.safeParse(recorded.input);
+    return {
+      name,
+      status: "completed",
+      result: recorded.input as T,
+      finishReason,
+      schemaValid: checked.success,
+      schemaIssues: checked.success ? [] : issuePaths(checked.error),
+      usage,
+      ms: Date.now() - started,
+      attempts: 1,
+    };
   } catch (error) {
-    // Only the status and kind: provider error text can carry account details.
-    return { name, status: "provider failure", error: failureSummary(error), usage: { inputTokens: 0, outputTokens: 0 }, ms: Date.now() - started, attempts: 1 };
+    // Only the status, kind and error code: provider error text can carry account details.
+    const { code, failedGeneration } = providerErrorDetails(error);
+    return {
+      name,
+      status: "provider failure",
+      error: failureSummary(error),
+      errorCode: code,
+      failedGeneration: describeFailedGeneration(failedGeneration, schema),
+      usage: { inputTokens: 0, outputTokens: 0 },
+      ms: Date.now() - started,
+      attempts: 1,
+    };
   }
 }
+
+/** The synthetic diagnostic's claim call: the same instructions, schema, reasoning and allowance as a real claim call. */
+export const judgeClaimsText = (model: LanguageModel, name: string, content: string, maxRetries?: number) =>
+  call<Judgment>(model, name, JUDGE_INSTRUCTIONS, content, judgmentSchema, MAX_OUTPUT_TOKENS, maxRetries);
 
 export const judgeBatch = (model: LanguageModel, batch: Batch) =>
   call<Judgment>(model, batch.name, JUDGE_INSTRUCTIONS, batchPrompt(batch).text, judgmentSchema, MAX_OUTPUT_TOKENS);

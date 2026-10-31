@@ -22,6 +22,7 @@ import {
   type NoteJudgment,
 } from "./judge";
 import { LABELS } from "./labels";
+import { DIAGNOSTIC_CAP, diagnosticCalls, stopsTheRun } from "./diagnostic";
 import { score, summarize } from "./score";
 
 describe("the G11 case set", () => {
@@ -298,5 +299,35 @@ describe("scoring", () => {
     const scored = score(validate(priyaA, j).claims, new Map(priyaA.cases.map((c) => [c.id, "completed" as CallStatus])));
     expect(scored.find((c) => c.id === "C53")!.outcome).toBe("detected");
     expect(scored.find((c) => c.id === "C39")!.outcome).toBe("detected on another detail");
+  });
+});
+
+describe("the provider diagnostic", () => {
+  const calls = diagnosticCalls();
+
+  it("uses synthetic content only, sharing nothing with the case set", () => {
+    for (const { content } of calls) {
+      expect(content).not.toMatch(/\b(Alex|Charlotte|Priya|Person 2|Person 3|CPAP|space heater)\b/);
+      for (const { claim } of ALL_CASES) expect(content).not.toContain(claim);
+    }
+  });
+
+  it("varies one factor per call, and fits the 16,000-token cap with each call under the per-minute limit", () => {
+    const [d1, d2, d3] = calls;
+    expect(d2.content.length).toBeGreaterThan(d1.content.length * 4);
+    expect((d3.content.match(/^D\d\d:/gm) ?? []).length).toBe(5);
+    expect((d1.content.match(/^D\d\d:/gm) ?? []).length).toBe(2);
+    expect(calls.reduce((sum, c) => sum + c.allowance, 0)).toBeLessThanOrEqual(DIAGNOSTIC_CAP);
+    for (const c of calls) expect(c.allowance).toBeLessThan(8000);
+  });
+
+  it("stops early only for failures that would break the remaining calls", () => {
+    const failure = (error: string, errorCode?: string) => ({ name: "D1", status: "provider failure" as const, error, errorCode, usage: { inputTokens: 0, outputTokens: 0 }, ms: 0, attempts: 1 });
+    expect(stopsTheRun(failure("status 400, malformed tool call", "tool_use_failed"), true)).toBeUndefined();
+    expect(stopsTheRun(failure("status 401, other"), true)).toContain("key or model");
+    expect(stopsTheRun(failure("status 429, rate limit"), false)).toContain("rate-limited");
+    expect(stopsTheRun(failure("status 413, request too large"), true)).toContain("smallest call");
+    expect(stopsTheRun(failure("status 413, request too large"), false)).toBeUndefined();
+    expect(stopsTheRun(failure("status 400, other", "invalid_request_error"), true)).toContain("parameter was refused");
   });
 });
