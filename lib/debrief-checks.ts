@@ -10,6 +10,7 @@
  * categories, and factual support only covers the known inaccuracies below.
  */
 import { SAFETY_RULES } from "@/lib/rules";
+import { guidanceValue } from "@/lib/rules/engine";
 import { introducedEquipment, mentions, negated, powerOutageContext, type IntroducedItem } from "@/lib/continuity";
 import type { AfterActionReport, Improvement, TurnOutput } from "@/lib/ttx";
 
@@ -224,6 +225,53 @@ const amountInHours = (amount: string, unit: string) => {
   const n = Number(amount) || NUMBER_WORDS[amount.toLowerCase()];
   return /^day/i.test(unit) ? n * 24 : /^minute/i.test(unit) ? n / 60 : n;
 };
+
+/**
+ * How long a stored supply lasts: "the water supply would have been exhausted after roughly one day" (Alex,
+ * 12:04 on 2026-10-31, finding 36). It isn't an interval between events, but it is a claim: it passes only
+ * when the baseline's quantity and the applicable rate give it. Water uses the stored gallons, the people
+ * line and the sourced rate in data/rules/guidance.json; food uses the stored days directly. Pets change
+ * the water rate, so a household with pets can't be checked this way.
+ */
+const SUPPLY_LASTS = /\b(exhausted|run(s|ning)? out|ran out|last(s|ed|ing)?|cover(s|ed|ing)?|be gone|used up|deplet\w*|enough for)\b/i;
+const RESOURCES = [
+  // Stored water, not the flood water in the story.
+  { name: "water", pattern: /\b(stored water|water supply|drinking water|bottled water|your water|gallons?)\b/gi },
+  { name: "food", pattern: /\bfood\b/gi },
+] as const;
+
+export type SupplyDuration =
+  | { resource: string; claimedDays: number; supportedDays: number; matched: string }
+  | { resource: string; claimedDays: number; missing: string; matched: string };
+
+/** A supply-duration claim in the sentence and what the baseline supports, or undefined if there's no such claim. */
+export function supplyDuration(sentence: string, baseline: string | undefined): SupplyDuration | undefined {
+  if (!SUPPLY_LASTS.test(sentence)) return undefined;
+  const amount = new RegExp(AMOUNT, "i").exec(sentence);
+  if (!amount || /^minute/i.test(amount[2])) return undefined;
+  // The resource the amount is about: the nearest one named before it, else the first after it.
+  const named = RESOURCES.flatMap(({ name, pattern }) => [...sentence.matchAll(pattern)].map((match) => ({ name, at: match.index! })));
+  const before = named.filter(({ at }) => at < amount.index).sort((a, b) => b.at - a.at)[0];
+  const resource = (before ?? named.sort((a, b) => a.at - b.at)[0])?.name;
+  if (!resource) return undefined;
+  const claimedDays = amountInHours(amount[1], amount[2]) / 24;
+  const claim = { resource, claimedDays, matched: amount[0] };
+
+  if (resource === "food") {
+    const days = baseline?.match(/\b(\d+(?:\.\d+)?) days? of food\b/i)?.[1];
+    return days ? { ...claim, supportedDays: Number(days) } : { ...claim, missing: "the stored days of food" };
+  }
+  const gallons = baseline?.match(/\b(\d+(?:\.\d+)?) gallons? of stored water\b/i)?.[1];
+  const peopleLine = baseline?.match(/^People: (.+)$/m)?.[1];
+  const people = peopleLine ? [...peopleLine.matchAll(/\b(\d+)\b/g)].reduce((sum, match) => sum + Number(match[1]), 0) : 0;
+  if (!gallons) return { ...claim, missing: "the stored gallons of water" };
+  if (!people) return { ...claim, missing: "the number of people" };
+  if (/^Pets: /m.test(baseline ?? "")) return { ...claim, missing: "a water rate that includes the pets" };
+  return { ...claim, supportedDays: Number(gallons) / (people * guidanceValue("water.supply", "gallonsPerPersonPerDay")) };
+}
+
+/** Whether a claimed supply duration matches what the baseline supports, allowing for "about". */
+const supplyMatches = (claimed: number, supported: number) => Math.abs(claimed - supported) <= Math.max(0.25, supported * 0.15);
 
 /**
  * An interval the log's hours don't give. One is supported only when the sentence names two logged hours,
@@ -528,7 +576,24 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[], con
       const match = known.patterns.map((pattern) => text.match(pattern)).find(Boolean);
       if (match) add("accuracy", `accuracy:${known.id}`, field, match[0], `Known inaccuracy (${known.id}): ${quote(text)}`, known.fix);
     }
-    const interval = field.startsWith("supply_checklist") || GUIDANCE.test(text) ? undefined : unsupportedInterval(text, hours);
+    // Without the baseline (some unit tests) a supply duration can't be checked; the server always has it.
+    const supply = field.startsWith("supply_checklist") || context.baseline === undefined ? undefined : supplyDuration(text, context.baseline);
+    if (supply && ("missing" in supply || !supplyMatches(supply.claimedDays, supply.supportedDays))) {
+      add(
+        "accuracy",
+        "accuracy:unsupported-supply-duration",
+        field,
+        supply.matched,
+        "missing" in supply
+          ? `States how long the ${supply.resource} lasts, but the baseline doesn't give ${supply.missing}: ${quote(text)}`
+          : `States the ${supply.resource} lasts ${supply.matched}, but the baseline gives about ${+supply.supportedDays.toFixed(1)} days: ${quote(text)}`,
+        "missing" in supply
+          ? "Leave out how long it lasts, or state only the stored amount the baseline gives."
+          : `Use what the baseline gives: about ${+supply.supportedDays.toFixed(1)} days of ${supply.resource}, or leave the duration out.`,
+      );
+    }
+    // A supply duration is checked above; it isn't an interval between events.
+    const interval = supply || field.startsWith("supply_checklist") || GUIDANCE.test(text) ? undefined : unsupportedInterval(text, hours);
     if (interval) {
       add(
         "accuracy",

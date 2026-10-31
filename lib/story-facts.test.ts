@@ -24,13 +24,24 @@ describe("storyFacts", () => {
     expect(note).toContain("The participant's actions are only what their own responses say.");
   });
 
-  it("lists what the story says about heating from the hour power returned", () => {
+  it("classifies heating from the hour power returned as observed, forecast or confirmed", () => {
     const facts = storyFacts([
       turn(0, "The heating is offline."),
       turn(6, "Power is restored, but the furnace is still off."),
-      turn(12, "", "The heat comes back on."),
+      turn(12, "Maintenance says the heat should be back by tomorrow."),
+      turn(18, "", "The furnace comes back on."),
     ]);
     expect(facts.powerReturned).toEqual({ hour: 6, sentence: "Power is restored, but the furnace is still off." });
-    expect(facts.heatingAfterPower.map(({ hour }) => hour)).toEqual([6, 12]);
+    expect(facts.heatingAfterPower.map(({ hour, state }) => `${hour} ${state}`)).toEqual(["6 unavailable", "12 forecast", "18 restored"]);
+    expect(storyFactsBriefing(facts)).toContain("until it returned during the Hour 18 turn");
+  });
+
+  it("says heating was still unavailable at the last report when no restoration is confirmed", () => {
+    const note = storyFactsBriefing(
+      storyFacts([turn(0, "Power comes back on, but the central heating is slow to recover."), turn(6, "The heating system will be restored in about four hours.")]),
+    );
+    expect(note).toContain("Hour 6, forecast only, not an event");
+    expect(note).toContain("So heating was still unavailable at Hour 0, the last report, after power returned at Hour 0.");
+    expect(note).not.toContain("returned during");
   });
 });

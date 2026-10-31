@@ -11,10 +11,11 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { checkDebrief, electricalConclusion, omitKitImprovement, storyDefects, unsupportedInterval } from "@/lib/debrief-checks";
+import { checkDebrief, electricalConclusion, omitKitImprovement, storyDefects, supplyDuration, unsupportedInterval } from "@/lib/debrief-checks";
 import d0407 from "@/lib/fixtures/alex-2026-10-31-0407-drafts.json";
 import d1135 from "@/lib/fixtures/alex-2026-10-31-1135-drafts.json";
 import d1142 from "@/lib/fixtures/alex-2026-10-31-1142-drafts.json";
+import d1204 from "@/lib/fixtures/alex-2026-10-31-1204-drafts.json";
 import replay from "@/lib/fixtures/alex-replay-turns.json";
 import { engineBaseline } from "@/lib/inventory";
 import { storyFacts, storyFactsBriefing } from "@/lib/story-facts";
@@ -107,6 +108,26 @@ const CAPTURED: Captured[] = [
     report: d1142.repair as AfterActionReport,
     expected: ["vague-kit do_better[1].action", "safety:vague-heating summary"],
     knownMisses: [],
+    outcome: "withheld",
+  },
+  {
+    name: "12:04 first draft",
+    report: d1204.first as AfterActionReport,
+    // need_to_know[1], "exhausted after about one day", is a supported supply duration (finding 36).
+    expected: [
+      "list-shaped do_better[2].action",
+      "invented-premise need_to_know[3]",
+      "accuracy:unsupported-duration need_to_know[0]",
+      "accuracy:unsupported-electrical-conclusion need_to_know[3]",
+    ],
+    knownMisses: ['need_to_know[0]: 45 °F "for several days", though it was reported from Hour 60 into the Hour 72 turn'],
+  },
+  {
+    name: "12:04 repair",
+    report: d1204.repair as AfterActionReport,
+    // need_to_know[0] has heating back "about six hours later (between Hour 60 and Hour 72)": still off at Hour 72.
+    expected: ["vague-kit do_better[2].action", "accuracy:unsupported-duration need_to_know[0]"],
+    knownMisses: ['need_to_know[1]: "the 72‑hour outage", though power returned at Hour 60'],
     outcome: "withheld",
   },
 ];
@@ -238,10 +259,19 @@ describe("the story-facts note for Alex's replay", () => {
     expect(note).not.toContain("Hour 42:");
   });
 
-  it("keeps heating unavailable after power returned, until it comes back in the Hour 72 turn", () => {
-    expect(note).toContain("Hour 60: \"Power is restored but the building’s central heating is slow to recover");
-    expect(note).toContain("Hour 72: \"With the central heating still offline");
-    expect(note).toContain("comes back online");
+  it("separates observed state, forecast and confirmed restoration (finding 37)", () => {
+    const facts = storyFacts(turns, storyDefects(turns, context));
+    expect(facts.heatingAfterPower.map(({ hour, state }) => `${hour} ${state}`)).toEqual(["60 unavailable", "66 forecast", "72 unavailable", "72 restored"]);
+    expect(note).toContain("Hour 60, observed: heating unavailable (same sentence)");
+    expect(note).toContain('Hour 66, forecast only, not an event: "central heating system will be fully restored in about six hours');
+    expect(note).toContain('Hour 72, observed: heating unavailable: "central heating still offline');
+    expect(note).toContain('Hour 72, confirmed: heating returned during this turn: "central heating system comes back online');
+  });
+
+  it("says heating returned during the Hour 72 turn, with no elapsed time", () => {
+    expect(note).toContain("until it returned during the Hour 72 turn. The exact time within that turn is unknown");
+    // The turn's own "After six hours" isn't a logged time, so it isn't quoted.
+    expect(note).not.toContain("After six hours");
   });
 
   it("names the invented heater, the logged hours, and that only the participant's responses are their actions", () => {
@@ -251,7 +281,7 @@ describe("the story-facts note for Alex's replay", () => {
   });
 
   it("stays compact", () => {
-    expect(note.length).toBeLessThan(1600);
+    expect(note.length).toBeLessThan(1800);
   });
 });
 
@@ -260,5 +290,72 @@ describe("citations written with a no-break space after Hour (finding 33)", () =
     const repair = d1142.repair as AfterActionReport;
     expect(repair.need_to_know[0]).toContain("Hour 0");
     expect(checksOn({ ...repair, need_to_know: ["The water reached the outlets (Hour 31)."] }, "need_to_know[0]")).toEqual(["hour-not-in-log"]);
+  });
+});
+
+describe("the 12:04 heating contradiction (finding 37)", () => {
+  const repair = d1204.repair as AfterActionReport;
+
+  it("still prevents delivery when the vague kit is gone", () => {
+    const withoutKit = { ...repair, do_better: repair.do_better.slice(0, 2) };
+    expect(failures(withoutKit)).toEqual(["accuracy:unsupported-duration need_to_know[0]"]);
+    expect(outcome(withoutKit)).toBe("withheld");
+  });
+
+  it("passes when it says heating returned during the Hour 72 turn, with no elapsed time", () => {
+    const accurate = {
+      ...repair,
+      do_better: repair.do_better.slice(0, 2),
+      need_to_know: [
+        "Power was restored at Hour 60, but central heating stayed unavailable and only returned during the Hour 72 turn, leaving the apartment around 45 °F (Hours 60–72).",
+        ...repair.need_to_know.slice(1),
+      ],
+    };
+    expect(failures(accurate)).toEqual([]);
+  });
+});
+
+describe("supply durations (finding 36)", () => {
+  /** Alex's baseline: 1 gallon of stored water for 1 adult, 2 days of food, no pets. */
+  const supply = (sentence: string, base = baseline) => supplyDuration(sentence, base);
+
+  it.each([
+    ["Your stored water (1 gallon) would have been exhausted after about one day.", "water", 1],
+    ["One gallon covers about 24 hours of drinking water for you.", "water", 1],
+    ["Your food would run out after two days.", "food", 2],
+  ])("allows arithmetic the baseline supports: %s", (sentence, resource, days) => {
+    expect(supply(sentence)).toMatchObject({ resource, supportedDays: days });
+    expect(checksOn(withFact(`${sentence} (baseline)`), "need_to_know[0]")).toEqual([]);
+  });
+
+  it.each([
+    "Your stored water would last about three days.",
+    "Your food would run out after one day.",
+    "Your 1 gallon of water would be used up within 12 hours.",
+  ])("rejects arithmetic the baseline doesn't support: %s", (sentence) => {
+    expect(checksOn(withFact(`${sentence} (baseline)`), "need_to_know[0]")).toEqual(["accuracy:unsupported-supply-duration"]);
+  });
+
+  it.each([
+    ["no stored water", baseline.replace(/1 gallon of stored water[^,]*, /, "")],
+    ["no people line", baseline.replace(/^People: .+$/m, "")],
+    ["pets, which change the water rate", `${baseline}\nPets: 1 dog.`],
+  ])("rejects a water duration when the baseline is missing an input: %s", (_, base) => {
+    expect(supply("Your water would run out after about one day.", base)).toHaveProperty("missing");
+    expect(
+      checkDebrief(withFact("Your water would run out after about one day (baseline)."), turns, { ...context, baseline: base })
+        .filter((p) => p.field === "need_to_know[0]")
+        .map((p) => p.check),
+    ).toEqual(["accuracy:unsupported-supply-duration"]);
+  });
+
+  it("leaves supply amounts without a duration alone", () => {
+    expect(supply("Your stored water (1 gallon) and food (2 days) were below the three‑day minimum.")).toBeUndefined();
+  });
+});
+
+describe("supply durations: the story's flood water isn't a supply", () => {
+  it("leaves it to the interval check", () => {
+    expect(supplyDuration("The flood water lasted 12 hours in the hallway.", baseline)).toBeUndefined();
   });
 });

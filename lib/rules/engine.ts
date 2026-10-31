@@ -65,7 +65,7 @@ export const NEED_FACTS: Record<string, string> = {
 const fuelHeating = ["gas-furnace", "propane", "oil", "wood"];
 
 /** A number from data/rules/guidance.json, so the math uses the same sourced values as the rules. */
-const guidanceValue = (id: string, key: string): number => {
+export const guidanceValue = (id: string, key: string): number => {
   const records = guidanceJson as unknown as Array<{ id: string; values: Record<string, number> }>;
   const value = records.find((r) => r.id === id)?.values[key];
   if (value === undefined) throw new Error(`guidance ${id} has no value ${key}`);
