@@ -11,7 +11,7 @@ import path from "node:path";
 import { readUIMessageStream, type UIMessageChunk } from "ai";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { privateTerms } from "@/lib/household";
+import { leakedTerms, privateTerms } from "@/lib/household";
 import { SAFETY_RULES } from "@/lib/rules";
 import { engineBaseline } from "@/lib/inventory";
 import { PRIVACY_LEAKS, TEST_HOUSEHOLDS, type TestHousehold } from "@/lib/test-households";
@@ -187,8 +187,10 @@ function check(result: Result, messages: TtxUIMessage[]) {
     .filter((m) => m.role === "user")
     .flatMap((m) => m.parts.map((p) => (p.type === "text" ? p.text : "")))
     .join("\n");
-  const secrets = [...privateTerms(result.household.profile), ...(result.household.id === "privacy" ? PRIVACY_LEAKS : [])];
-  const leaked = secrets.filter((secret) => containsWord(sent, secret));
+  const leaked = [
+    ...leakedTerms(sent, privateTerms(result.household.profile)),
+    ...(result.household.id === "privacy" ? PRIVACY_LEAKS.filter((leak) => containsWord(sent, leak)) : []),
+  ];
   if (leaked.length) problems.push(`PRIVACY: sent ${leaked.map((s) => `"${s}"`).join(", ")}`);
 
   // Structure: feedback after every response, options on every ongoing turn.
@@ -331,7 +333,7 @@ describe(`test households against ${BASE_URL}`, () => {
     const result = await play(household);
     results.push(result);
     writeFileSync(path.join(outDir, `${household.id}.md`), reportMarkdown(result));
-    // Privacy leaks and failed calls fail the run; other findings are for review.
-    expect(result.problems.filter((p) => p.startsWith("PRIVACY") || p.includes("failed"))).toEqual([]);
+    // Privacy leaks and failed calls fail the run; other findings, grading language included, are for review.
+    expect(result.problems.filter((p) => p.startsWith("PRIVACY") || /^Call \d+ failed:/.test(p))).toEqual([]);
   });
 });

@@ -2,9 +2,10 @@ import nlp from "compromise";
 
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 
-type EntityKind =
+export type EntityKind =
   | "Person"
   | "Pet"
+  | "Medical"
   | "Location"
   | "Address"
   | "Postcode"
@@ -16,7 +17,12 @@ type EntityKind =
 interface Detection {
   value: string;
   kind: EntityKind;
+  /** Only mask this exact capitalization, so a name like "Ash" doesn't hide the word "ash". */
+  caseSensitive?: boolean;
 }
+
+/** A value to mask wherever it appears: a plain string is a person's name, matched in any case. */
+export type MaskTerm = string | Detection;
 
 const TAG_PATTERN = /\[[^\]]*\]/;
 
@@ -213,10 +219,15 @@ const UK_POSTCODE = /\b[A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2}\b/gu;
 const CA_POSTCODE = /\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b/gu;
 
 // Places. The state itself is kept: it's coarse and the simulation needs the region.
-// A two-letter code followed by a lowercase word is an abbreviation, not a
-// state: "Battery CO detectors" is about carbon monoxide, not Colorado.
+// Codes that are also words or common abbreviations count as a state after a
+// comma ("Salem, OR and the coast"), or when no lowercase word follows:
+// "Battery CO detectors" is about carbon monoxide, not Colorado. Other codes
+// always count, so "Austin TX with two kids" is still a place.
+const AMBIGUOUS_STATE_CODES = ["CO", "OR", "IN", "ME", "OK", "HI", "OH", "ID", "PA", "MA", "DE", "DC", "MD", "PR"];
+const STATE_NAMES = US_STATES.filter((s) => s.length > 2).join("|");
+const STATE_CODES = US_STATES.filter((s) => s.length === 2);
 const CITY_STATE = new RegExp(
-  String.raw`\b(\p{Lu}[\p{L}'.-]+(?:\s+\p{Lu}[\p{L}'.-]+){0,2}),?\s+(?:${US_STATES.filter((s) => s.length > 2).join("|")}|(?:${US_STATES.filter((s) => s.length === 2).join("|")})(?![ \t]+\p{Ll}))\b`,
+  String.raw`\b(\p{Lu}[\p{L}'.-]+(?:\s+\p{Lu}[\p{L}'.-]+){0,2})(?:,\s+(?:${STATE_NAMES}|${STATE_CODES.join("|")})|\s+(?:${STATE_NAMES}|${STATE_CODES.filter((s) => !AMBIGUOUS_STATE_CODES.includes(s)).join("|")}|(?:${AMBIGUOUS_STATE_CODES.join("|")})(?![ \t]+\p{Ll})))\b`,
   "gu",
 );
 /** A town right before a UK or Canadian postcode, as in "Bath BA1 2AB". */
@@ -410,8 +421,8 @@ const findTagFor = (realValue: string, entityMap: Record<string, string>) => {
 };
 
 export interface MaskOptions {
-  /** Names to mask wherever they appear, even when no detector catches them. */
-  alwaysMask?: string[];
+  /** Values to mask wherever they appear, even when no detector catches them. */
+  alwaysMask?: MaskTerm[];
   /** Return the masked text without recording anything in the ledger (for previews). */
   dryRun?: boolean;
 }
@@ -432,7 +443,7 @@ export function maskInput(text: string, options: MaskOptions = {}): string {
   const detected: Detection[] = [
     ...contactDetectors(text),
     ...contextDetectors(text),
-    ...alwaysMask.map((value) => ({ value, kind: "Person" as const })),
+    ...alwaysMask.map((term): Detection => (typeof term === "string" ? { value: term, kind: "Person" } : term)),
     ...nlpDetectors(text),
   ];
   const people = detected.filter((d) => d.kind === "Person").map((d) => cleanEntity(d.value));
@@ -446,12 +457,20 @@ export function maskInput(text: string, options: MaskOptions = {}): string {
 
   // Work on a copy so a dry run (a preview) leaves the real ledger untouched.
   const ledger = { ...initialMap };
-  const replacements = new Map<string, string>();
-  for (const { value, kind } of detected) {
+  // Keyed by lowercase value; `exact` is set for a case-sensitive value, which only its own capitalization matches.
+  const replacements = new Map<string, { tag: string; exact?: string }>();
+  // Case-sensitive values, so the same word from the ledger doesn't come back as a case-insensitive match.
+  const exactOnly = new Set<string>();
+  for (const { value, kind, caseSensitive } of detected) {
     const realValue = cleanEntity(value);
     if (!realValue || TAG_PATTERN.test(realValue)) continue;
     const key = realValue.toLowerCase();
-    if (replacements.has(key)) continue;
+    if (replacements.has(key) || (exactOnly.has(key) && !caseSensitive)) continue;
+    if (caseSensitive) {
+      exactOnly.add(key);
+      // Recorded only once it actually appears, so the ledger holds no unused word.
+      if (!new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegExp(realValue)}(?![\\p{L}\\p{N}_])`, "u").test(text)) continue;
+    }
 
     let tag = findTagFor(realValue, ledger);
     if (!tag) {
@@ -459,7 +478,7 @@ export function maskInput(text: string, options: MaskOptions = {}): string {
       ledger[tag] = realValue;
       if (!options.dryRun) usePrivacyStore.getState().addMapping(realValue, tag);
     }
-    replacements.set(key, tag);
+    replacements.set(key, { tag, exact: caseSensitive ? realValue : undefined });
   }
 
   if (replacements.size === 0) return text;
@@ -475,9 +494,12 @@ export function maskInput(text: string, options: MaskOptions = {}): string {
     "giu",
   );
 
-  return text.replace(pattern, (match) =>
-    match.startsWith("[") ? match : (replacements.get(match.toLowerCase()) ?? match),
-  );
+  return text.replace(pattern, (match) => {
+    if (match.startsWith("[")) return match;
+    const replacement = replacements.get(match.toLowerCase());
+    if (!replacement || (replacement.exact && replacement.exact !== match)) return match;
+    return replacement.tag;
+  });
 }
 
 /**

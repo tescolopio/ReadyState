@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { privateTerms } from "@/lib/household";
+import { leakedTerms, privateTerms } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { PRIVACY_LEAKS, TEST_HOUSEHOLDS } from "@/lib/test-households";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
@@ -23,7 +23,7 @@ describe("test households", () => {
     "%s sends no names, medication or device names",
     (id, { profile }) => {
       const text = outgoing(id);
-      expect(privateTerms(profile).filter((term) => containsWord(text, term)), text).toEqual([]);
+      expect(leakedTerms(text, privateTerms(profile)), text).toEqual([]);
     },
   );
 

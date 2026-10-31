@@ -5,6 +5,7 @@
  * `local*` fields never appear in it, and anything the person skipped is
  * reported as unknown rather than assumed (design brief §7).
  */
+import type { MaskTerm } from "@/utils/obfuscator";
 
 export const AGE_RANGES = {
   infant: "infant (under 2)",
@@ -163,6 +164,16 @@ export interface Home {
   backupWh?: number;
   /** Free text such as "garage is detached, no AC". Masked before sending. */
   notes?: string;
+}
+
+/**
+ * The backup ratings that apply to the chosen backup power: output for any backup, battery capacity only for a
+ * battery or solar battery. A value left over from an earlier choice (the wizard hides its field) is ignored.
+ */
+export function backupRatings(home: Pick<Home, "backupPower" | "backupWatts" | "backupWh">): { watts?: number; wh?: number } {
+  const hasBackup = Boolean(home.backupPower && home.backupPower !== "none");
+  const hasBattery = home.backupPower === "battery" || home.backupPower === "solar";
+  return { watts: hasBackup ? home.backupWatts : undefined, wh: hasBattery ? home.backupWh : undefined };
 }
 
 export interface Location {
@@ -347,7 +358,8 @@ export function describeHousehold(profile: HouseholdProfile): string {
     home.basement === true && "basement",
     home.basement === false && "no basement",
   ].filter(Boolean);
-  const backupDetails = [home.backupWatts && `about ${home.backupWatts} W`, home.backupWh && `${home.backupWh} Wh battery`]
+  const ratings = backupRatings(home);
+  const backupDetails = [ratings.watts && `about ${ratings.watts} W`, ratings.wh && `${ratings.wh} Wh battery`]
     .filter(Boolean)
     .join(", ");
   const systems = [
@@ -400,16 +412,37 @@ export const hasProfile = (profile: HouseholdProfile) =>
 
 /**
  * Everything in the profile that must never be sent: names (whole, and each
- * word, so "Priya's" is caught in notes), plus medication and device names.
- * Passed to `maskInput` as `alwaysMask` so free-text notes can't leak them.
+ * word, so "Priya's" is caught in notes), plus medication and device names,
+ * tagged as medical details rather than people. Passed to `maskInput` as
+ * `alwaysMask` so free-text notes can't leak them.
  */
-export function privateTerms(profile: HouseholdProfile): string[] {
-  const names = [...profile.people, ...profile.pets]
-    .map((entry) => entry.localName?.trim())
-    .filter((name): name is string => Boolean(name));
+export function privateTerms(profile: HouseholdProfile): Exclude<MaskTerm, string>[] {
+  const named = (entries: { localName?: string }[], kind: "Person" | "Pet") =>
+    entries.flatMap(({ localName }) => {
+      const name = localName?.trim();
+      if (!name) return [];
+      // Each word only in its own capitalization, so a name like "Ash" or "Will" doesn't hide "ash" or "will".
+      const words = name.split(/\s+/).filter((word) => word.length > 1 && word !== name);
+      return [{ value: name, kind }, ...words.map((word) => ({ value: word, kind, caseSensitive: true }))];
+    });
+  // The whole detail and each item of a list, so "metformin" is caught on its own from "Lisinopril and metformin".
   const details = profile.people
-    .flatMap((person) => person.needs.map((need) => need.localDetail?.trim()))
-    .filter((detail): detail is string => Boolean(detail));
-  const words = names.flatMap((name) => name.split(/\s+/)).filter((word) => word.length > 1);
-  return [...new Set([...names, ...words, ...details])];
+    .flatMap((person) => person.needs.map((need) => need.localDetail?.trim() ?? ""))
+    .flatMap((detail) => [detail, ...detail.split(/\s*(?:,|;|\/|&|\+|\band\b|\bplus\b)\s*/i)])
+    .map((detail) => detail.trim())
+    .filter((detail) => detail.length > 2)
+    .map((value) => ({ value, kind: "Medical" as const }));
+  const seen = new Set<string>();
+  return [...named(profile.people, "Person"), ...named(profile.pets, "Pet"), ...details].filter((term) => {
+    const key = `${term.value.toLowerCase()}|${"caseSensitive" in term}`;
+    return !seen.has(key) && Boolean(seen.add(key));
+  });
+}
+
+/** The private terms that appear in `text`, each matched as `maskInput` matches it. */
+export function leakedTerms(text: string, terms: Exclude<MaskTerm, string>[]): string[] {
+  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return terms
+    .filter(({ value, caseSensitive }) => new RegExp(`(?<![\\p{L}\\p{N}])${escape(value)}(?![\\p{L}\\p{N}])`, caseSensitive ? "u" : "iu").test(text))
+    .map(({ value }) => value);
 }
