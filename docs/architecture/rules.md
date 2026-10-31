@@ -52,6 +52,12 @@ Why files and not a hosted database? Rules are shared reference content, not any
 | Pets | Evacuate with pets; many shelters refuse them; food, water, ID, leash, microchip | Ready.gov |
 | Hygiene | Soap and the cleanest water available; sanitizer with at least 60% alcohol | CDC |
 | Kit | Ready.gov's basic kit (12 items) and additional supplies | Ready.gov |
+| Tornado | A safe room or shelter; otherwise a small interior windowless room or basement on the lowest level; cover head and neck; no safe option in a car | Ready.gov |
+| Hurricane, inland | Not just coastal: rain flooding caused 57% of US hurricane deaths over the last decade and can last days; evacuate immediately when told; never drive around barricades; interior room for wind; highest level, not a closed attic, for flooding | Ready.gov, NOAA, NHC, Mecklenburg County |
+| Calories | About 1,400 kcal a day for a child, 2,200 for a teen or adult, 1,800 for an older adult (low activity, rounded) | USDA/HHS Dietary Guidelines |
+| Pet calories and water | 70 × kg^0.75 × 1.6 kcal a day for a neutered adult dog (cat 1.2), ±50%; dogs drink about 1 oz per lb per day | Pet Nutrition Alliance, AKC (cite-only) |
+| Sanitation | Twin-bucket emergency toilet (5-gallon buckets, 3–5 mil bags, half a cup of cover per use, fill halfway, nothing buried within 100 ft of water); limit flushing in floods; don't pump septic past half | Oregon State Extension (cite-only), CDC |
+| Medical devices | CPAP about 56 W (73 W peak, more with a humidifier); home oxygen concentrator about 350 W; portable concentrator batteries 2–4 h, up to 12 with packs | CDC-hosted study, Philips, ResMed (cite-only) |
 
 ### Corrections and conflicts found
 
@@ -59,17 +65,18 @@ Why files and not a hosted database? Rules are shared reference content, not any
 - **Medication days differ by source:** CDC says 7–10 days and the Red Cross says 7. The rule flags below 7.
 - **The heat stroke threshold differs:** some CDC materials say 103 °F and others 104 °F. We use 103 °F, the more conservative figure.
 - **Pet food has no authoritative number** ("several days"). Our 3-day and 2-week thresholds mirror the human guidance, and the rule says so.
+- **The twin-bucket toilet isn't a CDC method.** It comes from New Zealand's Wellington Region Emergency Management Office after the 2011 Christchurch earthquake, adapted by Oregon State University Extension. CDC's own guidance covers bucket latrines with bag liners, and septic systems.
+- **Calorie figures are simplified.** The Dietary Guidelines give estimates by sex, age and activity. The profile records only an age range, so each range uses one rounded low-activity figure; the record's notes keep the ranges.
+- **Device wattages are per model.** One CPAP and one home concentrator, from manufacturer specifications; the wizard offers them only as "typical" figures when the user doesn't know their own device's rating.
 
 ### Not yet covered
 
-- Emergency toilets and waste disposal
-- Calorie needs per person
-- Hurricane evacuation zones and shelter-in-place details
-- Older adults' and children's specific guidance (CDC has pages)
-- Medical-device wattages by device type
+- Tornado safety for mobile homes (NWS guidance to research)
+- Coastal evacuation zones by state (for example ReadyNC's Know Your Zone): Charlotte is inland, so it isn't needed yet
+- Older adults' and children's specific guidance (CDC has pages); phased in later
+- More device types: ventilators, suction, feeding pumps, power wheelchairs
 - CO poisoning symptoms in detail
-- Tornado safety
-- Survival "rules of three" (3 minutes of air, 3 hours of shelter, 3 days of water, 3 weeks of food): a common heuristic, **not found in federal guidance**. It could come from public military survival doctrine (Distribution A) after checking.
+- The survival "rule of threes": a wilderness heuristic, not household guidance and not found in federal sources. It could appear as UI flavor text once it has a citable source, never as consequence logic.
 
 ## Review status
 

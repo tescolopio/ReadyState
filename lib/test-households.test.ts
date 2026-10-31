@@ -33,7 +33,7 @@ describe("test households", () => {
   });
 
   it("covers all five personas, each with a different emergency", () => {
-    const personas = TEST_HOUSEHOLDS.filter((household) => !household.id.match(/minimal|privacy/));
+    const personas = TEST_HOUSEHOLDS.filter((household) => !household.id.match(/minimal|privacy|charlotte/));
     expect(personas.map((household) => household.id)).toEqual(["alex", "sam", "priya", "morgan", "jordan"]);
     expect(new Set(personas.map((household) => household.profile.scenario)).size).toBe(5);
   });

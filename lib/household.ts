@@ -115,6 +115,8 @@ export interface Pet {
   localName?: string;
   kind: PetKind;
   size?: "small" | "medium" | "large";
+  /** Body weight, for food and water math. */
+  weightLb?: number;
   /** Free text such as "on daily seizure medication". Masked before sending. */
   notes?: string;
 }
@@ -155,8 +157,10 @@ export interface Home {
   cooking?: keyof typeof COOKING;
   water?: keyof typeof WATER_SOURCE;
   backupPower?: keyof typeof BACKUP_POWER;
-  /** Generator or power station capacity. */
+  /** Generator or power station output rating. */
   backupWatts?: number;
+  /** Battery capacity of a power station or solar battery, for runtime math. */
+  backupWh?: number;
   /** Free text such as "garage is detached, no AC". Masked before sending. */
   notes?: string;
 }
@@ -207,6 +211,7 @@ export const SUPPLY_ITEMS = {
     sanitation: "Moist towelettes, garbage bags and ties",
     "hand-sanitizer": "Hand sanitizer (at least 60% alcohol)",
     "plastic-sheeting": "Plastic sheeting and duct tape",
+    "toilet-kit": "Emergency toilet kit (2 buckets, heavy bags, cover material)",
   },
   Safety: {
     "first-aid": "First aid kit",
@@ -246,6 +251,7 @@ export const SCENARIOS = {
   wildfire: "Wildfire and smoke",
   hurricane: "Hurricane",
   earthquake: "Earthquake",
+  tornado: "Tornado",
   "boil-water": "Water contamination (boil-water notice)",
 } as const;
 export type ScenarioId = keyof typeof SCENARIOS;
@@ -325,7 +331,10 @@ export function describeHousehold(profile: HouseholdProfile): string {
   if (pets.length) {
     const petLabel = (pet: Pet) => [pet.size, PET_KINDS[pet.kind]].filter(Boolean).join(" ");
     lines.push(`Pets: ${countBy(pets, petLabel)}.`);
-    for (const pet of pets) if (pet.notes?.trim()) lines.push(`- ${petLabel(pet)}: ${pet.notes.trim()}`);
+    for (const pet of pets) {
+      const details = [pet.weightLb && `about ${pet.weightLb} lb`, pet.notes?.trim()].filter(Boolean);
+      if (details.length) lines.push(`- ${petLabel(pet)}: ${details.join("; ")}`);
+    }
   }
 
   const where = [location.region?.trim(), location.setting && SETTINGS[location.setting]].filter(Boolean);
@@ -338,12 +347,15 @@ export function describeHousehold(profile: HouseholdProfile): string {
     home.basement === true && "basement",
     home.basement === false && "no basement",
   ].filter(Boolean);
+  const backupDetails = [home.backupWatts && `about ${home.backupWatts} W`, home.backupWh && `${home.backupWh} Wh battery`]
+    .filter(Boolean)
+    .join(", ");
   const systems = [
     home.heating && `Heating: ${HEATING[home.heating]}.`,
     home.cooking && `Cooking: ${COOKING[home.cooking]}.`,
     home.water && `Water: ${WATER_SOURCE[home.water]}.`,
     home.backupPower &&
-      `Backup power: ${BACKUP_POWER[home.backupPower]}${home.backupWatts ? ` (about ${home.backupWatts} W)` : ""}.`,
+      `Backup power: ${BACKUP_POWER[home.backupPower]}${backupDetails ? ` (${backupDetails})` : ""}.`,
   ].filter(Boolean);
   if (homeParts.length || systems.length) {
     lines.push(

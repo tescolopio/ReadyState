@@ -199,6 +199,47 @@ export const TEST_HOUSEHOLDS: TestHousehold[] = [
     },
   },
   {
+    id: "charlotte",
+    persona: "Regional case: inland Carolinas, giant-breed dogs",
+    tests:
+      "An inland hurricane in the Charlotte area: rain flooding, wind, tornadoes and a long outage rather than storm surge. Two Great Danes test the calorie and water math, and a CPAP on a power station tests battery runtime.",
+    profile: {
+      people: [
+        { id: "charlotte-1", localName: "Marcus Hale", ageRange: "adult", needs: [] },
+        {
+          id: "charlotte-2",
+          localName: "Dana Hale",
+          ageRange: "adult",
+          needs: [{ kind: "powered-device", watts: 60, localDetail: "AirSense CPAP" }],
+        },
+      ],
+      pets: [
+        { id: "charlotte-pet-1", localName: "Atlas", kind: "dog", size: "large", weightLb: 140, notes: "Great Dane" },
+        { id: "charlotte-pet-2", localName: "Juno", kind: "dog", size: "large", weightLb: 120, notes: "Great Dane, nervous in storms" },
+      ],
+      location: { region: "North Carolina", setting: "suburban" },
+      home: {
+        type: "house",
+        floors: 2,
+        basement: false,
+        heating: "heat-pump",
+        cooking: "gas",
+        water: "municipal",
+        backupPower: "battery",
+        backupWatts: 2000,
+        backupWh: 2048,
+        notes: "Tall oaks over the roof. The creek behind the yard flooded in 2024.",
+      },
+      supplies: {
+        waterGallons: 10,
+        foodDays: 7,
+        petFoodDays: 10,
+        have: ["flashlights", "batteries", "weather-radio", "power-bank", "first-aid", "smoke-detector", "co-detector", "cooler", "can-opener"],
+      },
+      scenario: "hurricane",
+    },
+  },
+  {
     id: "minimal",
     persona: "Edge case: almost nothing provided",
     tests:

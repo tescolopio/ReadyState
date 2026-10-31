@@ -214,5 +214,117 @@
     "url": "https://www.fema.gov/emergency-managers/national-preparedness/exercises/hseep",
     "license": "public-domain",
     "verified": null
+  },
+  {
+    "id": "ready-gov-tornadoes",
+    "title": "Tornadoes",
+    "publisher": "FEMA / Ready.gov",
+    "url": "https://www.ready.gov/tornadoes",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "ready-gov-hurricanes",
+    "title": "Hurricanes",
+    "publisher": "FEMA / Ready.gov",
+    "url": "https://www.ready.gov/hurricanes",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "noaa-inland-flooding",
+    "title": "Inland flooding: A hidden danger of tropical cyclones",
+    "publisher": "NOAA",
+    "url": "https://www.noaa.gov/stories/inland-flooding-hidden-danger-of-tropical-cyclones",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "nhc-2025-season-lessons",
+    "title": "Lessons from the 2024 Hurricane Season",
+    "publisher": "NOAA National Hurricane Center",
+    "url": "https://www.nhc.noaa.gov/outreach/presentations/2025_SECART.pdf",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "mecklenburg-hurricane",
+    "title": "Plan, Prepare and Stay Informed for Hurricane Season",
+    "publisher": "Mecklenburg County, NC",
+    "url": "https://news.mecknc.gov/plan-prepare-and-stay-informed-hurricane-season",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "dga-2010-calories",
+    "title": "Dietary Guidelines for Americans 2010, estimated calorie needs",
+    "publisher": "USDA / HHS",
+    "url": "https://health.gov/dietaryguidelines/dga2010/dietaryguidelines2010.pdf",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "dga-2020-food-pattern-modeling",
+    "title": "Food Pattern Modeling: Ages 2 Years and Older (Table 1.1)",
+    "publisher": "USDA / HHS",
+    "url": "https://www.dietaryguidelines.gov/sites/default/files/2020-07/FoodPatternModeling_Report_2YearsandOlder.pdf",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "pna-calories",
+    "title": "Calculating Calories Based on Pet Needs",
+    "publisher": "Pet Nutrition Alliance",
+    "url": "https://petnutritionalliance.org/wp-content/uploads/2023/03/MER.RER_.PNA_.pdf",
+    "license": "cite-only",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "akc-dog-water",
+    "title": "Is Your Puppy Drinking Enough Water?",
+    "publisher": "American Kennel Club",
+    "url": "https://www.akc.org/expert-advice/health/puppy-drinking-enough-water/",
+    "license": "cite-only",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "osu-sanitation",
+    "title": "Survival Basics: Sanitation and Waste Management (EM 9334)",
+    "publisher": "Oregon State University Extension",
+    "url": "https://extension.oregonstate.edu/catalog/pub/em-9334-survival-basics-sanitation-waste-management",
+    "license": "cite-only",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "cdc-septic-floods",
+    "title": "Guidelines for Septic and Onsite Wastewater Systems",
+    "publisher": "CDC",
+    "url": "https://www.cdc.gov/floods/safety/guidelines-for-septic-and-onsite-wastewater-systems.html",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "cdc-electricity-dependent-2017",
+    "title": "Who's at Risk When the Power Goes Out? The At-home Electricity-Dependent Population in the United States, 2012 (Molinari et al., J Public Health Manag Pract 2017)",
+    "publisher": "CDC (HHS Public Access)",
+    "url": "https://stacks.cdc.gov/view/cdc/41187",
+    "license": "public-domain",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "philips-everflo",
+    "title": "EverFlo oxygen concentrator brochure",
+    "publisher": "Philips Respironics",
+    "url": "https://www.philips.hu/c-dam/b2bhc/master/whitepapers/copd/1038667_EverFlo_Broch.pdf",
+    "license": "cite-only",
+    "verified": "2026-10-27"
+  },
+  {
+    "id": "resmed-airsense-11",
+    "title": "AirSense 11 power specifications (as listed by retailers)",
+    "publisher": "ResMed",
+    "url": "https://easybreathe.com/products/airsense-11-power-supply-65w",
+    "license": "cite-only",
+    "verified": "2026-10-27"
   }
 ]
