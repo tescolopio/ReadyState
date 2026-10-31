@@ -60,6 +60,8 @@ interface CallRecord {
   debriefRepairs?: number;
   /** What the debrief's first attempt failed, before the server repaired it. */
   failedFirst?: string[];
+  /** What a rejected repair still failed. */
+  stillFailing?: string[];
   inputTokens?: number;
   outputTokens?: number;
   turn?: TurnOutput;
@@ -117,7 +119,8 @@ async function send(messages: TtxUIMessage[]): Promise<SendOutcome<TtxUIMessage>
     last = message;
   }
   const failed = last?.parts.find((part) => "state" in part && part.state === "output-error");
-  if (streamError) return { error: streamError };
+  // A rejected debrief still carries the server's counters in its metadata.
+  if (streamError) return { error: streamError, message: last };
   if (!last || failed) return { error: failed && "errorText" in failed ? String(failed.errorText) : "empty response" };
   return { message: last };
 }
@@ -187,6 +190,7 @@ async function play(household: TestHousehold): Promise<Result> {
       schemaRetries: metadata?.schemaRetries,
       debriefRepairs: metadata?.debriefRepairs,
       failedFirst: metadata?.debriefChecks?.failedFirst,
+      stillFailing: metadata?.debriefChecks?.stillFailing,
       inputTokens: metadata?.usage?.inputTokens,
       outputTokens: metadata?.usage?.outputTokens,
     };
@@ -259,7 +263,11 @@ function check(result: Result, messages: TtxUIMessage[]) {
   const replayedTurns = result.turns.filter((record) => record.replayed).length;
   findings.push(...contentFindings({ baseline: result.baseline, turns, participantText, report: result.report, replayedTurns }));
 
-  const calls = [...result.turns, ...(result.debrief ? [result.debrief] : [])].filter((call) => !call.replayed && !call.error);
+  const calls = [...result.turns, ...(result.debrief ? [result.debrief] : [])].filter(
+    // A rejected debrief still used the provider, and reports what it used.
+    (call) => !call.replayed && (!call.error || call.providerCalls !== undefined),
+  );
+  const rejected = calls.find((call) => call.stillFailing?.length || (call.error && call.failedFirst?.length));
   const inputs = calls.flatMap((call) => (call.inputTokens !== undefined ? [call.inputTokens] : []));
   const outputs = calls.flatMap((call) => (call.outputTokens !== undefined ? [call.outputTokens] : []));
   const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
@@ -272,12 +280,17 @@ function check(result: Result, messages: TtxUIMessage[]) {
     `${turns.length} turns, reached ${turns.at(-1)?.time_elapsed ?? "Hour 0"}${result.report ? ", debrief written" : ""}`,
     `Input tokens per call: max ${inputs.length ? Math.max(...inputs) : "n/a"}, average ${inputs.length ? Math.round(sum(inputs) / inputs.length) : "n/a"}; output tokens total ${sum(outputs)}`,
     `Average request time ${calls.length ? Math.round(sum(calls.map((c) => c.requestMs)) / calls.length) : 0} ms; waited ${Math.round(sum(calls.map((c) => c.waitedMs)) / 1000)} s for rate limits`,
-    `Server retries over ${calls.length} calls: ${schemaRetries} after a malformed turn, ${rateLimitRetries} after a rate limit, ${result.debrief?.debriefRepairs ?? 0} debrief repair(s)`,
+    `Server retries over ${calls.length} calls: ${schemaRetries} after a malformed turn, ${rateLimitRetries} after a rate limit, ${sum(calls.map((call) => call.debriefRepairs ?? 0))} debrief repair(s)`,
     ...(result.debrief?.failedFirst?.length
       ? [`Debrief passed the implemented checks after a repair; the first attempt failed: ${result.debrief.failedFirst.join(" / ")}`]
       : result.debrief
         ? ["Debrief passed the implemented checks on the first attempt"]
-        : []),
+        : rejected
+          ? [
+              `Debrief rejected, not shown; the first attempt failed: ${rejected.failedFirst?.join(" / ")}`,
+              ...(rejected.stillFailing ? [`The repair still failed: ${rejected.stillFailing.join(" / ")}`] : []),
+            ]
+          : []),
   );
 }
 
@@ -386,7 +399,7 @@ describe(`test households against ${BASE_URL}`, () => {
     };
     const rows = results.map(
       (r) =>
-        `| [${r.household.persona}](${r.household.id}.md) | ${CHECK_CATEGORIES.map((c) => cell(r, c)).join(" | ")} | ${r.notes.join("; ")} |`,
+        `| [${r.household.persona}](${r.household.id}.md) | ${CHECK_CATEGORIES.map((c) => cell(r, c)).join(" | ")} | ⏳ pending | ${r.notes.join("; ")} |`,
     );
     const problems = results.flatMap((r) =>
       r.findings.map((f) => `- **${r.household.id}** (${f.category}${f.replayed ? ", known from replayed turns" : ""}): ${f.text}`),
@@ -400,11 +413,13 @@ describe(`test households against ${BASE_URL}`, () => {
         "",
         "Completing an exercise is reported separately from its content: a run can finish and still have continuity, safety or suitability problems. Content checks are heuristics: passing means \"passed the implemented checks\", not verified safe or accurate. A valid citation shows the cited event exists, not that the advice describes it correctly. Findings from replayed turns are listed but not counted.",
         "",
-        `| Household | ${CHECK_CATEGORIES.map((c) => CATEGORY_LABELS[c]).join(" | ")} | Notes |`,
-        `| --- | ${CHECK_CATEGORIES.map(() => "---").join(" | ")} | --- |`,
+        "**Manual review is a separate result.** The automated columns can all pass while the debrief fails a reading of every displayed line, including the checklist. The runner can't do that reading, so it's marked pending here; record it in docs/testing.",
+        "",
+        `| Household | ${CHECK_CATEGORIES.map((c) => CATEGORY_LABELS[c]).join(" | ")} | Manual review | Notes |`,
+        `| --- | ${CHECK_CATEGORIES.map(() => "---").join(" | ")} | --- | --- |`,
         ...rows,
         "",
-        "## Findings",
+        "## Automated findings",
         "",
         problems.length ? problems.join("\n") : "None.",
         "",

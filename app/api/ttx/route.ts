@@ -22,6 +22,7 @@ import {
   TARGET_DURATION_HOURS,
   buildExercisePrompt,
   deriveTtxState,
+  participantMessages,
   ttxTools,
   type AfterActionReport,
   type TtxMetadata,
@@ -124,7 +125,7 @@ const DEBRIEF_NO_TIME =
 
 type DebriefOutcome =
   | { report: AfterActionReport; failedFirst: DebriefProblem[] }
-  | { error: string; failed: DebriefProblem[] };
+  | { error: string; failedFirst: DebriefProblem[]; stillFailing?: DebriefProblem[] };
 
 /**
  * Generates the debrief whole and runs the implemented checks
@@ -171,21 +172,23 @@ async function generateCheckedDebrief({
   };
 
   const { turns } = deriveTtxState(messages);
+  const [baseline = "", ...participantText] = participantMessages(messages);
+  const context = { baseline, participantText };
   const first = await attempt(briefing);
-  const failedFirst = checkDebrief(first, turns);
+  const failedFirst = checkDebrief(first, turns, context);
   if (!failedFirst.length) return { report: first, failedFirst };
 
   console.warn("[ttx] debrief failed checks", failedFirst.map((p) => p.problem));
-  if (budget.remainingMs() < MIN_REPAIR_BUDGET_MS) return { error: DEBRIEF_NO_TIME, failed: failedFirst };
+  if (budget.remainingMs() < MIN_REPAIR_BUDGET_MS) return { error: DEBRIEF_NO_TIME, failedFirst };
 
   counts.debriefRepairs++;
   const repaired = await attempt(
     `${briefing}\n\n${repairInstructions(failedFirst)}\n\nYOUR PREVIOUS DEBRIEF (JSON):\n${JSON.stringify(first)}`,
   );
-  const stillFailing = checkDebrief(repaired, turns);
+  const stillFailing = checkDebrief(repaired, turns, context);
   if (stillFailing.length) {
     console.warn("[ttx] repaired debrief still failed checks", stillFailing.map((p) => p.problem));
-    return { error: DEBRIEF_STILL_FAILING, failed: stillFailing };
+    return { error: DEBRIEF_STILL_FAILING, failedFirst, stillFailing };
   }
   return { report: repaired, failedFirst };
 }
@@ -289,16 +292,32 @@ export async function POST(req: Request) {
               counts,
               usage,
             });
-            if ("error" in outcome) {
-              writer.write({ type: "error", errorText: outcome.error });
-              return;
-            }
-            const metadata: TtxMetadata = {
+            const problems = (list: DebriefProblem[]) => list.map((p) => p.problem);
+            const counters = {
               usage,
               providerCalls: counts.providerCalls,
               schemaRetries: counts.schemaRetries,
               debriefRepairs: counts.debriefRepairs,
-              debriefChecks: { passedImplementedChecks: true, failedFirst: outcome.failedFirst.map((p) => p.problem) },
+            };
+            if ("error" in outcome) {
+              // The counters and failed checks still go out, for the eval; the debrief doesn't.
+              writer.write({
+                type: "start",
+                messageMetadata: {
+                  ...counters,
+                  debriefChecks: {
+                    passedImplementedChecks: false,
+                    failedFirst: problems(outcome.failedFirst),
+                    ...(outcome.stillFailing ? { stillFailing: problems(outcome.stillFailing) } : {}),
+                  },
+                },
+              });
+              writer.write({ type: "error", errorText: outcome.error });
+              return;
+            }
+            const metadata: TtxMetadata = {
+              ...counters,
+              debriefChecks: { passedImplementedChecks: true, failedFirst: problems(outcome.failedFirst) },
             };
             const toolCallId = generateId();
             writer.write({ type: "start", messageMetadata: metadata });

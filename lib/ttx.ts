@@ -143,11 +143,13 @@ export interface TtxMetadata {
   /** Debrief repairs after failed content checks (0 or 1). */
   debriefRepairs?: number;
   /**
-   * Set on a debrief that passed lib/debrief-checks.ts: the implemented
+   * The debrief's result against lib/debrief-checks.ts: the implemented
    * checks, not a verification of safety or accuracy. `failedFirst` lists
-   * what the first attempt failed, before its repair.
+   * what the first attempt failed, before its repair; `stillFailing`, what a
+   * rejected repair still failed. Sent with the error, too, when a debrief is
+   * rejected.
    */
-  debriefChecks?: { passedImplementedChecks: true; failedFirst: string[] };
+  debriefChecks?: { passedImplementedChecks: boolean; failedFirst: string[]; stillFailing?: string[] };
 }
 
 export type TtxUIMessage = UIMessage<
@@ -217,6 +219,10 @@ const messageText = (message: TtxUIMessage) =>
     .map((part) => (part.type === "text" ? part.text : ""))
     .join("")
     .trim();
+
+/** What the participant sent, in order: the household baseline first, then each response. */
+export const participantMessages = (messages: TtxUIMessage[]) =>
+  messages.filter((message) => message.role === "user").map(messageText).filter(Boolean);
 
 const alertsLine = (alerts: string[]) =>
   alerts.length ? alerts.join("; ") : "none";

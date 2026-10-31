@@ -5,6 +5,7 @@
  * accurate. Debrief checks are shared with the server (lib/debrief-checks.ts).
  * Regression examples live in checks.test.ts and lib/debrief-checks.test.ts.
  */
+import { introducedEquipment as introducedItems } from "@/lib/continuity";
 import { checkDebrief, unsafeSentences, type DebriefCheckCategory } from "@/lib/debrief-checks";
 import { improvementText, type AfterActionReport, type TurnOutput } from "@/lib/ttx";
 
@@ -27,8 +28,6 @@ export interface Finding {
   replayed?: boolean;
 }
 
-const sentences = (texts: string[]) => texts.flatMap((text) => text.split(/(?<=[.!?])\s+/));
-
 /** Unsafe advice in the given texts, as "rule: sentence". */
 export const unsafeAdvice = (texts: string[]) => unsafeSentences(texts).map(({ rule, sentence }) => `${rule}: "${sentence}"`);
 
@@ -40,53 +39,14 @@ export function turnAdvice(turns: TurnOutput[]) {
   ]);
 }
 
-/**
- * Equipment the story must not conjure up. A mention counts as introduced
- * when the baseline doesn't list it and the sentence doesn't obtain it from
- * someone or somewhere.
- */
-const EQUIPMENT = [
-  "space heater",
-  "heater",
-  "generator",
-  "camp stove",
-  "grill",
-  "chainsaw",
-  "sump pump",
-  "car",
-  "vehicle",
-  "truck",
-  "radio",
-  "power station",
-  "solar panel",
-];
-const OBTAINED =
-  /\b(borrow\w*|buy\w*|bought|purchas\w*|neighbou?rs?|friends?|stores?|shops?|offer\w*|lends?|lent|brings?|brought|rent\w*|warming cent(er|re)|shelters?|responders?|crews?|staff)\b/i;
-const mentions = (text: string, item: string) => new RegExp(`\\b${item}s?\\b`, "i").test(text);
-/** "no radio", "without a car", "lacks a working generator": a missing item, not an introduced one. */
-const negated = (text: string, item: string) =>
-  new RegExp(`\\b(no|without|lacks?|lacking|doesn't have|don't have)\\s+(an?\\s+|any\\s+)?(\\w+\\s+)?${item}`, "i").test(text);
-
-/** Equipment that appears in the story without being in the baseline or obtained (finding 2, eval finding 16). */
-export function introducedEquipment(baseline: string, turns: TurnOutput[], participantText: string[]): string[] {
-  const known = [baseline, ...participantText].join("\n");
-  const flagged = new Map<string, string>();
-  for (const turn of turns) {
-    const told = sentences([turn.narrative_response, turn.new_inject, ...turn.response_options]);
-    for (const sentence of told) {
-      if (OBTAINED.test(sentence)) continue;
-      for (const item of EQUIPMENT) {
-        if (flagged.has(item) || mentions(known, item) || !mentions(sentence, item) || negated(sentence, item)) continue;
-        // "space heater" covers "heater".
-        if (item === "heater" && flagged.has("space heater")) continue;
-        flagged.set(item, `${turn.time_elapsed}: "${item}" appears without being in the baseline or obtained: "${sentence}"`);
-      }
-    }
-  }
-  return [...flagged.values()];
-}
+/** Equipment that appears in the story without being in the baseline or obtained (lib/continuity.ts). */
+export const introducedEquipment = (baseline: string, turns: TurnOutput[], participantText: string[]) =>
+  introducedItems(baseline, turns, participantText).map(
+    ({ item, time, sentence }) => `${time}: "${item}" appears without being in the baseline or obtained: "${sentence}"`,
+  );
 
 const DEBRIEF_CATEGORY: Record<DebriefCheckCategory, CheckCategory> = {
+  continuity: "continuity",
   suitability: "suitability",
   citation: "citation",
   safety: "safety",
@@ -117,7 +77,7 @@ export function contentFindings({ baseline, turns, participantText, report, repl
     if (!report.need_to_know.length) out.push({ category: "completion", text: "Debrief has no 'what you need to know'" });
     if (!report.do_better.length) out.push({ category: "completion", text: "Debrief has no 'what you can do better'" });
     // Citations are checked against every hour, replayed or not.
-    out.push(...checkDebrief(report, turns).map((p) => ({ category: DEBRIEF_CATEGORY[p.category], text: p.problem })));
+    out.push(...checkDebrief(report, turns, { baseline, participantText }).map((p) => ({ category: DEBRIEF_CATEGORY[p.category], text: p.problem })));
     const verdict = [report.summary, ...report.need_to_know, ...report.do_better.map(improvementText), ...report.went_well].join(" ").match(VERDICT);
     if (verdict) out.push({ category: "suitability", text: `Debrief uses grading language: "${verdict[0]}"` });
   }

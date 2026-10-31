@@ -416,6 +416,17 @@ describe("POST /api/ttx: the debrief", () => {
     expect(model.doGenerateCalls).toHaveLength(2);
     expect(body).toContain("didn't pass ReadyState's checks, even after one repair");
     expect(body).not.toContain("tool-output-available");
+    // The counters and both sets of failures still reach the eval, without the debrief.
+    const start = body.split("\n").find((line) => line.includes('"type":"start"'));
+    expect(JSON.parse(start!.slice(6)).messageMetadata).toMatchObject({
+      providerCalls: 2,
+      debriefRepairs: 1,
+      debriefChecks: {
+        passedImplementedChecks: false,
+        failedFirst: [expect.stringContaining("action is a list")],
+        stillFailing: [expect.stringContaining("action is a list")],
+      },
+    });
   });
 
   it("skips the repair when too little of the time budget is left", async () => {

@@ -10,9 +10,10 @@
  * categories, and factual support only covers the known inaccuracies below.
  */
 import { SAFETY_RULES } from "@/lib/rules";
+import { introducedEquipment, mentions, negated, powerOutageContext } from "@/lib/continuity";
 import type { AfterActionReport, Improvement, TurnOutput } from "@/lib/ttx";
 
-export type DebriefCheckCategory = "suitability" | "citation" | "safety" | "accuracy";
+export type DebriefCheckCategory = "continuity" | "suitability" | "citation" | "safety" | "accuracy";
 
 export interface DebriefProblem {
   category: DebriefCheckCategory;
@@ -86,24 +87,79 @@ const GUIDANCE = /\b(guidance|CDC|FEMA|Ready\.gov|Red Cross|USDA|NWS)\b/;
  * Claims known to be wrong, from eval findings. Factual support for anything
  * else is unchecked here (the model judge, G11).
  */
-export const KNOWN_INACCURACIES = [
+const ELECTRICAL_FIX =
+  "The exercise narrated a breaker trip, which doesn't show why it tripped or what the circuit can carry. Leave out conclusions about circuit capacity, wattage limits or dedicated circuits; if it matters, the household can ask building maintenance or an electrician.";
+
+export const KNOWN_INACCURACIES: { id: string; patterns: RegExp[]; except?: RegExp; fix: string }[] = [
   {
+    // A 1,500 W heater is within a 15-amp, 120 V circuit's 1,800 W (eval finding 16).
     id: "heater-exceeds-circuit",
-    pattern: /\b(1,?500[- ‑]?(w|watts?)\b|space heater)[^.]{0,80}\b(exceeds?|overloads?)\b[^.]{0,60}\bcircuit/i,
-    fix: "A 1,500 W heater is within a standard 15-amp, 120 V circuit (1,800 W). It trips a breaker only when other loads share the circuit; say that, or leave it out.",
+    patterns: [/\b(1,?500[- ‑]?(w|watts?)\b|space heater)[^.]{0,80}\b(exceeds?|overloads?)\b[^.]{0,60}\bcircuit/i],
+    fix: ELECTRICAL_FIX,
   },
   {
     id: "detectors-electrical-hazards",
-    pattern: /\b(smoke|co|carbon monoxide)\b[^.]{0,60}\b(detectors?|alarms?)\b[^.]{0,80}\belectrical (hazards?|faults?|problems?)\b/i,
+    patterns: [/\b(smoke|co|carbon monoxide)\b[^.]{0,60}\b(detectors?|alarms?)\b[^.]{0,80}\belectrical (hazards?|faults?|problems?)\b/i],
     fix: "Smoke alarms detect smoke and CO alarms detect carbon monoxide; neither detects electrical hazards. Describe what each actually detects.",
+  },
+  {
+    // "No smoke detectors … a required safety device for fire and carbon monoxide detection" (Alex, 2026-10-31).
+    id: "smoke-alarm-detects-co",
+    patterns: [
+      /\bsmoke (detectors?|alarms?)\b[^.]{0,120}\b(carbon monoxide|CO)\b[^.]{0,20}\b(detection|detectors?|detects?|alerts?|warnings?)\b/i,
+      /\bsmoke (detectors?|alarms?)\b[^.]{0,80}\b(detects?|detection|alerts?|warns?|senses?)\b[^.]{0,60}\b(carbon monoxide|CO)\b/i,
+    ],
+    // A combination alarm, or a CO alarm named as its own device, is correct.
+    except: /\b(combination|combo|dual[- ‑]sensor)\b|\bsmoke\s*(\/|and|&)\s*(CO|carbon monoxide) (alarms?|detectors?)\b|\b(CO|carbon monoxide) (alarms?|detectors?)\b/i,
+    fix: "A smoke alarm detects smoke, not carbon monoxide; that takes a CO alarm or a combination smoke/CO alarm. Name the right device, or leave it out.",
+  },
+  {
+    // A narrated breaker trip shows neither why it tripped nor what the circuit carries (Alex, 2026-10-31).
+    id: "unsupported-electrical-conclusion",
+    patterns: [
+      /\b(circuits?|breakers?|wiring|outlets?|electrical (system|panel))\b[^.]{0,80}\b(cannot|can't|can ?not|unable to|won't|will not)\s+(sustain|handle|support|carry|take|run|power)\b/i,
+      /\b(will|would|always)\s+(trip|overload)\w*\b[^.]{0,40}\b(breakers?|circuits?)\b/i,
+      /\b(breakers?|circuits?)\b[^.]{0,40}\b(will|would|always)\s+(trip|overload)\w*\b/i,
+      /\b(electrical|circuit) capacity\b|\bdedicated circuit\b|\bamp(erage)? rating\b/i,
+      /\b80 ?(%|percent)\b[^.]{0,40}\b(circuit|load|breaker|capacity)\b/i,
+      // A stated cause: "overloaded the circuit". Recounting the trip ("when the breaker tripped") and
+      // advice ("a heat source that does not overload circuits") are fine.
+      /\boverload(ed|s)\b[^.]{0,20}\b(circuits?|breakers?)\b/i,
+      /\bcaus(ed|es|ing)\b[^.]{0,40}\b(circuits?|breakers?)\b[^.]{0,20}\btrip/i,
+    ],
+    fix: ELECTRICAL_FIX,
   },
 ];
 
+/** A whole kit as the action, with no specific first step: "Assemble a basic emergency kit." */
+const GENERIC_KIT = /\b(kits?|go[- ‑]bags?|supplies|preparedness items)\b/i;
+
+/** Heat that needs grid power. */
+const GRID_HEAT =
+  /\b(space heaters?|electric (space )?heaters?|plug[- ‑]in heaters?|ceramic heaters?|oil[- ‑]filled (radiators?|heaters?)|(low|high)[- ‑]wattage (space )?heaters?|\d+[- ‑]?(w|watts?)\b[^.]{0,20}\bheaters?|electric blankets?|heated blankets?|heating pads?)\b/i;
+/** A recommendation, in the present or imperative; "You used…" recounts. */
+const RECOMMENDS =
+  /\b(get|buy|obtain|acquire|purchase|use|keep|have|consider|choose|add|invest in|pick up|rely on|bring|plug in|run|such as|e\.g\.)\b/i;
+/** Says grid heat won't help: "Electric heating … is unavailable during a power outage" (Alex, 2026-10-31). */
+const UNAVAILABLE = /\b(unavailable|useless|won't (work|run|help)|doesn't (work|run|help)|don't (work|run|help)|can't (work|run)|stops? working)\b/i;
+const NOT_ADVICE = /\b(don't|do not|never|avoid|won't|will not|doesn't|does not|can't|cannot|not|instead of|rather than|useless|unavailable)\b/i;
+const ACQUIRE = /\b(get|buy|obtain|acquire|purchase|add|borrow|pick up|invest in)\b/i;
+
+const OUTAGE_HEATING = SAFETY_RULES.find((rule) => rule.id === "outage-appropriate-heating");
+
+/** What the participant established, for checks that need more than the turns. */
+export interface DebriefContext {
+  baseline?: string;
+  /** The participant's responses. */
+  participantText?: string[];
+}
+
 /**
- * Every implemented check, given the turns that happened. An empty list means
- * the debrief passed the implemented checks.
+ * Every implemented check, given the turns that happened and, where known,
+ * what the household established. An empty list means the debrief passed the
+ * implemented checks.
  */
-export function checkDebrief(report: AfterActionReport, turns: TurnOutput[]): DebriefProblem[] {
+export function checkDebrief(report: AfterActionReport, turns: TurnOutput[], context: DebriefContext = {}): DebriefProblem[] {
   const problems: DebriefProblem[] = [];
   const add = (category: DebriefCheckCategory, problem: string, fix: string) => problems.push({ category, problem, fix });
 
@@ -125,6 +181,13 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[]): De
           "Rewrite it as one concrete step and put the individual supplies in supply_checklist, one per item, or drop this improvement.",
         );
       }
+    }
+    if (GENERIC_KIT.test(item.action) && !suppliesIn(item.action) && !listShaped(item.action)) {
+      add(
+        "suitability",
+        `Improvement's action is a whole kit, not a specific first step: ${quote(item.action)}`,
+        "Name one specific item or step that fills a gap the exercise showed, e.g. \"Buy a battery radio this week\" (Hour 30: you missed the alert), or drop this improvement.",
+      );
     }
   }
 
@@ -163,17 +226,67 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[]): De
   }
 
   const improvements = report.do_better.flatMap(improvementParts);
-  const all = [report.summary, ...report.need_to_know, ...improvements, ...report.went_well, ...(report.supply_checklist ?? [])];
+  const checklist = report.supply_checklist ?? [];
+  const all = [report.summary, ...report.need_to_know, ...improvements, ...report.went_well, ...checklist];
+
+  // Continuity: an event in the log isn't a valid premise if the story invented it. Equipment the
+  // story introduced without the household having or obtaining it can't ground a point, and the
+  // original defect stays attributed to the turn that introduced it.
+  if (context.baseline !== undefined) {
+    for (const { item, time } of introducedEquipment(context.baseline, turns, context.participantText ?? [])) {
+      // A general statement that such equipment won't work isn't a premise about this one.
+      const refersTo = (text: string) =>
+        (mentions(text, item) || (item === "space heater" && mentions(text, "heater"))) && !negated(text, item) && !UNAVAILABLE.test(text);
+      const premises = [
+        report.summary,
+        ...report.need_to_know,
+        ...report.went_well,
+        ...report.do_better.flatMap(({ action, evidence, why }) => [evidence, why, ...(ACQUIRE.test(action) ? [] : [action])]),
+      ];
+      const relying = sentences(premises).filter(refersTo);
+      if (relying.length) {
+        add(
+          "continuity",
+          `Relies on the ${item}, which the story introduced at ${time} without the household having or obtaining it: ${relying.slice(0, 3).map((s) => quote(s, 100)).join("; ")}`,
+          `Leave the ${item} out: it isn't a valid premise. Base every point on what the household had or obtained, and drop an improvement that depends on it.`,
+        );
+      }
+    }
+  }
 
   // Safety: the detect patterns of data/rules/safety.json.
-  for (const { rule, prompt, sentence } of unsafeSentences([...report.need_to_know, ...improvements, ...(report.supply_checklist ?? [])])) {
+  const flagged = new Set<string>();
+  for (const { rule, prompt, sentence } of unsafeSentences([...report.need_to_know, ...improvements, ...checklist])) {
+    flagged.add(`${rule}:${sentence}`);
     add("safety", `Breaks safety rule ${rule}: ${quote(sentence)}`, prompt);
+  }
+  // In an exercise with a power outage, the outage-heating rule applies to any recommendation of grid-powered
+  // heat, whether or not the sentence says "outage", and even after power returned in the story.
+  if (OUTAGE_HEATING && powerOutageContext(context.baseline ?? "", turns)) {
+    const recommends = (sentence: string) => GRID_HEAT.test(sentence) && RECOMMENDS.test(sentence) && !NOT_ADVICE.test(sentence);
+    const recommending = [
+      ...sentences([report.summary, ...report.need_to_know, ...report.do_better.flatMap(({ action, why }) => [action, why])]).filter(recommends),
+      // A checklist item is a recommendation by being on the list.
+      ...checklist.filter((entry) => GRID_HEAT.test(entry) && !NOT_ADVICE.test(entry)),
+    ];
+    for (const sentence of recommending) {
+      if (flagged.has(`${OUTAGE_HEATING.id}:${sentence}`)) continue;
+      add("safety", `Recommends grid-powered heat in a power-outage exercise (rule ${OUTAGE_HEATING.id}): ${quote(sentence)}`, OUTAGE_HEATING.prompt);
+    }
   }
 
   // Factual support, for known inaccuracies only.
   for (const sentence of sentences(all)) {
     for (const known of KNOWN_INACCURACIES) {
-      if (known.pattern.test(sentence)) add("accuracy", `Known inaccuracy (${known.id}): ${quote(sentence)}`, known.fix);
+      if (known.patterns.some((pattern) => pattern.test(sentence)) && !known.except?.test(sentence)) {
+        add("accuracy", `Known inaccuracy (${known.id}): ${quote(sentence)}`, known.fix);
+      }
+    }
+  }
+  // A breaker trip in the story doesn't justify buying anything.
+  for (const item of report.do_better) {
+    if (ACQUIRE.test(item.action) && /\b(breakers?|circuits?|tripp?(ed|ing)?)\b/i.test(`${item.evidence} ${item.why}`)) {
+      add("accuracy", `Improvement bases a purchase on a breaker trip (unsupported-electrical-conclusion): ${quote(item.action)}`, ELECTRICAL_FIX);
     }
   }
 

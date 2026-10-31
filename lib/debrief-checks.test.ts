@@ -165,7 +165,7 @@ describe("checkDebrief: structured improvements", () => {
       ...base,
       do_better: [
         {
-          action: "Build a kit this month.",
+          action: "Get ready for the next outage this month.",
           evidence: "Hour 24: the dark hallway",
           why: "You needed water, food, a radio, flashlights and batteries.",
         },
@@ -185,7 +185,236 @@ describe("checkDebrief: structured improvements", () => {
         },
       ],
     };
-    expect(categories(heater).sort()).toEqual(["accuracy", "safety"]);
+    expect(new Set(categories(heater))).toEqual(new Set(["accuracy", "safety"]));
+  });
+});
+
+/**
+ * Alex's debrief from the structured-improvements rerun on 2026-10-31. It
+ * passed every check of the time; these defects were found by reading it.
+ * The turns quote the run where the checks depend on them.
+ */
+const alex31Baseline = [
+  "People: 1 adult.",
+  "Home: apartment, 1 floor, no basement. Heating: electric heat. Cooking: electric. Water: municipal water. Backup power: none.",
+  "Stored: 1 gallon of stored water, 2 days of food.",
+  "Has: flashlights or headlamps, phone power banks.",
+  "Emergency to practice: extended power outage.",
+].join("\n");
+const alex31Turns = alexTurns.map((turn) => {
+  if (turn.hours_elapsed === 60) {
+    return {
+      ...turn,
+      narrative_response: "Power is restored but the building’s central heating is slow to recover, keeping indoor temperatures around 45 °F.",
+      response_options: [
+        "I go back to my apartment alone right away, find an electric space heater in the unit, and try to heat the space despite the low temperature.",
+      ],
+    };
+  }
+  if (turn.hours_elapsed === 72) {
+    return {
+      ...turn,
+      narrative_response:
+        "You locate a small 1500‑watt space heater stored in the building’s maintenance closet and plug it into an outlet near the living‑room sofa. Within about 10 minutes the circuit breaker trips, cutting power to the heater and the apartment lights.",
+    };
+  }
+  return turn;
+});
+/** The participant chose the Hour 60 option: finding the heater doesn't establish it. */
+const alex31Context = {
+  baseline: alex31Baseline,
+  participantText: [
+    "I go back to my apartment alone right away, find an electric space heater in the unit, and try to heat the space despite the low temperature.",
+  ],
+};
+const alex31: AfterActionReport = {
+  summary:
+    "The exercise revealed critical gaps in water, food, and emergency supplies, and highlighted the challenges of heating a damp apartment without adequate power capacity. However, reliance on a high‑wattage space heater overloaded the circuit, and the delayed central heating left you exposed to cold for several hours.",
+  went_well: [
+    "You turned off the main breaker when water contacted outlets, preventing electrical shock (Hour 30).",
+    "You monitored the heater’s impact on the circuit and called maintenance when breakers tripped (Hour 72).",
+  ],
+  need_to_know: [
+    "Your apartment’s electric circuit cannot sustain a 1500‑W heater continuously; high‑wattage heaters will trip breakers (Hour 72).",
+    "You have only 1 gallon of stored water, covering roughly one day for one adult, which is below the three‑day minimum recommended for power outages (Baseline).",
+    "No smoke detectors were recorded in the apartment, a required safety device for fire and carbon monoxide detection (Baseline gaps).",
+  ],
+  do_better: [
+    {
+      action: "Store at least 3 gallons of water for a minimum three‑day supply.",
+      evidence: "Baseline: only 1 gallon stored (Hour 0‑12 water use) and later water shortage concerns during flood.",
+      why: "Ensures adequate hydration when municipal water is unavailable, meeting CDC/FEMA guidelines.",
+    },
+    {
+      action: "Assemble a basic emergency kit.",
+      evidence: "Inventory check identified 10 of 12 kit items missing; these were never acquired during the exercise.",
+      why: "Provides essential tools and supplies for sheltering in place, utility shut‑off, and receiving alerts during outages.",
+    },
+    {
+      action:
+        "Obtain a heating solution compatible with the apartment’s electrical capacity, such as a low‑wattage (e.g., 750‑W) space heater used on a dedicated circuit.",
+      evidence: "Hour 72: 1500‑W heater repeatedly tripped the breaker, limiting indoor heating until central heat returned.",
+      why: "Prevents circuit overload and ensures reliable warmth without risking electrical fire or hypothermia.",
+    },
+  ],
+  supply_checklist: ["3 gallons of stored water", "Warm blankets or sleeping bags for each occupant", "Smoke detector with battery backup"],
+};
+
+describe("checkDebrief: Alex's 2026-10-31 debrief", () => {
+  const problems = checkDebrief(alex31, alex31Turns, alex31Context);
+  const about = (text: string) => problems.filter((p) => p.problem.includes(text));
+
+  it("rejects points that rely on the space heater the story invented, though the event is in the log", () => {
+    const premise = problems.filter((p) => p.category === "continuity");
+    expect(premise).toHaveLength(1);
+    expect(premise[0].problem).toContain("Relies on the space heater, which the story introduced at Hour 60");
+    expect(premise[0].problem).toContain("high‑wattage space heater overloaded");
+  });
+
+  it("applies the outage-heating rule from the scenario, though the sentence never says outage", () => {
+    expect(problems.filter((p) => p.category === "safety").map((p) => p.problem)).toEqual([
+      expect.stringContaining("Recommends grid-powered heat in a power-outage exercise"),
+    ]);
+    expect(about("Recommends grid-powered heat")[0].problem).toContain("750‑W) space heater");
+  });
+
+  it("rejects the vague kit action", () => {
+    expect(about("whole kit, not a specific first step")).toHaveLength(1);
+    expect(about("whole kit")[0].fix).toContain("or drop this improvement");
+  });
+
+  it("rejects the smoke-alarm/CO confusion", () => {
+    expect(about("smoke-alarm-detects-co")).toHaveLength(1);
+  });
+
+  it("rejects electrical conclusions the narrated breaker trip doesn't support", () => {
+    const electrical = about("unsupported-electrical-conclusion").map((p) => p.problem);
+    expect(electrical).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("overloaded the circuit"),
+        expect.stringContaining("cannot sustain a 1500‑W heater"),
+        expect.stringContaining("electrical capacity"),
+        expect.stringContaining("bases a purchase on a breaker trip"),
+      ]),
+    );
+    expect(about("unsupported-electrical-conclusion")[0].fix).not.toMatch(/80 ?%/);
+  });
+
+  it("doesn't reject the repair's correct statement that electric heat is unavailable in an outage (false positive, 2026-10-31)", () => {
+    const correct = {
+      ...alex31,
+      summary: "Gaps in water and warmth showed.",
+      went_well: [],
+      need_to_know: [
+        "Electric heating (central heat or space heaters) is unavailable during a power outage; you need non‑electric warmth sources such as layered clothing and blankets (Hour 0).",
+      ],
+      do_better: [],
+    };
+    expect(checkDebrief(correct, alex31Turns, alex31Context)).toEqual([]);
+  });
+
+  it("rejects the repair's causal breaker claim", () => {
+    const causal = {
+      ...alex31,
+      summary: "Gaps in water and warmth showed.",
+      need_to_know: ["The 1500‑watt space heater caused the circuit breaker to trip, showing that high‑draw electric heaters are risky (Hour 72)."],
+      went_well: [],
+      do_better: [],
+    };
+    expect(checkDebrief(causal, alex31Turns, alex31Context).map((p) => p.category).sort()).toEqual(["accuracy", "continuity"]);
+  });
+
+  it("passes once the heater, the kit action and the claims are gone, with one improvement left", () => {
+    const repaired: AfterActionReport = {
+      ...alex31,
+      summary: "The exercise revealed gaps in water, food and warmth, and the slow return of central heat left you cold for hours.",
+      went_well: [alex31.went_well[0]],
+      need_to_know: [
+        alex31.need_to_know[1],
+        "No smoke or CO alarms were recorded; a smoke alarm detects smoke, and a CO alarm detects carbon monoxide (Baseline gaps).",
+      ],
+      do_better: [alex31.do_better[0]],
+    };
+    expect(checkDebrief(repaired, alex31Turns, alex31Context)).toEqual([]);
+  });
+});
+
+describe("checkDebrief: smoke and CO alarms", () => {
+  const base: AfterActionReport = { ...alexRerun, need_to_know: [], do_better: [], supply_checklist: [] };
+  const fact = (text: string) => categories({ ...base, need_to_know: [`${text} (Baseline gaps)`] });
+
+  it("flags a smoke alarm described as detecting carbon monoxide", () => {
+    expect(fact("A smoke alarm will warn you of carbon monoxide.")).toEqual(["accuracy"]);
+  });
+
+  it("allows an explicitly identified combination alarm, or a CO alarm named as its own device", () => {
+    expect(fact("Install a combination smoke/CO alarm, which detects both smoke and carbon monoxide.")).toEqual([]);
+    expect(fact("Install smoke and CO alarms near the bedroom.")).toEqual([]);
+    expect(fact("Smoke alarms detect smoke; a CO alarm detects carbon monoxide.")).toEqual([]);
+  });
+});
+
+describe("checkDebrief: kit actions", () => {
+  const base: AfterActionReport = { ...alexRerun, need_to_know: [], do_better: [], supply_checklist: [] };
+  const action = (text: string) => categories({ ...base, do_better: [{ action: text, evidence: "Hour 30: the missed alert", why: "You had no alerts." }] });
+
+  it("rejects a kit or supplies with no specific first step, with or without a checklist", () => {
+    expect(action("Assemble a basic emergency kit.")).toEqual(["suitability"]);
+    expect(action("Stock up on emergency supplies.")).toEqual(["suitability"]);
+    expect(action("Put together a go-bag.")).toEqual(["suitability"]);
+  });
+
+  it("accepts a kit started with a specific item", () => {
+    expect(action("Start a kit with a battery radio this week.")).toEqual([]);
+    expect(action("Buy a first-aid kit this week.")).toEqual([]);
+  });
+});
+
+describe("checkDebrief: scenario context for heating", () => {
+  const base: AfterActionReport = { ...alexRerun, need_to_know: [], do_better: [], supply_checklist: [] };
+  const heater: AfterActionReport = {
+    ...base,
+    do_better: [{ action: "Buy a ceramic space heater for the bedroom.", evidence: "Hour 48: the cold bedroom", why: "It warms one room." }],
+    supply_checklist: ["Electric blanket"],
+  };
+  const outage = { baseline: "Emergency to practice: extended power outage." };
+
+  it("flags grid-powered heat in the action and the checklist of an outage exercise", () => {
+    const problems = checkDebrief(heater, alexTurns, outage).map((p) => p.problem);
+    expect(problems).toEqual([
+      expect.stringContaining('"Buy a ceramic space heater'),
+      expect.stringContaining('"Electric blanket"'),
+    ]);
+  });
+
+  it("recognizes an outage the story developed, not only the chosen emergency", () => {
+    const turns = alexTurns.map((turn) => (turn.hours_elapsed === 12 ? { ...turn, new_inject: "The ice brings down a line and the power goes out." } : turn));
+    expect(checkDebrief(heater, turns, { baseline: "Emergency to practice: winter storm." })).toHaveLength(2);
+  });
+
+  it("doesn't apply without an outage, or to a warning against grid heat", () => {
+    expect(checkDebrief(heater, alexTurns, { baseline: "Emergency to practice: winter storm." })).toEqual([]);
+    const warning = { ...base, need_to_know: ["A space heater won't help when the power is out (Hour 12)."] };
+    expect(checkDebrief(warning, alexTurns, outage)).toEqual([]);
+  });
+});
+
+describe("checkDebrief: invented premises", () => {
+  const base: AfterActionReport = { ...alexRerun, need_to_know: [], do_better: [], supply_checklist: [] };
+
+  it("allows recommending to obtain an item the story invented, and saying the household lacks it", () => {
+    const report: AfterActionReport = {
+      ...base,
+      need_to_know: ["You have no space heater of your own (Baseline)."],
+      do_better: [{ action: "Buy a sleeping bag this week.", evidence: "Hour 48: the cold apartment", why: "It keeps you warm without power." }],
+    };
+    expect(checkDebrief(report, alex31Turns, alex31Context).filter((p) => p.category === "continuity")).toEqual([]);
+  });
+
+  it("counts an item the participant said they have", () => {
+    const report: AfterActionReport = { ...base, need_to_know: ["Your space heater tripped the breaker (Hour 72)."] };
+    const context = { ...alex31Context, participantText: ["I plug in the space heater I keep in the closet."] };
+    expect(checkDebrief(report, alex31Turns, context).filter((p) => p.category === "continuity")).toEqual([]);
   });
 });
 
@@ -196,7 +425,7 @@ describe("repairInstructions", () => {
     expect(text).toMatch(/^Your debrief failed these checks/);
     expect(text).toContain("1. Improvement's action is a list");
     expect(text).toContain("2. Known inaccuracy (heater-exceeds-circuit)");
-    expect(text).toContain("Fix: A 1,500 W heater is within a standard 15-amp, 120 V circuit");
+    expect(text).toContain("Fix: The exercise narrated a breaker trip");
     expect(text.match(/^\d+\./gm)).toHaveLength(3);
   });
 
