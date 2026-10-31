@@ -1,29 +1,43 @@
 /**
- * Runs the eval-only factual-consistency judge (G11) over the case set in
- * scripts/eval/factual/, validates each judgment against the contract and
- * scores it against the manual labels. Opt-in:
+ * Runs the eval-only factual-consistency judge (G11): claim calls and
+ * separate note checks over the case set in scripts/eval/factual/, validated
+ * against the contract and scored against the manual labels. Opt-in:
  *
  *   EVAL_FACTUAL=1 EVAL_FACTUAL_SET=development npm run eval -- scripts/eval/factual.eval.ts
  *
  * EVAL_FACTUAL_SET is development, reserved or all (default development).
- * EVAL_FACTUAL_DRY_RUN=1 prints the plan and its token estimate without any
+ * EVAL_FACTUAL_DRY_RUN=1 prints the plan and its token allowance without any
  * model call. It calls the provider directly with the server's env key, not
- * the ReadyState server. A hard token budget (EVAL_JUDGE_BUDGET, default
- * 25,000 input and output tokens) stops it before any call that could exceed
- * it; a failed call counts at its full allowance, since its usage isn't
- * reported.
+ * the ReadyState server. A hard budget (EVAL_JUDGE_BUDGET, default 25,000)
+ * stops it before any call whose allowance could exceed it. A failed call
+ * reports no usage, so it is charged at its full allowance: the charge is
+ * budget accounting, not measured usage, and the report keeps the two apart.
  */
 import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { wrapLanguageModel, type LanguageModelMiddleware } from "ai";
+import { wrapLanguageModel, type LanguageModel, type LanguageModelMiddleware } from "ai";
 import { describe, expect, it } from "vitest";
 
 import { resolveModel } from "@/lib/providers";
 
-import { BATCHES, type Batch } from "./factual/cases";
-import { MAX_OUTPUT_TOKENS, batchPrompt, checkNote, estimateInputTokens, judgeBatch, validate, type BatchRun, type NoteCheckResult, type ValidatedClaim } from "./factual/judge";
+import { BATCHES, NOTE_CHECKS } from "./factual/cases";
+import {
+  MAX_OUTPUT_TOKENS,
+  NOTE_INSTRUCTIONS,
+  NOTE_MAX_OUTPUT_TOKENS,
+  batchPrompt,
+  checkNote,
+  estimateInputTokens,
+  judgeBatch,
+  judgeNote,
+  notePrompt,
+  validate,
+  type CallRun,
+  type CallStatus,
+  type NoteCheckResult,
+} from "./factual/judge";
 import { score, summarize, type ScoredCase } from "./factual/score";
 
 const ENABLED = process.env.EVAL_FACTUAL === "1";
@@ -35,18 +49,35 @@ const PAUSE_MS = 62_000;
 const outDir = path.join("eval-results", `${new Date().toISOString().replace(/[:.]/g, "-")}-factual`);
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/** The batches a set runs, and the most each call may use. */
-export function plan(set: string) {
-  const batches = BATCHES.filter((batch) => set === "all" || batch.set === set);
-  const calls = batches.map((batch) => ({ batch: batch.name, allowance: estimateInputTokens(batchPrompt(batch).text) + MAX_OUTPUT_TOKENS }));
-  return { batches, calls, worstCase: calls.reduce((sum, call) => sum + call.allowance, 0) };
+interface PlannedCall {
+  name: string;
+  allowance: number;
+  run: (model: LanguageModel) => Promise<CallRun<unknown>>;
+}
+
+/** The calls a set makes, in order, and the most each may use. */
+export function plan(set: string): PlannedCall[] {
+  const inSet = (s: string) => set === "all" || s === set;
+  return [
+    ...BATCHES.filter((batch) => inSet(batch.set)).map((batch) => ({
+      name: batch.name,
+      allowance: estimateInputTokens(batchPrompt(batch).text) + MAX_OUTPUT_TOKENS,
+      run: (model: LanguageModel) => judgeBatch(model, batch),
+    })),
+    ...NOTE_CHECKS.filter((check) => inSet(check.set)).map((check) => ({
+      name: check.name,
+      allowance: estimateInputTokens(notePrompt(check).text, NOTE_INSTRUCTIONS) + NOTE_MAX_OUTPUT_TOKENS,
+      run: (model: LanguageModel) => judgeNote(model, check),
+    })),
+  ];
 }
 
 describe.skipIf(!ENABLED)("G11 factual-consistency judge, eval only", () => {
   it("judges the case set within the token budget", async () => {
-    const { batches, calls, worstCase } = plan(SET);
+    const calls = plan(SET);
+    const worstCase = calls.reduce((sum, c) => sum + c.allowance, 0);
     // Written directly: the test runner hides console output from passing tests.
-    process.stdout.write(`\nPlan for ${SET}: ${calls.map((c) => `${c.batch} ≤${c.allowance}`).join(", ")}; worst case ${worstCase} of a ${BUDGET}-token budget.\n`);
+    process.stdout.write(`\nPlan for ${SET}: ${calls.map((c) => `${c.name} ≤${c.allowance}`).join(", ")}; worst case ${worstCase} of a ${BUDGET}-token budget.\n`);
     if (DRY_RUN) return;
 
     if (!process.env.GROQ_API_KEY) {
@@ -70,39 +101,45 @@ describe.skipIf(!ENABLED)("G11 factual-consistency judge, eval only", () => {
     const modelId = typeof resolved.model === "string" ? resolved.model : resolved.model.modelId;
 
     const started = Date.now();
-    const runs: BatchRun[] = [];
-    const skipped: string[] = [];
-    let spent = 0;
-    for (const batch of batches) {
-      const allowance = estimateInputTokens(batchPrompt(batch).text) + MAX_OUTPUT_TOKENS;
+    const runs: CallRun<unknown>[] = [];
+    let charged = 0;
+    for (const planned of calls) {
+      let last: CallRun<unknown> | undefined;
       for (let attempt = 1; attempt <= 2; attempt++) {
-        if (spent + allowance > BUDGET) {
-          skipped.push(`${batch.name} (attempt ${attempt}): would exceed the budget at ${spent} spent`);
-          break;
-        }
+        if (charged + planned.allowance > BUDGET) break;
         if (runs.length) await sleep(PAUSE_MS);
         const before = providerCalls;
-        const run = await judgeBatch(model, batch, MAX_OUTPUT_TOKENS);
-        run.attempts = attempt;
-        run.providerCalls = providerCalls - before;
-        spent += run.error ? allowance * Math.max(1, run.providerCalls) : run.usage.inputTokens + run.usage.outputTokens;
-        runs.push(run);
-        if (!run.error) break;
+        last = await planned.run(model);
+        last.attempts = attempt;
+        last.providerCalls = providerCalls - before;
+        charged += last.status === "provider failure" ? planned.allowance * Math.max(1, last.providerCalls) : last.usage.inputTokens + last.usage.outputTokens;
+        runs.push(last);
+        if (last.status === "completed") break;
       }
+      if (!last) runs.push({ name: planned.name, status: "not run", usage: { inputTokens: 0, outputTokens: 0 }, ms: 0, attempts: 0 });
     }
 
-    const judged = runs.filter((run) => run.judgment).map((run) => ({ run, batch: batches.find((b) => b.name === run.batch)! }));
-    const validated: ValidatedClaim[] = judged.flatMap(({ batch, run }) => validate(batch, run.judgment!).claims);
-    const notes = judged.map(({ batch, run }) => ({ batch: batch.name, result: checkNote(batch, run.judgment!) })).filter((n) => n.result);
-    const scored = score(validated).filter((c) => batches.some((b) => b.cases.some((x) => x.id === c.id)));
-    const usage = runs.reduce((total, run) => ({ input: total.input + run.usage.inputTokens, output: total.output + run.usage.outputTokens }), { input: 0, output: 0 });
+    // Each case's call outcome: the last attempt of its batch.
+    const lastRun = (name: string) => runs.filter((run) => run.name === name).at(-1)!;
+    const status = new Map<string, CallStatus>();
+    const validated = BATCHES.filter((batch) => calls.some((c) => c.name === batch.name)).flatMap((batch) => {
+      const run = lastRun(batch.name);
+      for (const { id } of batch.cases) status.set(id, run.status);
+      return run.status === "completed" ? validate(batch, run.result as Parameters<typeof validate>[1]).claims : [];
+    });
+    const notes = NOTE_CHECKS.filter((check) => calls.some((c) => c.name === check.name)).map((check) => {
+      const run = lastRun(check.name);
+      return { name: check.name, status: run.status, result: run.status === "completed" ? checkNote(check, run.result as Parameters<typeof checkNote>[1]) : undefined };
+    });
+    const scored = score(validated, status);
+    const reported = runs.reduce((total, run) => ({ input: total.input + run.usage.inputTokens, output: total.output + run.usage.outputTokens }), { input: 0, output: 0 });
 
     mkdirSync(outDir, { recursive: true });
-    const meta = { model: `${resolved.provider}/${modelId}`, set: SET, budget: BUDGET, spent, usage, providerCalls, skipped, elapsedMs: Date.now() - started, revision: revision() };
+    const meta = { model: `${resolved.provider}/${modelId}`, set: SET, budget: BUDGET, charged, reported, providerCalls, elapsedMs: Date.now() - started, revision: revision() };
     writeFileSync(path.join(outDir, "factual-judge.json"), JSON.stringify({ ...meta, runs, validated, notes, scored }, null, 2));
-    writeFileSync(path.join(outDir, "factual-judge.md"), report(meta, runs, scored, notes as { batch: string; result: NoteCheckResult }[], batches));
-    console.log(`Factual judge report written to ${path.resolve(outDir)}`);
-    expect(spent).toBeLessThanOrEqual(BUDGET);
+    writeFileSync(path.join(outDir, "factual-judge.md"), report(meta, runs, scored, notes));
+    process.stdout.write(`Factual judge report written to ${path.resolve(outDir)}\n`);
+    expect(charged).toBeLessThanOrEqual(BUDGET);
   });
 });
 
@@ -120,51 +157,57 @@ const cell = (text = "") => text.replace(/\|/g, "\\|").replace(/\s+/g, " ");
 const ids = (cases: ScoredCase[]) => (cases.length ? cases.map((c) => `${c.id} (${c.type})`).join("; ") : "none");
 
 function report(
-  meta: { model: string; set: string; spent: number; usage: { input: number; output: number }; providerCalls: number; skipped: string[]; elapsedMs: number; revision: string },
-  runs: BatchRun[],
+  meta: { model: string; set: string; charged: number; reported: { input: number; output: number }; providerCalls: number; elapsedMs: number; revision: string },
+  runs: CallRun<unknown>[],
   scored: ScoredCase[],
-  notes: { batch: string; result: NoteCheckResult }[],
-  batches: Batch[],
+  notes: { name: string; status: CallStatus; result?: NoteCheckResult }[],
 ) {
-  const sets = [...new Set(batches.map((b) => b.set))];
+  const sets = [...new Set(scored.map((c) => c.set))];
   return [
     "# G11 factual-consistency judge (eval only)",
     "",
-    `Model ${meta.model}, set ${meta.set}, code ${meta.revision}. ${runs.length} judge call(s), ${meta.providerCalls} provider call(s) including SDK retries; ${meta.usage.input} input / ${meta.usage.output} output tokens (${meta.spent} counted against the budget); ${Math.round(meta.elapsedMs / 1000)} s elapsed.`,
-    ...(meta.skipped.length ? ["", "**Skipped for the budget:**", ...meta.skipped.map((s) => `- ${s}`)] : []),
+    `Model ${meta.model}, set ${meta.set}, code ${meta.revision}. ${runs.length} call attempt(s), ${meta.providerCalls} provider call(s) including SDK retries; ${Math.round(meta.elapsedMs / 1000)} s elapsed.`,
     "",
-    "| Call | Attempt | Result | Input | Output | ms | Provider calls |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
-    ...runs.map((run) => `| ${run.batch} | ${run.attempts} | ${run.error ?? "judgment"} | ${run.usage.inputTokens} | ${run.usage.outputTokens} | ${run.ms} | ${run.providerCalls ?? "?"} |`),
+    `**Tokens:** ${meta.reported.input + meta.reported.output} reported (${meta.reported.input} input, ${meta.reported.output} output); ${meta.charged} conservatively charged against the budget. The charge is budget accounting, not measured usage: a failed call reports no usage and is charged at its full allowance.`,
+    "",
+    "| Call | Attempt | Status | Failure | Input | Output | ms | Provider calls |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ...runs.map((run) => `| ${run.name} | ${run.attempts} | ${run.status} | ${run.error ?? ""} | ${run.usage.inputTokens} | ${run.usage.outputTokens} | ${run.ms} | ${run.providerCalls ?? "?"} |`),
     "",
     ...sets.flatMap((set) => {
       const s = summarize(scored, set);
       return [
         `## ${set}`,
         "",
-        `**Overall, with invalid results counted as failures:** defects detected on the correct detail ${s.completion.defectsOnDetail}; accurate texts accepted ${s.completion.accurateAccepted}; valid results ${s.completion.validResults}.`,
+        `**Coverage of ${s.cases} cases:** provider failures ${s.coverage.providerFailures.length}; not run ${s.coverage.notRun.length}; invalid responses ${s.coverage.invalidResponses.length}; valid judgments ${s.coverage.validJudgments.length}.`,
+        "",
+        `**Overall, over every labeled case (missing and invalid results count as failures):** defects detected on the correct detail ${s.overall.defectsDetectedOnDetail}; accurate texts accepted ${s.overall.accurateAccepted}.`,
+        "",
+        "**Valid judgments:**",
         "",
         "| Result | Count | Cases |",
         "| --- | --- | --- |",
-        `| Defects detected | ${s.detected.length} of ${s.defects} | ${ids(s.detected)} |`,
-        `| …on the correct detail | ${s.detectedOnDetail.length} | ${ids(s.detectedOnDetail)} |`,
-        `| …on a different detail | ${s.detectedOnOtherDetail.length} | ${ids(s.detectedOnOtherDetail)} |`,
-        `| …of which misclassified (contradicted vs unsupported) | ${s.misclassified.length} | ${ids(s.misclassified)} |`,
+        `| Defects detected on the correct detail | ${s.detected.length} | ${ids(s.detected)} |`,
+        `| Defects detected on another detail | ${s.detectedOnAnotherDetail.length} | ${ids(s.detectedOnAnotherDetail)} |`,
+        `| …misclassified (contradicted vs unsupported) | ${s.misclassified.length} | ${ids(s.misclassified)} |`,
         `| Missed defects (judged supported) | ${s.missed.length} | ${ids(s.missed)} |`,
-        `| Accurate text accepted | ${s.accepted.length} of ${s.accurate} | ${ids(s.accepted)} |`,
         `| False positives (accurate text rejected) | ${s.falsePositives.length} | ${ids(s.falsePositives)} |`,
         `| Unclear on labeled cases | ${s.unclear.length} | ${ids(s.unclear)} |`,
-        `| Invalid results (contract broken) | ${s.invalid.length} | ${ids(s.invalid)} |`,
         `| Boundary violations (counted as unsupported) | ${s.boundaryViolations.length} | ${ids(s.boundaryViolations)} |`,
-        `| Mixed claims: false detail flagged | ${s.mixed.filter((c) => c.falseDetailFlagged).length} of ${s.mixed.length} | ${s.mixed.map((c) => `${c.id}: ${c.falseDetailFlagged ?? c.outcome}`).join("; ")} |`,
-        `| Invalid reasons | ${s.invalid.reduce((n, c) => n + c.invalid.length, 0)} | ${s.invalid.map((c) => `${c.id}: ${c.invalid.join("; ")}`).join(" / ") || "none"} |`,
-        `| Ambiguous (not scored) | ${s.ambiguous.length} | ${s.ambiguous.map((c) => `${c.id}: ${c.verdict ?? "invalid"}`).join("; ")} |`,
+        `| Ambiguous (not scored) | ${s.ambiguous.length} | ${s.ambiguous.map((c) => `${c.id}: ${c.verdict}`).join("; ")} |`,
+        "",
+        "**Invalid responses:**",
+        ...(s.coverage.invalidResponses.length ? s.coverage.invalidResponses.map((c) => `- ${c.id}: ${c.invalid.join("; ")}`) : ["- none"]),
         "",
       ];
     }),
     "## Note checks",
     "",
-    ...notes.map(({ batch, result }) => `- ${batch}: corruption ${result.corruptionReported === undefined ? "none planted" : result.corruptionReported ? "reported" : "**not reported**"}; unchecked lines ${result.unchecked.join(", ") || "none"}; false alarms ${result.falseAlarms.join(", ") || "none"}`),
+    ...notes.map(({ name, status, result }) =>
+      result
+        ? `- ${name}: planted line ${result.planted.detected ? "**detected**" : "not detected"} (marked inconsistent ${result.planted.markedInconsistent}, on the planted detail ${result.planted.onDetail}, refuting line quoted correctly ${result.planted.refutedCorrectly}); false alarms ${result.falseAlarms.join(", ") || "none"}; unchecked ${result.unchecked.join(", ") || "none"}; invalid quotations ${result.invalid.join("; ") || "none"}`
+        : `- ${name}: ${status}`,
+    ),
     "",
     "## Every case",
     "",

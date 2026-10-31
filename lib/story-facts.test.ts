@@ -17,10 +17,17 @@ const turn = (hours: number, new_inject = "", narrative_response = ""): TurnOutp
 
 describe("storyFacts", () => {
   it("leaves out power and heating when the story never says power came back", () => {
-    const note = storyFactsBriefing(storyFacts([turn(0, "The power goes out."), turn(6, "You could wait until power returns.")]));
+    const note = storyFactsBriefing(
+      storyFacts([
+        turn(0, "The power goes out."),
+        turn(6, "You could wait until power returns."),
+        // Priya, Hour 12 (2026-10-28): a goal, not an event.
+        turn(12, "You must decide how to protect Person 3, restore power to the medical device, and avoid a dead car battery."),
+      ]),
+    );
     expect(note).not.toContain("Power returned");
     expect(note).not.toContain("Heating after power returned");
-    expect(note).toContain("Logged hours: Hour 0, Hour 6.");
+    expect(note).toContain("Logged hours: Hour 0, Hour 6, Hour 12.");
     expect(note).toContain("The participant's actions are only what their own responses say.");
   });
 

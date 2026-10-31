@@ -276,7 +276,7 @@ describe("the story-facts note for Alex's replay", () => {
   });
 
   it("names the invented heater, the logged hours, and that only the participant's responses are their actions", () => {
-    expect(note).toContain("The space heater, first at Hour 60");
+    expect(note).toContain("The space heater, first offered as a choice at Hour 60 (not a completed action)");
     expect(note).toContain("Logged hours: Hour 0, Hour 6");
     expect(note).toContain("such as coordinating with building staff or restoring power");
   });

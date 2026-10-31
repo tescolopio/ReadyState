@@ -24,7 +24,7 @@ export interface Batch {
   name: string;
   set: CaseSet;
   household: Household;
-  /** Which evidence the judge gets: story batches get the log and the story-facts note; the others don't. */
+  /** Which evidence the judge gets: story batches get the log; household-and-guidance batches get the baseline and guidance. */
   evidence: "story" | "household-and-guidance";
   /**
    * Story outcomes and situations left out of the log for length, to keep each call under the provider's per-minute
@@ -32,8 +32,6 @@ export interface Batch {
    * and alert stays in, and the judge is told which hours are omitted.
    */
   omitHours?: number[];
-  /** A false line added to (or changed in) the story-facts note, to see whether the judge reports the conflict. */
-  corruptNote?: { find?: string; replace?: string; add?: string };
   cases: FactualCase[];
 }
 
@@ -59,7 +57,6 @@ export const BATCHES: Batch[] = [
     household: "alex",
     evidence: "story",
     omitHours: [6, 12, 18, 24],
-    corruptNote: { find: "Power returned at Hour 60", replace: "Power returned at Hour 54" },
     cases: [
       { id: "C09", claim: "Power was restored at Hour 60, but central heating stayed unavailable and only returned during the Hour 72 turn." },
       { id: "C13", claim: "Without power, the building's central heating can remain below safe indoor temperatures (45 °F) for many hours." },
@@ -119,8 +116,6 @@ export const BATCHES: Batch[] = [
     household: "charlotte",
     evidence: "story",
     omitHours: [12, 18, 24, 30, 36, 48, 54, 60],
-    // Refuted by Hour 66: the clinic's heating failed in the power outage.
-    corruptNote: { add: "- Power returned at Hour 48." },
     cases: [
       { id: "C44", claim: "You moved everyone upstairs and turned off the main gas valve, which kept the medical device's battery from draining." },
       { id: "C35", claim: "You called the local emergency management center to ask for an air-rescue helicopter for Person 2." },
@@ -163,8 +158,6 @@ export const BATCHES: Batch[] = [
     household: "priya",
     evidence: "story",
     omitHours: [0, 6, 10, 26, 36, 38, 44, 46],
-    // Refuted by Hours 30 and 32: the house is still without power.
-    corruptNote: { add: "- Power returned at Hour 30." },
     cases: [
       { id: "C48", claim: "Running the fan from the car battery through an inverter drained it, so the car wouldn't start at Hour 22." },
       { id: "C36", claim: "The medical device had power again from Hour 14 on." },
@@ -186,3 +179,38 @@ export const BATCHES: Batch[] = [
 ];
 
 export const ALL_CASES = BATCHES.flatMap((batch) => batch.cases.map((c) => ({ ...c, set: batch.set, household: batch.household })));
+
+/**
+ * The story-facts note is checked in its own calls, not while judging claims
+ * (2026-10-31, after the note's planted value spread into claim verdicts).
+ * Each check plants one false line; it counts as detected only when the judge
+ * marks it inconsistent, names `detail` as the conflicting detail, and quotes
+ * one of the `refutedBy` lines correctly.
+ */
+export interface NoteCheck {
+  name: string;
+  set: CaseSet;
+  household: Household;
+  corrupt: { find?: string; replace?: string; add?: string; detail: string; refutedBy: string[] };
+}
+
+export const NOTE_CHECKS: NoteCheck[] = [
+  {
+    name: "alex note",
+    set: "development",
+    household: "alex",
+    corrupt: { find: "Power returned at Hour 60", replace: "Power returned at Hour 54", detail: "Hour 54", refutedBy: ["Hour 60 situation"] },
+  },
+  {
+    name: "charlotte note",
+    set: "reserved",
+    household: "charlotte",
+    corrupt: { add: "Power returned at Hour 48.", detail: "Hour 48", refutedBy: ["Hour 66 situation"] },
+  },
+  {
+    name: "priya note",
+    set: "reserved",
+    household: "priya",
+    corrupt: { add: "Power returned at Hour 30.", detail: "Hour 30", refutedBy: ["Hour 30 outcome", "Hour 32 outcome"] },
+  },
+];

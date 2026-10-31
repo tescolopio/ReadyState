@@ -62,6 +62,8 @@ export interface IntroducedItem {
   /** Index of that turn. */
   turnIndex: number;
   sentence: string;
+  /** True when it first appeared in an offered response option, not in the story's events. */
+  fromOption?: boolean;
   /** When the participant later said in their own words that they have or obtained it. */
   establishedLater?: string;
 }
@@ -91,6 +93,7 @@ export function introducedEquipment(baseline: string, turns: TurnOutput[], respo
   };
 
   turns.forEach((turn, turnIndex) => {
+    const options = new Set(sentences(turn.response_options));
     for (const sentence of sentences([turn.narrative_response, turn.new_inject, ...turn.response_options])) {
       if (OBTAINED.test(sentence)) continue;
       for (const item of EQUIPMENT) {
@@ -99,7 +102,7 @@ export function introducedEquipment(baseline: string, turns: TurnOutput[], respo
         if (flagged.has(item) || established.has(item)) continue;
         // "space heater" covers "heater".
         if (item === "heater" && flagged.has("space heater")) continue;
-        flagged.set(item, { item, time: turn.time_elapsed, turnIndex, sentence });
+        flagged.set(item, { item, time: turn.time_elapsed, turnIndex, sentence, ...(options.has(sentence) ? { fromOption: true } : {}) });
       }
     }
     offered.push(...turn.response_options);

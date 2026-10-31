@@ -15,9 +15,12 @@
 import type { IntroducedItem } from "@/lib/continuity";
 import type { TurnOutput } from "@/lib/ttx";
 
-/** Power coming back as an event, not a hypothetical ("stay with your neighbor until power returns", Hour 42). */
+/**
+ * Power coming back as an event, not a hypothetical ("stay with your neighbor until power returns", Alex Hour 42)
+ * or a goal ("You must decide how to … restore power to the medical device", Priya Hour 12).
+ */
 const POWER_BACK =
-  /(?<!\b(until|when|once|if|whether|before|after|wait(ing)? for|unless)\s+(the\s+)?)\b(power (is|was|has been|gets) (restored|back)|power (returns|returned|comes back|came back|is back on)|(restores?|restored) (the )?power|electricity (is|was|has been) restored)\b/i;
+  /(?<!\b(until|when|once|if|whether|before|after|wait(ing)? for|unless)\s+(the\s+)?)\b(power (is|was|has been|gets) (restored|back)|power (returns|returned|comes back|came back|is back on)|(?<!\b(to|must|could|would|will|can|should|might|may)\s+)(restores|restored) (the )?power|electricity (is|was|has been) restored)\b/i;
 const HEATING = /\b(central heat(ing)?( system)?|heat(ing)? system|heating|furnace|boiler|the heat)\b/i;
 /**
  * What a sentence says about heating, read after its heating subject: a forecast isn't an event (finding 37,
@@ -39,7 +42,7 @@ export interface StoryFacts {
   powerReturned?: { hour: number; sentence: string };
   /** What the story says about heating from then on, in order, each as an observed state, a forecast or a confirmed restoration. */
   heatingAfterPower: { hour: number; state: HeatingState; sentence: string; clause: string }[];
-  defects: Pick<IntroducedItem, "item" | "time" | "sentence">[];
+  defects: Pick<IntroducedItem, "item" | "time" | "sentence" | "fromOption">[];
 }
 
 /** The sentence's heating state, and the sentence from its heating subject on, which is what the note quotes. */
@@ -51,7 +54,7 @@ function heatingState(sentence: string): { state: HeatingState; clause: string }
   return state && { state, clause: sentence.slice(subject.index) };
 }
 
-export function storyFacts(turns: TurnOutput[], defects: Pick<IntroducedItem, "item" | "time" | "sentence">[] = []): StoryFacts {
+export function storyFacts(turns: TurnOutput[], defects: Pick<IntroducedItem, "item" | "time" | "sentence" | "fromOption">[] = []): StoryFacts {
   const told = turns.flatMap((turn) =>
     [turn.new_inject, turn.narrative_response].flatMap((text) => split(text ?? "").map((sentence) => ({ hour: turn.hours_elapsed, sentence }))),
   );
@@ -99,7 +102,9 @@ export function storyFactsBriefing({ hours, powerReturned, heatingAfterPower, de
     ...(defects.length
       ? [
           "- Equipment the story introduced that the household never had or obtained; don't rely on it, recommend it, or draw conclusions from events involving it:",
-          ...defects.map(({ item, time, sentence }) => `  - The ${item}, first at ${time}: ${quote(sentence)}`),
+          ...defects.map(({ item, time, sentence, fromOption }) =>
+            fromOption ? `  - The ${item}, first offered as a choice at ${time} (not a completed action): ${quote(sentence)}` : `  - The ${item}, first at ${time}: ${quote(sentence)}`,
+          ),
         ]
       : []),
     "- The participant's actions are only what their own responses say. Don't credit them with anything else, such as coordinating with building staff or restoring power.",

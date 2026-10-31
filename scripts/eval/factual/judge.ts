@@ -2,18 +2,20 @@
  * An eval-only factual-consistency judge (work item G11). It is not used by
  * the server. It sees the claims and the evidence, never the manual labels.
  *
- * The contract, revised after the first run (2026-10-31):
- * - Each claim is split into its material assertions (actor, action, time,
- *   quantity, equipment provenance, causal conclusion, state), each judged
- *   with its own evidence. The claim's verdict is derived from them here: a
- *   claim is supported only when every assertion is.
- * - "unsupported" must name the evidence searched and what is missing.
- * - Every STORY FACTS line is checked against the log, separately from the
- *   claims.
- * - Outside knowledge can't make an assertion contradicted: it then counts as
- *   unsupported, and the misclassification is reported.
- * Results that break the contract (unknown or missing references, a verdict
- * its own assertions don't give) are invalid, not scored as right or wrong.
+ * The contract, revised twice on 2026-10-31:
+ * - Each claim is split into material assertions. Each assertion quotes the
+ *   exact span of the claim it covers, and together the quotes must cover
+ *   every content word, so a detail like "you kept" can't drop out.
+ * - Every piece of evidence is a reference and an exact quotation, which must
+ *   occur in the cited line. That catches invented quotations; it can't show
+ *   the quotation supports the verdict.
+ * - The claim's verdict is derived from its assertions.
+ * - "unsupported" names what was searched and what is missing.
+ * - Outside knowledge can't make an assertion contradicted.
+ * - The derived story-facts note isn't given while judging claims. It is
+ *   checked in separate calls, against the log lines its facts refer to,
+ *   with offered options labeled apart from what happened.
+ * Results that break the contract are invalid, not scored as right or wrong.
  */
 import { generateText, tool, type LanguageModel } from "ai";
 import { z } from "zod";
@@ -27,7 +29,7 @@ import { storyFacts, storyFactsBriefing } from "@/lib/story-facts";
 import { TEST_HOUSEHOLDS } from "@/lib/test-households";
 import type { TurnOutput } from "@/lib/ttx";
 
-import type { Batch, Household } from "./cases";
+import type { Batch, Household, NoteCheck } from "./cases";
 import charlotte from "./fixtures/charlotte.json";
 import priya from "./fixtures/priya.json";
 
@@ -35,33 +37,32 @@ export const VERDICTS = ["supported", "contradicted", "unsupported", "unclear"] 
 export type JudgeVerdict = (typeof VERDICTS)[number];
 export const ASSERTION_KINDS = ["actor", "action", "time", "quantity", "provenance", "cause", "state", "other"] as const;
 
-const assertionSchema = z.object({
-  kind: z.enum(ASSERTION_KINDS),
-  text: z.string().describe("The assertion, in at most 15 words."),
-  verdict: z.enum(VERDICTS),
-  evidence: z.array(z.string()).describe("References of the lines that support or contradict it, exactly as written in brackets."),
-  searched: z.array(z.string()).describe("For unsupported: the references or sections you searched. Otherwise empty."),
-  missing: z.string().describe("For unsupported: what the evidence would need to say. Otherwise empty."),
-  outside_knowledge: z.boolean().describe("True if the verdict relies on anything not in the evidence."),
-});
+const quotedEvidence = z.array(
+  z.object({
+    ref: z.string().describe('A line\'s reference, exactly as written in brackets, e.g. "Hour 72 outcome".'),
+    quote: z.string().describe("The exact words from that line that bear on the assertion, copied character for character."),
+  }),
+);
 
 export const judgmentSchema = z.object({
-  note_check: z
-    .array(
-      z.object({
-        line: z.string().describe('The note line\'s reference, e.g. "Note 2".'),
-        consistent: z.boolean(),
-        log_references: z.array(z.string()),
-        explanation: z.string().describe("At most 25 words."),
-      }),
-    )
-    .describe("One entry for every STORY FACTS line, checked against the log. Empty if no note was given."),
   claims: z.array(
     z.object({
       id: z.string(),
       claim: z.string().describe("The claim, quoted exactly as given."),
       basis: z.enum(["story", "household", "guidance"]),
-      assertions: z.array(assertionSchema).describe("Every material assertion in the claim."),
+      assertions: z
+        .array(
+          z.object({
+            kind: z.enum(ASSERTION_KINDS),
+            quote: z.string().describe("The exact span of the claim this assertion covers, copied character for character."),
+            verdict: z.enum(VERDICTS),
+            evidence: quotedEvidence.describe("For supported or contradicted: the lines and exact words that show it."),
+            searched: z.array(z.string()).describe("For unsupported: the references or sections you searched. Otherwise empty."),
+            missing: z.string().describe("For unsupported: what the evidence would need to say. Otherwise empty."),
+            outside_knowledge: z.boolean().describe("True if the verdict relies on anything not in the evidence."),
+          }),
+        )
+        .describe("Every material assertion. Together the quotes must cover every word of the claim that carries meaning."),
       verdict: z.enum(VERDICTS).describe("supported only if every assertion is; contradicted if any is; else unsupported if any is; else unclear."),
       explanation: z.string().describe("At most 25 words."),
     }),
@@ -71,28 +72,48 @@ export type Judgment = z.infer<typeof judgmentSchema>;
 export type JudgedClaim = Judgment["claims"][number];
 export type JudgedAssertion = JudgedClaim["assertions"][number];
 
+export const noteJudgmentSchema = z.object({
+  lines: z.array(
+    z.object({
+      line: z.string().describe('The note line\'s reference, e.g. "Note 2".'),
+      verdict: z.enum(["consistent", "inconsistent", "unverifiable"]),
+      conflicting_detail: z.string().describe("For inconsistent: the exact words of the note line that conflict with the log. Otherwise empty."),
+      evidence: quotedEvidence.describe("The log lines and exact words that show it."),
+      explanation: z.string().describe("At most 25 words."),
+    }),
+  ),
+});
+export type NoteJudgment = z.infer<typeof noteJudgmentSchema>;
+
 export const JUDGE_INSTRUCTIONS = `You check claims from the debrief of a household emergency exercise against the evidence given, and nothing else.
 
-First, check every STORY FACTS line against the log, if a note is given. The note is derived from the log by software and may be wrong. For each line, say whether the log is consistent with it, citing the log lines. Do this even when you could judge every claim without the note.
-
-Then, for each claim:
-1. Split it into its material assertions: who acted (actor), what was done (action), when (time), how much or how long (quantity), whose equipment it was or where it came from (provenance), what caused what (cause), and what was the case (state). A claim's details are each an assertion.
-2. Judge each assertion:
+For each claim:
+1. Split it into its material assertions: who acted (actor), what was done (action), when (time), how much or how long (quantity), whose equipment it was or where it came from (provenance), what caused what (cause), and what was the case (state).
+2. For each assertion, quote the exact span of the claim it covers, character for character. Together your quotes must cover every word of the claim that carries meaning; don't paraphrase a detail away.
+3. Judge each assertion:
    - supported: the evidence states it, or it follows directly.
    - contradicted: the evidence states something incompatible with it.
    - unsupported: the evidence neither states nor implies it, and doesn't contradict it. List what you searched and what is missing.
    - unclear: too vague or evaluative to check, or the evidence conflicts with itself.
-   Cite evidence by the references in brackets, exactly as written.
-3. The claim's verdict follows from its assertions: supported only if every assertion is supported; contradicted if any is contradicted; otherwise unsupported if any is unsupported; otherwise unclear.
+   For supported or contradicted, give each piece of evidence as the line's reference in brackets and the exact words from that line, copied character for character.
+4. The claim's verdict follows from its assertions: supported only if every assertion is supported; contradicted if any is contradicted; otherwise unsupported if any is unsupported; otherwise unclear.
 
 Rules:
 - Each claim has one basis: story (the exercise log), household (the baseline) or guidance (the approved guidance). The story can't establish a guidance fact, and guidance can't establish what happened.
 - Use only the evidence given. Knowledge from outside it can't make an assertion contradicted or supported; if you notice such knowledge, the assertion is unsupported, and set outside_knowledge.
 - A forecast ("will be restored in about six hours", "could run out within two hours") is not an event. Never treat a forecast as having happened.
 - The participant's actions are only what their responses say. Story events and other people's actions are not the participant's.
-- For story claims, judge by the log, not the note.
 - Missing evidence is unknown. Some hours' outcomes are omitted, and the log doesn't record everything: the absence of a line never shows that something didn't happen, so it can't make an assertion contradicted.
 - Quote each claim exactly.`;
+
+export const NOTE_INSTRUCTIONS = `You check a note that software derived from the log of a household emergency exercise. Check every note line against the log lines given, and nothing else.
+
+For each note line, give one verdict:
+- consistent: the log lines say what the note line says.
+- inconsistent: the log lines say something incompatible with it. Quote the exact words of the note line that conflict.
+- unverifiable: the log lines given neither confirm nor contradict it.
+
+Give evidence as the log line's reference in brackets and the exact words from that line, copied character for character. An offered option is a choice the participant was given, not something that happened. A forecast is not an event.`;
 
 interface HouseholdEvidence {
   baseline: string;
@@ -110,13 +131,12 @@ const EVIDENCE: Record<Household, () => HouseholdEvidence> = {
   priya: () => ({ baseline: priya.baseline, turns: priya.turns as TurnOutput[], responses: priya.responses }),
 };
 
-/** A household's baseline lines, labeled for citing; the first line of each person or pet block keeps its sub-lines. */
+/** A household's baseline lines, labeled for citing; person and pet sub-lines stay under their line. */
 const baselineLines = (baseline: string) =>
   baseline
     .split("\n")
     .filter(Boolean)
-    .map((line) => (line.startsWith("- ") ? line : `[Baseline: ${line.split(":")[0]}] ${line}`))
-    .map((line) => (line.startsWith("- ") ? `  ${line}` : line));
+    .map((line) => (line.startsWith("- ") ? `  ${line}` : `[Baseline: ${line.split(":")[0]}] ${line}`));
 
 /** The approved guidance, numbered for citing. */
 export const guidanceLines = () =>
@@ -128,42 +148,37 @@ export const guidanceLines = () =>
 const withoutChoices = (text: string) =>
   text.replace(/\s*(You (must|need to|have to) (now )?(decide|choose)|Decide whether|Choose whether|They suggest three options|Options include)[\s\S]*$/, "").trim();
 
-function logLines(omitHours: number[], { turns, responses }: HouseholdEvidence) {
+interface LogOptions {
+  omitHours?: number[];
+  /** Only these hours (for note checks). */
+  onlyHours?: number[];
+  responses?: boolean;
+  /** Offered options, labeled as options. */
+  options?: boolean;
+}
+
+function logLines({ turns, responses }: HouseholdEvidence, { omitHours = [], onlyHours, responses: withResponses = true, options = false }: LogOptions) {
   return turns.flatMap((turn, i) => {
     const hour = turn.hours_elapsed;
+    if (onlyHours && !onlyHours.includes(hour)) return [];
     const omitted = omitHours.includes(hour);
     const situation = omitted ? "" : withoutChoices(turn.new_inject ?? "");
     return [
       turn.narrative_response && !omitted ? `[Hour ${hour} outcome] ${turn.narrative_response}` : "",
       situation ? `[Hour ${hour} situation] ${situation}` : "",
+      ...(options ? turn.response_options.map((option, n) => `[Hour ${hour} offered option ${n + 1}] ${option}`) : []),
       turn.critical_alerts.length ? `[Hour ${hour} alerts] ${turn.critical_alerts.join(" ")}` : "",
-      responses[i] ? `[Response after Hour ${hour}] ${responses[i]}` : "",
+      withResponses && responses[i] ? `[Response after Hour ${hour}] ${responses[i]}` : "",
     ].filter(Boolean);
   });
 }
 
-/** The story-facts note's bullet lines, after any deliberate corruption. */
-export function noteLines(batch: Batch): { lines: string[]; corrupted?: number } {
-  const evidence = EVIDENCE[batch.household]();
-  const note = storyFactsBriefing(storyFacts(evidence.turns, storyDefects(evidence.turns, { baseline: evidence.baseline, participantText: evidence.responses })));
-  let lines = note.split("\n").slice(1).map((line) => line.trim().replace(/^- /, ""));
-  let corrupted: number | undefined;
-  const { find, replace, add } = batch.corruptNote ?? {};
-  if (find && replace) {
-    corrupted = lines.findIndex((line) => line.includes(find));
-    if (corrupted < 0) throw new Error(`${batch.name}: the note has no line with "${find}"`);
-    lines = lines.map((line, i) => (i === corrupted ? line.replace(find, replace) : line));
-  }
-  if (add) {
-    // Before the last line, so it isn't the obvious odd one out at the end.
-    corrupted = lines.length - 1;
-    lines = [...lines.slice(0, -1), add.replace(/^- /, ""), ...lines.slice(-1)];
-  }
-  return { lines, corrupted };
-}
+/** Every bracketed reference in a prompt, with the text of its line. */
+const referencedLines = (text: string) =>
+  new Map([...text.matchAll(/^\s*\[([^\]]+)\] (.*)$/gm)].map((match) => [match[1], match[2]]));
 
-/** The judge's message for a batch, and every reference it may cite. */
-export function batchPrompt(batch: Batch): { text: string; references: Set<string>; noteRefs: string[] } {
+/** The judge's message for a claim batch, and every line it may cite. */
+export function batchPrompt(batch: Batch): { text: string; lines: Map<string, string> } {
   const evidence = EVIDENCE[batch.household]();
   const sections: string[] = [];
   if (batch.evidence === "story") {
@@ -171,20 +186,106 @@ export function batchPrompt(batch: Batch): { text: string; references: Set<strin
     sections.push(`HOUSEHOLD BASELINE:\n${baselineLines(evidence.baseline).filter((line) => !line.startsWith("[Baseline: Gaps")).join("\n")}`);
     const omitted = batch.omitHours ?? [];
     sections.push(
-      `EXERCISE LOG ("Response after Hour N" is the participant's own message; the next hour's outcome follows from it.${omitted.length ? ` Outcomes and situations for Hours ${omitted.join(", ")} are omitted for length; every response and alert is included.` : ""}):\n${logLines(omitted, evidence).join("\n")}`,
+      `EXERCISE LOG ("Response after Hour N" is the participant's own message; the next hour's outcome follows from it.${omitted.length ? ` Outcomes and situations for Hours ${omitted.join(", ")} are omitted for length; every response and alert is included.` : ""}):\n${logLines(evidence, { omitHours: omitted }).join("\n")}`,
     );
-    const { lines } = noteLines(batch);
-    sections.push(`STORY FACTS (derived from the log by software; may be wrong):\n${lines.map((line, i) => `[Note ${i + 1}] ${line}`).join("\n")}`);
   } else {
     sections.push(`HOUSEHOLD BASELINE:\n${baselineLines(evidence.baseline).join("\n")}`, `APPROVED GUIDANCE:\n${guidanceLines().join("\n")}`);
   }
   const claims = batch.cases.map(({ id, claim }) => `${id}: ${claim}`).join("\n");
   const text = `${sections.join("\n\n")}\n\nCLAIMS (judge each; quote it exactly):\n${claims}`;
-  const references = new Set([...text.matchAll(/^\s*\[([^\]]+)\]/gm)].map((match) => match[1]));
-  return { text, references, noteRefs: [...references].filter((ref) => ref.startsWith("Note ")) };
+  return { text, lines: referencedLines(text) };
 }
 
-/** References that count as evidence for a basis: the log for story claims (not the derived note), and so on. */
+/** The note's factual lines: its headers and instructions aren't facts, and the logged hours are checked offline. */
+const isFact = (line: string) => !line.endsWith(":") && !line.startsWith("Logged hours:") && !line.startsWith("The participant's actions");
+
+/** The story-facts note's factual lines, with the planted false line. */
+export function noteLines(check: NoteCheck): { lines: string[]; corrupted: number } {
+  const evidence = EVIDENCE[check.household]();
+  const note = storyFactsBriefing(storyFacts(evidence.turns, storyDefects(evidence.turns, { baseline: evidence.baseline, participantText: evidence.responses })));
+  let lines = note
+    .split("\n")
+    .slice(1)
+    .map((line) => line.trim().replace(/^- /, ""))
+    .filter(isFact);
+  const { find, replace, add } = check.corrupt;
+  let corrupted: number;
+  if (find && replace) {
+    corrupted = lines.findIndex((line) => line.includes(find));
+    if (corrupted < 0) throw new Error(`${check.name}: the note has no line with "${find}"`);
+    lines = lines.map((line, i) => (i === corrupted ? line.replace(find, replace) : line));
+  } else {
+    // In the middle, so it isn't the obvious odd one out at either end.
+    corrupted = Math.floor(lines.length / 2);
+    lines = [...lines.slice(0, corrupted), add!, ...lines.slice(corrupted)];
+  }
+  return { lines, corrupted };
+}
+
+const hoursIn = (text: string) => [...text.matchAll(/\bHour (\d+)\b/g)].map((match) => Number(match[1]));
+
+/**
+ * The note-check message: the hours the note's lines name, and the refuting hours for the planted line, with their
+ * outcomes, situations, offered options and alerts.
+ */
+export function notePrompt(check: NoteCheck): { text: string; lines: Map<string, string>; noteRefs: string[]; corruptedRef: string } {
+  const evidence = EVIDENCE[check.household]();
+  const { lines, corrupted } = noteLines(check);
+  const hours = [...new Set([...lines.flatMap(hoursIn), ...check.corrupt.refutedBy.flatMap(hoursIn)])].sort((a, b) => a - b);
+  const log = logLines(evidence, { onlyHours: hours, responses: false, options: true });
+  const note = lines.map((line, i) => `[Note ${i + 1}] ${line}`);
+  const text = `LOG LINES (Hours ${hours.join(", ")}; "offered option" lines are choices the participant was given, not events):\n${log.join("\n")}\n\nNOTE:\n${note.join("\n")}`;
+  return { text, lines: referencedLines(text), noteRefs: note.map((_, i) => `Note ${i + 1}`), corruptedRef: `Note ${corrupted + 1}` };
+}
+
+/** Note lines whose hours or quotations aren't in the note-check's evidence, other than the planted line. */
+export function untraceableNoteLines(check: NoteCheck): string[] {
+  const { text, lines, corruptedRef } = notePrompt(check);
+  const log = [...lines].filter(([ref]) => !ref.startsWith("Note ")).map(([, line]) => normalizeText(line));
+  return [...lines]
+    .filter(([ref]) => ref.startsWith("Note ") && ref !== corruptedRef)
+    .filter(([, line]) => {
+      // Quotations from the log follow a colon; other quoted words are the note's instructions.
+      const quotes = [...line.matchAll(/: "([^"]+?)…?"/g)].map((match) => normalizeText(match[1].replace(/…$/, "")));
+      const hoursPresent = hoursIn(line).every((hour) => text.includes(`[Hour ${hour} `));
+      return !hoursPresent || !quotes.every((quote) => log.some((logLine) => logLine.includes(quote)));
+    })
+    .map(([ref, line]) => `${ref}: ${line}`);
+}
+
+/** Text compared for quotations: typographic variants and spacing made uniform. */
+export const normalizeText = (text: string) =>
+  text
+    .replace(/[‐‑‒–—]/g, "-")
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[    ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.,;:…]+$/, "");
+
+const normalizeRef = (ref: string) => ref.trim().replace(/^\[|\]$/g, "");
+
+/** Whether a quoted piece of evidence occurs in the line it cites. */
+const quoteProblem = (lines: Map<string, string>, { ref, quote }: { ref: string; quote: string }): string | undefined => {
+  const line = lines.get(normalizeRef(ref));
+  if (line === undefined) return `unknown reference ${ref}`;
+  if (!normalizeText(quote)) return `no quotation from ${ref}`;
+  if (!normalizeText(line).includes(normalizeText(quote))) return `quotation not in ${ref}: "${quote.slice(0, 60)}"`;
+  return undefined;
+};
+
+/** Words that carry no detail of their own, left out of the coverage check. */
+const FILLER = new Set("a an the of to and or at in on for with by from as is was were be been that which it its this these those".split(" "));
+const contentWords = (text: string) => (normalizeText(text).toLowerCase().match(/[a-z0-9]+(?:['-][a-z0-9]+)*/g) ?? []).filter((word) => !FILLER.has(word));
+
+/** The claim's content words no assertion quotes. */
+export function uncoveredWords(claim: string, quotes: string[]): string[] {
+  const covered = new Set(quotes.flatMap(contentWords));
+  return [...new Set(contentWords(claim).filter((word) => !covered.has(word)))];
+}
+
+/** References that count as evidence for a basis. */
 const BASIS_REFS: Record<JudgedClaim["basis"], (ref: string) => boolean> = {
   story: (ref) => /^(Hour \d+ (outcome|situation|alerts)|Response after Hour \d+)$/.test(ref),
   household: (ref) => ref.startsWith("Baseline: "),
@@ -211,26 +312,33 @@ export interface ValidatedClaim {
   verdict?: JudgeVerdict;
 }
 
-const normalize = (ref: string) => ref.trim().replace(/^\[|\]$/g, "");
-
-/** Checks a batch's judgment against the contract, claim by claim. */
+/** Checks a claim batch's judgment against the contract, claim by claim. */
 export function validate(batch: Batch, judgment: Judgment): { claims: ValidatedClaim[]; extra: string[] } {
-  const { references } = batchPrompt(batch);
+  const { lines } = batchPrompt(batch);
   const byId = new Map(judgment.claims.map((claim) => [claim.id, claim]));
   const claims = batch.cases.map(({ id, claim }): ValidatedClaim => {
     const judged = byId.get(id);
-    if (!judged) return { id, invalid: ["no verdict"], boundaryViolations: [] };
+    if (!judged) return { id, invalid: ["no verdict for this claim"], boundaryViolations: [] };
     const invalid: string[] = [];
     const boundaryViolations: string[] = [];
-    if (judged.claim.trim() !== claim) invalid.push("claim not quoted exactly");
+    if (normalizeText(judged.claim) !== normalizeText(claim)) invalid.push("claim not quoted exactly");
     if (!judged.assertions.length) invalid.push("no assertions");
+    for (const [i, assertion] of judged.assertions.entries()) {
+      if (!normalizeText(claim).includes(normalizeText(assertion.quote)) || !normalizeText(assertion.quote)) {
+        invalid.push(`assertion ${i + 1}: its quote isn't a span of the claim ("${assertion.quote.slice(0, 50)}")`);
+      }
+    }
+    const uncovered = uncoveredWords(claim, judged.assertions.map((a) => a.quote));
+    if (judged.assertions.length && uncovered.length) invalid.push(`claim words no assertion quotes: ${uncovered.join(", ")}`);
+
     const inBasis = BASIS_REFS[judged.basis];
     const enforced = judged.assertions.map((assertion, i) => {
       const where = `assertion ${i + 1} (${assertion.kind})`;
-      const refs = assertion.evidence.map(normalize);
-      const unknown = [...refs, ...assertion.searched.map(normalize)].filter((ref) => /^(Hour|Response|Baseline|Guidance|Note)\b/.test(ref) && !references.has(ref));
-      if (unknown.length) invalid.push(`${where}: unknown references ${unknown.join(", ")}`);
-      if ((assertion.verdict === "supported" || assertion.verdict === "contradicted") && !refs.length) invalid.push(`${where}: ${assertion.verdict} without evidence references`);
+      for (const problem of assertion.evidence.map((e) => quoteProblem(lines, e)).filter(Boolean)) invalid.push(`${where}: ${problem}`);
+      const unknownSearched = assertion.searched.map(normalizeRef).filter((ref) => /^(Hour|Response|Baseline|Guidance)\b/.test(ref) && !lines.has(ref));
+      if (unknownSearched.length) invalid.push(`${where}: searched unknown references ${unknownSearched.join(", ")}`);
+      const refs = assertion.evidence.map((e) => normalizeRef(e.ref));
+      if ((assertion.verdict === "supported" || assertion.verdict === "contradicted") && !refs.length) invalid.push(`${where}: ${assertion.verdict} without evidence`);
       else if (assertion.verdict === "supported" && !refs.some(inBasis)) invalid.push(`${where}: supported without evidence from its basis`);
       if (assertion.verdict === "unsupported" && (!assertion.searched.length || !assertion.missing.trim())) {
         invalid.push(`${where}: unsupported without what was searched and what is missing`);
@@ -253,33 +361,47 @@ export function validate(batch: Batch, judgment: Judgment): { claims: ValidatedC
 export interface NoteCheckResult {
   /** Note lines the judge didn't check. */
   unchecked: string[];
-  /** Whether the deliberately corrupted line, if any, was reported inconsistent. */
-  corruptionReported?: boolean;
-  /** Correct lines reported inconsistent. */
+  /** Contract breaks: invented quotations, unknown references. */
+  invalid: string[];
+  /** The planted line: marked inconsistent, on the planted detail, with a correct quotation from a refuting line. */
+  planted: { detected: boolean; markedInconsistent: boolean; onDetail: boolean; refutedCorrectly: boolean };
+  /** Correct lines marked inconsistent. */
   falseAlarms: string[];
 }
 
-export function checkNote(batch: Batch, judgment: Judgment): NoteCheckResult | undefined {
-  if (batch.evidence !== "story") return undefined;
-  const { noteRefs } = batchPrompt(batch);
-  const { corrupted } = noteLines(batch);
-  const corruptedRef = corrupted === undefined ? undefined : `Note ${corrupted + 1}`;
-  const byLine = new Map(judgment.note_check.map((entry) => [normalize(entry.line), entry]));
+export function checkNote(check: NoteCheck, judgment: NoteJudgment): NoteCheckResult {
+  const { lines, noteRefs, corruptedRef } = notePrompt(check);
+  const byLine = new Map(judgment.lines.map((entry) => [normalizeRef(entry.line), entry]));
+  const invalid = judgment.lines.flatMap((entry) =>
+    entry.evidence.map((e) => quoteProblem(lines, e)).filter((p): p is string => Boolean(p)).map((p) => `${entry.line}: ${p}`),
+  );
+  const planted = byLine.get(corruptedRef);
+  const markedInconsistent = planted?.verdict === "inconsistent";
+  const onDetail = Boolean(planted && normalizeText(planted.conflicting_detail).includes(normalizeText(check.corrupt.detail)));
+  const refutedCorrectly = Boolean(
+    planted?.evidence.some((e) => check.corrupt.refutedBy.includes(normalizeRef(e.ref)) && !quoteProblem(lines, e)),
+  );
   return {
     unchecked: noteRefs.filter((ref) => !byLine.has(ref)),
-    corruptionReported: corruptedRef ? byLine.get(corruptedRef)?.consistent === false : undefined,
-    falseAlarms: noteRefs.filter((ref) => ref !== corruptedRef && byLine.get(ref)?.consistent === false),
+    invalid,
+    planted: { detected: markedInconsistent && onDetail && refutedCorrectly, markedInconsistent, onDetail, refutedCorrectly },
+    falseAlarms: noteRefs.filter((ref) => ref !== corruptedRef && byLine.get(ref)?.verdict === "inconsistent"),
   };
 }
 
-/** The answer's allowance per call; with the input it must stay under Groq's 8k tokens a minute. */
+/** The answer's allowance per claim call; with the input it must stay under Groq's 8k tokens a minute. */
 export const MAX_OUTPUT_TOKENS = 2400;
+/** The answer's allowance per note-check call. */
+export const NOTE_MAX_OUTPUT_TOKENS = 1500;
 /** A conservative estimate: about four characters a token, plus the tool schema. */
-export const estimateInputTokens = (prompt: string) => Math.round((prompt.length + JUDGE_INSTRUCTIONS.length) / 4) + 650;
+export const estimateInputTokens = (prompt: string, instructions = JUDGE_INSTRUCTIONS) => Math.round((prompt.length + instructions.length) / 4) + 700;
 
-export interface BatchRun {
-  batch: string;
-  judgment?: Judgment;
+export type CallStatus = "completed" | "provider failure" | "no tool call" | "not run";
+
+export interface CallRun<T> {
+  name: string;
+  status: CallStatus;
+  result?: T;
   error?: string;
   usage: { inputTokens: number; outputTokens: number };
   ms: number;
@@ -287,26 +409,38 @@ export interface BatchRun {
   providerCalls?: number;
 }
 
-/** One judge call for a batch. */
-export async function judgeBatch(model: LanguageModel, batch: Batch, maxOutputTokens: number): Promise<BatchRun> {
+async function call<T>(
+  model: LanguageModel,
+  name: string,
+  instructions: string,
+  content: string,
+  schema: z.ZodType<T>,
+  maxOutputTokens: number,
+): Promise<CallRun<T>> {
   const started = Date.now();
   try {
     const result = await generateText({
       model,
-      instructions: JUDGE_INSTRUCTIONS,
-      messages: [{ role: "user", content: batchPrompt(batch).text }],
-      // Unchanged from the first run, so this run measures the method change alone.
+      instructions,
+      messages: [{ role: "user", content }],
+      // Unchanged from the first run, so a run measures the method change alone.
       reasoning: "low",
       maxOutputTokens,
-      tools: { record_judgment: tool({ description: "Record the note check and a judgment for every claim.", inputSchema: judgmentSchema }) },
-      toolChoice: { type: "tool", toolName: "record_judgment" },
+      tools: { record: tool({ description: "Record your judgment.", inputSchema: schema }) },
+      toolChoice: { type: "tool", toolName: "record" },
     });
     const usage = { inputTokens: result.totalUsage.inputTokens ?? 0, outputTokens: result.totalUsage.outputTokens ?? 0 };
-    const call = result.toolCalls.find((toolCall) => toolCall.toolName === "record_judgment");
-    if (!call) return { batch: batch.name, error: "no judgment returned", usage, ms: Date.now() - started, attempts: 1 };
-    return { batch: batch.name, judgment: call.input as Judgment, usage, ms: Date.now() - started, attempts: 1 };
+    const recorded = result.toolCalls.find((toolCall) => toolCall.toolName === "record");
+    if (!recorded) return { name, status: "no tool call", usage, ms: Date.now() - started, attempts: 1 };
+    return { name, status: "completed", result: recorded.input as T, usage, ms: Date.now() - started, attempts: 1 };
   } catch (error) {
     // Only the status and kind: provider error text can carry account details.
-    return { batch: batch.name, error: `judge call failed (${failureSummary(error)})`, usage: { inputTokens: 0, outputTokens: 0 }, ms: Date.now() - started, attempts: 1 };
+    return { name, status: "provider failure", error: failureSummary(error), usage: { inputTokens: 0, outputTokens: 0 }, ms: Date.now() - started, attempts: 1 };
   }
 }
+
+export const judgeBatch = (model: LanguageModel, batch: Batch) =>
+  call<Judgment>(model, batch.name, JUDGE_INSTRUCTIONS, batchPrompt(batch).text, judgmentSchema, MAX_OUTPUT_TOKENS);
+
+export const judgeNote = (model: LanguageModel, check: NoteCheck) =>
+  call<NoteJudgment>(model, check.name, NOTE_INSTRUCTIONS, notePrompt(check).text, noteJudgmentSchema, NOTE_MAX_OUTPUT_TOKENS);
