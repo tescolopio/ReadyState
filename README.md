@@ -53,6 +53,7 @@ Further reading:
 - [Product and experience design brief](docs/product/design-brief.md): personas, the journal experience, visual identity, the family model and requirements.
 - [Modern design treatment](docs/product/design-treatment-modern.md): Style B, the alternative visual treatment for the A/B test.
 - [Work breakdown](docs/roadmap/work-breakdown.md): the roadmap by team, traced to the brief.
+- [Local test checklist](docs/testing/local-test.md): run it yourself and check it by hand in a browser.
 - [Deployment modes](docs/architecture/deployment-modes.md): self-hosted vs hosted, providers, desktop and mobile plans.
 - [Groq models](docs/architecture/groq-models.md): benchmarks and rate limits.
 - [Rules database](docs/architecture/rules.md): inventory checks, safety rules and look-fors as sourced, reviewable data in `data/rules/`.
