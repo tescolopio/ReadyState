@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ALL_CASES, BATCHES, NOTE_CHECKS, type Batch } from "./cases";
+import { ALL_CASES, BATCHES, NOTE_CHECKS, PILOT_CALLS, PILOT_PAIRS, pilotBatches, type Batch } from "./cases";
 import {
   ASSERTION_KINDS,
   JUDGE_INSTRUCTIONS,
@@ -13,6 +13,7 @@ import {
   describeFailedGeneration,
   estimateInputTokens,
   jsonBreak,
+  normalizeText,
   judgmentSchema,
   noteLines,
   notePrompt,
@@ -31,7 +32,7 @@ import {
 import { LABELS } from "./labels";
 import { CURRENT_RUN, DIAGNOSTIC_CAP, OUTPUT_LIMIT_RUN, RELAXED_KIND_RUN, TOKENS_PER_MINUTE, chargeFor, diagnosticCalls, stopsTheRun, validateDiagnostic } from "./diagnostic";
 import { MAX_CLAIMS_PER_CALL, collectResults, runCalls, splitBatches } from "./run";
-import { score, summarize } from "./score";
+import { onFalseDetail, score, summarize } from "./score";
 
 describe("the G11 case set", () => {
   it("labels every case, with unique opaque ids", () => {
@@ -40,8 +41,8 @@ describe("the G11 case set", () => {
     for (const { id } of ALL_CASES) expect(id).toMatch(/^C\d\d$/);
   });
 
-  it("keeps the 21 Alex cases as development, and reserves new cases from other households", () => {
-    expect(ALL_CASES.filter((c) => c.set === "development").map((c) => c.household)).toEqual(Array(21).fill("alex"));
+  it("keeps the Alex cases as development (21, plus 3 pilot rewrites), and reserves new cases from other households", () => {
+    expect(ALL_CASES.filter((c) => c.set === "development").map((c) => c.household)).toEqual(Array(24).fill("alex"));
     const reserved = ALL_CASES.filter((c) => c.set === "reserved");
     expect(new Set(reserved.map((c) => c.household))).toEqual(new Set(["charlotte", "priya"]));
     for (const kind of ["defect", "accurate", "ambiguous"]) expect(reserved.map((c) => LABELS[c.id].kind)).toContain(kind);
@@ -529,5 +530,75 @@ describe("batching claims at most two a call", () => {
     expect(calls).toBe(3);
     // A second attempt that would pass the budget isn't made.
     expect((await runCalls([failing], { budget: 5000, attempts: 2 })).runs).toHaveLength(1);
+  });
+});
+
+describe("the bounded pilot", () => {
+  const batches = pilotBatches();
+
+  it("pairs each previously missed defect with an accurate rewrite of it", () => {
+    expect(PILOT_PAIRS.map((p) => p.defect)).toEqual(["C07", "C25", "C16", "C19"]);
+    for (const { defect, rewrite } of PILOT_PAIRS) {
+      expect(LABELS[defect].kind).toBe("defect");
+      expect(LABELS[rewrite]).toMatchObject({ kind: "accurate", label: "supported" });
+      expect(LABELS[rewrite].source).toContain(`rewrite of ${defect}`);
+    }
+  });
+
+  it("judges every pilot claim exactly once, two a call, one defect and one other pair's rewrite in each", () => {
+    const ids = batches.flatMap((b) => b.cases.map((c) => c.id));
+    expect(ids.sort()).toEqual(PILOT_PAIRS.flatMap((p) => [p.defect, p.rewrite]).sort());
+    for (const [i, call] of PILOT_CALLS.entries()) {
+      expect(call).toHaveLength(2);
+      expect(LABELS[call[0]].kind).toBe("defect");
+      expect(LABELS[call[1]].kind).toBe("accurate");
+      expect(PILOT_PAIRS[i].rewrite).not.toBe(call[1]);
+    }
+  });
+
+  it("uses only development cases, with the claims and evidence of the development story batches", () => {
+    const byId = new Map(ALL_CASES.map((c) => [c.id, c]));
+    const storyB = BATCHES.find((b) => b.name === "alex story B")!;
+    for (const batch of batches) {
+      for (const { id, claim } of batch.cases) expect(byId.get(id)).toMatchObject({ claim, set: "development", household: "alex" });
+      expect(batchPrompt(batch).lines).toEqual(batchPrompt(storyB).lines);
+    }
+  });
+
+  it("fits a preflight budget with every call at its full allowance and under the per-minute limit", () => {
+    const allowances = batches.map((b) => estimateInputTokens(batchPrompt(b).text) + MAX_OUTPUT_TOKENS);
+    for (const a of allowances) expect(a).toBeLessThan(TOKENS_PER_MINUTE);
+    expect(allowances.reduce((sum, a) => sum + a, 0)).toBeLessThanOrEqual(30_000);
+  });
+
+  it("counts a defect as detected only when one non-supported assertion quotes its whole false detail", () => {
+    const claim = ALL_CASES.find((c) => c.id === "C25")!.claim;
+    const result = (quote: string) => ({
+      id: "C25",
+      invalid: [],
+      boundaryViolations: [],
+      judged: { id: "C25", claim, basis: "story" as const, verdict: "contradicted" as const, explanation: "x", assertions: [assertion("contradicted", quote, [])] },
+    });
+    expect(onFalseDetail("C25", result("you kept in the apartment"))).toBe(true);
+    expect(onFalseDetail("C25", result("A 1500-watt space heater you"))).toBe(false);
+  });
+});
+
+describe("the pilot rewrites' support in the supplied evidence", () => {
+  const { lines } = batchPrompt(pilotBatches()[0]);
+  const has = (ref: string, words: string) => expect(normalizeText(lines.get(ref) ?? ""), ref).toContain(normalizeText(words));
+
+  it("C56: the story introduces a 1500-watt heater from the maintenance closet", () => {
+    has("Hour 72 outcome", "You locate a small 1500-watt space heater stored in the building's maintenance closet");
+  });
+
+  it("C57: the water calculation and power returning at Hour 60 are both supplied", () => {
+    has("Baseline: Stored", "1 gallon of stored water (about 1.0 days at 1 gallon per person per day");
+    has("Hour 60 situation", "Power is restored");
+  });
+
+  it("C58: two trips while the plugged-in heater ran", () => {
+    has("Hour 72 outcome", "plug it into an outlet near the living-room sofa. Within about 10 minutes the circuit breaker trips");
+    has("Hour 72 outcome", "The heater runs for a short time before the breaker trips again");
   });
 });

@@ -79,6 +79,20 @@ export const BATCHES: Batch[] = [
     ],
   },
   {
+    // Accurate rewrites of three defects missed in the first run (C25, C16, C19), written 2026-10-31 for the pilot,
+    // after those defects' results were seen: development cases, not validation.
+    name: "alex story D",
+    set: "development",
+    household: "alex",
+    evidence: "story",
+    omitHours: [6, 12, 18, 24],
+    cases: [
+      { id: "C56", claim: "The story introduced a 1500-watt space heater from the building's maintenance closet." },
+      { id: "C57", claim: "Your stored water, about one day's worth, would have run out well before power returned at Hour 60." },
+      { id: "C58", claim: "The breaker tripped twice when you plugged in a 1500-watt space heater." },
+    ],
+  },
+  {
     name: "alex household and guidance",
     set: "development",
     household: "alex",
@@ -179,6 +193,33 @@ export const BATCHES: Batch[] = [
 ];
 
 export const ALL_CASES = BATCHES.flatMap((batch) => batch.cases.map((c) => ({ ...c, set: batch.set, household: batch.household })));
+
+/**
+ * The bounded pilot (proposed 2026-10-31): the four defects the first run missed, each with its accurate rewrite,
+ * two claims a call. Every call pairs one defect with the rewrite of a different defect, so no call shows both
+ * versions of the same claim. All are Alex story claims, so every call carries the same evidence.
+ */
+export const PILOT_PAIRS = [
+  { defect: "C07", rewrite: "C09" },
+  { defect: "C25", rewrite: "C56" },
+  { defect: "C16", rewrite: "C57" },
+  { defect: "C19", rewrite: "C58" },
+] as const;
+
+export const PILOT_CALLS: string[][] = PILOT_PAIRS.map(({ defect }, i) => [defect, PILOT_PAIRS[(i + 1) % PILOT_PAIRS.length].rewrite]);
+
+/** The pilot's calls as claim batches, with the story evidence the development story batches use. */
+export function pilotBatches(): Batch[] {
+  const byId = new Map(ALL_CASES.map((c) => [c.id, c]));
+  return PILOT_CALLS.map((ids, i) => ({
+    name: `pilot ${i + 1} of ${PILOT_CALLS.length}`,
+    set: "development",
+    household: "alex",
+    evidence: "story",
+    omitHours: [6, 12, 18, 24],
+    cases: ids.map((id) => ({ id, claim: byId.get(id)!.claim })),
+  }));
+}
 
 /**
  * The story-facts note is checked in its own calls, not while judging claims
