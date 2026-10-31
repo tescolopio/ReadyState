@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { introducedEquipment } from "@/lib/continuity";
-import { checkDebrief, repairInstructions, storyDefects } from "@/lib/debrief-checks";
+import { checkDebrief, omitKitImprovement, repairInstructions, storyDefects, unsupportedInterval } from "@/lib/debrief-checks";
+import saved from "@/lib/fixtures/alex-2026-10-31-drafts.json";
 import type { AfterActionReport, TurnOutput } from "@/lib/ttx";
 
 const turnAt = (hours: number): TurnOutput => ({
@@ -522,5 +523,98 @@ describe("repairInstructions", () => {
   it("permits dropping a failing improvement rather than replacing it", () => {
     expect(text).toContain("You may drop a failing improvement instead of fixing it");
     expect(text).toContain("don't replace a dropped one with a new one");
+  });
+});
+
+const logged = new Set(alexTurns.map((turn) => turn.hours_elapsed));
+
+describe("checkDebrief: durations", () => {
+  it.each([
+    "From Hour 60 to Hour 72, 12 hours, the apartment stayed around 45 °F.",
+    "The power was out from Hour 12 until Hour 60, two days later.",
+    "Your refrigerator keeps food safe for about 4 hours without power (FDA guidance).",
+    "Your stored water (1 gallon) and food (2 days) were below the recommended three‑day minimum (Baseline).",
+    "Baseline recorded only 1 gallon of water, providing just 1 day of supply.",
+    "Central heat came back several hours after you returned (Hour 72).",
+  ])("allows an interval computed from logged hours, or no precise interval: %s", (sentence) => {
+    expect(unsupportedInterval(sentence, logged)).toBeUndefined();
+  });
+
+  it.each([
+    // The saved repair: power returned at Hour 60 and heat came back after Hour 72; the citation spans six hours.
+    ["The central heating system took about six hours to restore after power returned (Hour 66–72 outcome).", "took about six hours"],
+    ["Within about 10 minutes the circuit breaker tripped (Hour 72).", "Within about 10 minutes"],
+    ["Power returned at Hour 60 and heat came back at Hour 72, six hours later.", "six hours later"],
+  ])("rejects an interval the log's hours don't give: %s", (sentence, matched) => {
+    expect(unsupportedInterval(sentence, logged)).toBe(matched);
+  });
+
+  it("flags the saved first draft's and repair's duration, with field and match", () => {
+    for (const report of [saved.first, saved.repair] as AfterActionReport[]) {
+      expect(checkDebrief(report, alex31Turns, alex31Context).filter((p) => p.check === "accuracy:unsupported-duration")).toEqual([
+        expect.objectContaining({ field: "need_to_know[0]", fix: expect.stringContaining("leave the precise duration out") }),
+      ]);
+    }
+  });
+});
+
+describe("omitKitImprovement: the server's fallback after a repair", () => {
+  const repair = saved.repair as AfterActionReport;
+  /** The saved repair with its duration corrected: only the kit list is left. */
+  const kitOnly: AfterActionReport = {
+    ...repair,
+    need_to_know: [
+      "Power returned at Hour 60, but the central heating stayed off through Hour 72, leaving indoor temperatures around 45 °F (Hours 60–72).",
+      ...repair.need_to_know.slice(1),
+    ],
+  };
+  const omit = (report: AfterActionReport) => omitKitImprovement(report, checkDebrief(report, alex31Turns, alex31Context), alex31Turns, alex31Context);
+
+  it("doesn't apply to the saved repair: its wrong duration must still prevent delivery", () => {
+    expect(checkDebrief(repair, alex31Turns, alex31Context).map((p) => `${p.check} ${p.field}`)).toEqual([
+      "list-shaped do_better[1].action",
+      "accuracy:unsupported-duration need_to_know[0]",
+    ]);
+    expect(omit(repair)).toBeUndefined();
+  });
+
+  it("drops the whole kit improvement, evidence and reason too, and leaves the checklist as it is", () => {
+    expect(checkDebrief(kitOnly, alex31Turns, alex31Context).map((p) => p.check)).toEqual(["list-shaped"]);
+    const result = omit(kitOnly)!;
+    expect(result.report.do_better).toEqual([repair.do_better[0], repair.do_better[2]]);
+    expect(JSON.stringify(result.report.do_better)).not.toContain("Inventory check identified");
+    expect(result.report.supply_checklist).toEqual(repair.supply_checklist);
+    expect({ ...result.report, do_better: [] }).toEqual({ ...kitOnly, do_better: [] });
+    expect(result.omitted).toEqual(repair.do_better[1]);
+    expect(result.checks).toEqual(["list-shaped"]);
+    expect(checkDebrief(result.report, alex31Turns, alex31Context)).toEqual([]);
+  });
+
+  it("drops a whole-kit action the same way", () => {
+    const vague = { ...kitOnly, do_better: [kitOnly.do_better[0], { ...kitOnly.do_better[1], action: "Assemble a basic emergency kit." }] };
+    expect(omit(vague)?.report.do_better).toEqual([kitOnly.do_better[0]]);
+  });
+
+  it("doesn't apply when no valid improvement would remain", () => {
+    expect(omit({ ...kitOnly, do_better: [kitOnly.do_better[1]] })).toBeUndefined();
+  });
+
+  it("doesn't apply when kit lists are in two improvements", () => {
+    expect(omit({ ...kitOnly, do_better: [kitOnly.do_better[0], kitOnly.do_better[1], { ...kitOnly.do_better[1], action: "Assemble a basic emergency kit." }] })).toBeUndefined();
+  });
+
+  it.each([
+    ["an uncited point", { need_to_know: [...kitOnly.need_to_know, "Floods are dangerous."] }],
+    ["the invented heater", { went_well: [...kitOnly.went_well, "You shut off the space heater when the breaker tripped (Hour 72)."] }],
+    ["grid heat in an outage", { summary: `${kitOnly.summary} Keep a space heater for the next outage.` }],
+    ["a kit list in another improvement's reason", { do_better: [{ ...kitOnly.do_better[0], why: kitOnly.do_better[1].action }, kitOnly.do_better[1], kitOnly.do_better[2]] }],
+  ])("doesn't apply when another failure remains: %s", (_, change) => {
+    const report = { ...kitOnly, ...change } as AfterActionReport;
+    expect(checkDebrief(report, alex31Turns, alex31Context).some((p) => p.check === "list-shaped")).toBe(true);
+    expect(omit(report)).toBeUndefined();
+  });
+
+  it("doesn't apply to a debrief that passed", () => {
+    expect(omitKitImprovement(saved.repair as AfterActionReport, [], alex31Turns, alex31Context)).toBeUndefined();
   });
 });

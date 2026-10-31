@@ -11,7 +11,7 @@
  */
 import type { IntroducedItem } from "@/lib/continuity";
 import type { DebriefProblem } from "@/lib/debrief-checks";
-import type { AfterActionReport } from "@/lib/ttx";
+import type { AfterActionReport, OmittedImprovement } from "@/lib/ttx";
 
 export const CAPTURE_HEADER = "x-readystate-capture-debrief-drafts";
 
@@ -33,6 +33,8 @@ export interface DebriefCapture {
   evidence: { hours: number[]; log: string };
   /** Known defects of the story, as given to the model in the briefing. */
   knownStoryDefects: Pick<IntroducedItem, "item" | "time" | "sentence">[];
+  /** When the server dropped the repair's kit-list improvement: what it dropped, the failures that allowed it and the debrief displayed. */
+  omitted?: OmittedImprovement & { stillFailing: DebriefProblem[]; report: AfterActionReport };
 }
 
 export const captureEnabled = (req: Request, mode: string) =>

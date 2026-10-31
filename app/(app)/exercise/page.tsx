@@ -19,6 +19,7 @@ import { SCENARIOS, hasProfile, privateTerms, type HouseholdProfile } from "@/li
 import { engineBaseline } from "@/lib/inventory";
 import { TEST_HOUSEHOLDS } from "@/lib/test-households";
 import {
+  OMITTED_IMPROVEMENT_NOTICE,
   TARGET_DURATION_HOURS,
   deriveTtxState,
   type AfterActionReport,
@@ -549,7 +550,13 @@ function MessageEntry({ message, source }: { message: TtxUIMessage; source: Less
             return part.state === "output-error" ? (
               <p key={index} className="text-sm text-error">{part.errorText}</p>
             ) : (
-              <DebriefView key={index} report={part.input} source={source} ready={part.state !== "input-streaming"} />
+              <DebriefView
+                key={index}
+                report={part.input}
+                source={source}
+                ready={part.state !== "input-streaming"}
+                omitted={Boolean(message.metadata?.debriefChecks?.omittedImprovement)}
+              />
             );
           default:
             return null;
@@ -683,7 +690,18 @@ function TurnView({ turn, source, ready }: { turn?: DeepPartial<TurnOutput>; sou
   );
 }
 
-function DebriefView({ report, source, ready }: { report?: DeepPartial<AfterActionReport>; source: LessonSource; ready: boolean }) {
+function DebriefView({
+  report,
+  source,
+  ready,
+  omitted,
+}: {
+  report?: DeepPartial<AfterActionReport>;
+  source: LessonSource;
+  ready: boolean;
+  /** The server dropped an improvement that failed its checks (lib/debrief-checks.ts, omitKitImprovement). */
+  omitted: boolean;
+}) {
   if (!report) return null;
   return (
     <div className="space-y-4">
@@ -697,6 +715,7 @@ function DebriefView({ report, source, ready }: { report?: DeepPartial<AfterActi
         source={source}
         ready={ready}
       />
+      {omitted && <p className="text-sm text-ink-3">{OMITTED_IMPROVEMENT_NOTICE}</p>}
       <ItemList title="What went well" items={report.went_well} />
       {report.supply_checklist?.some(Boolean) && (
         <details className="rounded-control border border-line p-3">

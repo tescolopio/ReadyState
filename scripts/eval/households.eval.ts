@@ -10,13 +10,13 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { readUIMessageStream, type UIMessageChunk } from "ai";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { CAPTURE_HEADER, type DebriefCapture } from "@/lib/debrief-capture";
 import { privateTerms } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { PRIVACY_LEAKS, TEST_HOUSEHOLDS, type TestHousehold } from "@/lib/test-households";
-import { deriveTtxState, improvementText, type AfterActionReport, type TtxUIMessage, type TurnOutput } from "@/lib/ttx";
+import { OMITTED_IMPROVEMENT_NOTICE, deriveTtxState, improvementText, type AfterActionReport, type TtxUIMessage, type TurnOutput } from "@/lib/ttx";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { maskInput } from "@/utils/obfuscator";
 
@@ -70,6 +70,8 @@ interface CallRecord {
   failedFirst?: string[];
   /** What a rejected repair still failed. */
   stillFailing?: string[];
+  /** An improvement the server dropped after the repair, with the checks it failed. */
+  omittedImprovement?: { action: string; checks: string[] };
   inputTokens?: number;
   outputTokens?: number;
   turn?: TurnOutput;
@@ -199,6 +201,7 @@ async function play(household: TestHousehold): Promise<Result> {
       debriefRepairs: metadata?.debriefRepairs,
       failedFirst: metadata?.debriefChecks?.failedFirst,
       stillFailing: metadata?.debriefChecks?.stillFailing,
+      omittedImprovement: metadata?.debriefChecks?.omittedImprovement,
       inputTokens: metadata?.usage?.inputTokens,
       outputTokens: metadata?.usage?.outputTokens,
     };
@@ -290,6 +293,11 @@ function check(result: Result, messages: TtxUIMessage[]) {
     `Input tokens per call: max ${inputs.length ? Math.max(...inputs) : "n/a"}, average ${inputs.length ? Math.round(sum(inputs) / inputs.length) : "n/a"}; output tokens total ${sum(outputs)}`,
     `Average request time ${calls.length ? Math.round(sum(calls.map((c) => c.requestMs)) / calls.length) : 0} ms; waited ${Math.round(sum(calls.map((c) => c.waitedMs)) / 1000)} s for rate limits`,
     `Server retries over ${calls.length} calls: ${schemaRetries} after a malformed turn, ${rateLimitRetries} after a rate limit, ${sum(calls.map((call) => call.debriefRepairs ?? 0))} debrief repair(s)`,
+    ...(result.debrief?.omittedImprovement
+      ? [
+          `Debrief shown with one improvement omitted by the server (${result.debrief.omittedImprovement.checks.join(", ")}): "${result.debrief.omittedImprovement.action}"; the participant was told`,
+        ]
+      : []),
     ...(result.debrief?.failedFirst?.length
       ? [`Debrief passed the implemented checks after a repair; the first attempt failed: ${result.debrief.failedFirst.join(" / ")}`]
       : result.debrief
@@ -385,6 +393,7 @@ function reportMarkdown({ household, baseline, turns, debrief, report, findings,
       "",
       "**What you can do better**",
       list(report.do_better.map(improvementText)),
+      ...(debrief?.omittedImprovement ? ["", `_${OMITTED_IMPROVEMENT_NOTICE}_`] : []),
       "",
       "**What went well**",
       list(report.went_well),
@@ -459,7 +468,7 @@ function writeCapture(household: TestHousehold, call: CallRecord, error: string 
     `${artifact.note}`,
     "",
     `Scenario ${artifact.scenario}; model ${capture.provider}/${capture.model}; code ${rev.commit.slice(0, 7)}${rev.dirty ? " (uncommitted changes)" : ""}.`,
-    `Delivered: ${error ? `**no**, the participant got the error "${error}"` : "yes"}.`,
+    `Delivered: ${error ? `**no**, the participant got the error "${error}"` : capture.omitted ? "yes, **with one improvement omitted by the server**" : "yes"}.`,
     `Request ${c.requestMs} ms; ${c.providerCalls ?? "?"} provider call(s), ${c.schemaRetries ?? 0} schema retries, ${c.debriefRepairs ?? 0} debrief repair(s); ${c.inputTokens ?? "?"} input / ${c.outputTokens ?? "?"} output tokens.`,
     "",
     ...capture.drafts.flatMap((draft) => [
@@ -480,6 +489,18 @@ function writeCapture(household: TestHousehold, call: CallRecord, error: string 
         : ["**Failed checks:** none."]),
       "",
     ]),
+    ...(capture.omitted
+      ? [
+          "## Final displayed version: the repair with one improvement omitted by the server",
+          "",
+          `Omitted (${capture.omitted.checks.join(", ")}): "${capture.omitted.action}". Its evidence and reason went with it; the checklist is unchanged. The participant was told one improvement was omitted.`,
+          "",
+          ...reportLines(capture.omitted.report),
+          "",
+          "**Failed checks:** none, after the omission.",
+          "",
+        ]
+      : []),
     "## Known story defects given to the model",
     "",
     list(capture.knownStoryDefects.map(({ item, time, sentence }) => `${time}: the ${item}: "${sentence}"`)),
@@ -500,6 +521,17 @@ const households = TEST_HOUSEHOLDS.filter((household) => !ONLY || ONLY.includes(
 const results: Result[] = [];
 
 describe(`test households against ${BASE_URL}`, () => {
+  // A server without the capture flag would spend the run's tokens and save no drafts.
+  beforeAll(async () => {
+    if (!CAPTURE) return;
+    const res = await fetch(`${BASE_URL}/api/ttx`, { headers: { [CAPTURE_HEADER]: "1" } });
+    const body = res.ok ? await res.json() : null;
+    if (body?.captureDebriefDrafts !== true) {
+      throw new Error(`EVAL_CAPTURE_DRAFTS=1, but ${BASE_URL} won't capture drafts: start it with READYSTATE_CAPTURE_DEBRIEF_DRAFTS=1. No model call was made.`);
+    }
+    console.log(`Draft capture confirmed on ${BASE_URL}`);
+  });
+
   afterAll(() => {
     if (!results.length) return;
     const cell = (r: Result, category: CheckCategory) => {

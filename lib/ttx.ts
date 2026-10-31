@@ -131,9 +131,17 @@ export const ttxTools = {
   }),
 };
 
+/** An improvement the server dropped after the repair, and the checks it failed (lib/debrief-checks.ts, omitKitImprovement). */
+export interface OmittedImprovement {
+  action: string;
+  checks: string[];
+}
+
+export const OMITTED_IMPROVEMENT_NOTICE = "One suggested improvement was omitted because it didn't meet our quality checks.";
+
 /**
  * What the server reports about the model calls behind a response, for the
- * eval. Never shown to participants.
+ * eval. Never shown to participants, except the omitted-improvement notice.
  */
 export interface TtxMetadata {
   /** Actual tokens, as the provider reported them. */
@@ -149,9 +157,11 @@ export interface TtxMetadata {
    * checks, not a verification of safety or accuracy. `failedFirst` lists
    * what the first attempt failed, before its repair; `stillFailing`, what a
    * rejected repair still failed. Sent with the error, too, when a debrief is
-   * rejected.
+   * rejected. `omittedImprovement` is set when the server dropped a kit-list
+   * improvement the repair kept; it is the one field the page shows, as
+   * OMITTED_IMPROVEMENT_NOTICE.
    */
-  debriefChecks?: { passedImplementedChecks: boolean; failedFirst: string[]; stillFailing?: string[] };
+  debriefChecks?: { passedImplementedChecks: boolean; failedFirst: string[]; stillFailing?: string[]; omittedImprovement?: OmittedImprovement };
   /** Every debrief draft and what it failed, only when a local eval asks for it (lib/debrief-capture.ts). Never displayed. */
   debriefCapture?: DebriefCapture;
 }

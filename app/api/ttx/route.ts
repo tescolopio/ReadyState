@@ -12,7 +12,7 @@ import {
 } from "ai";
 
 import { briefingWithoutBaseline, captureEnabled, type DebriefCapture, type DebriefDraft } from "@/lib/debrief-capture";
-import { checkDebrief, repairInstructions, storyDefects, storyDefectsBriefing, type DebriefProblem } from "@/lib/debrief-checks";
+import { checkDebrief, omitKitImprovement, repairInstructions, storyDefects, storyDefectsBriefing, type DebriefProblem } from "@/lib/debrief-checks";
 
 import { getAppMode } from "@/lib/config";
 import { getHostedServices, type HostedAccount } from "@/lib/hosted";
@@ -26,6 +26,7 @@ import {
   participantMessages,
   ttxTools,
   type AfterActionReport,
+  type OmittedImprovement,
   type TtxMetadata,
   type TtxPhase,
   type TtxUIMessage,
@@ -79,7 +80,7 @@ const PHASE_INSTRUCTIONS: Record<Exclude<TtxPhase, "aar">, string> = {
   loop: `Phase 2 - Response, Feedback & Inject: ${FEEDBACK_RULES} Then report the result of the action in narrative_response, advance the clock by 6 to 12 hours (so the exercise takes about 8 to 10 turns; use shorter steps only for a fast-moving crisis), and add a new development in new_inject that follows from the participant's choices, with response_options for it. The participant may pick one of your earlier options or write their own; evaluate either the same way. Set scenario_status to "complete" if hours_elapsed reaches ${TARGET_DURATION_HOURS}, otherwise "ongoing".`,
   ended: `Phase 4 - Debrief: the exercise is over. There is no win or lose. Help the household answer two questions from everything that happened: what do we need to know about our situation, and what can we do better? Note what went well, too. Don't grade, score or give a verdict.
 Trace every point to something that actually happened: an event in the log, a decision the participant made, or a fact in the household baseline, and say which. Never criticize something that didn't happen.
-Advice must work in the conditions this emergency creates. In a power outage, recommend warmth, light, cooling and cooking that work without grid power. Only recommend equipment a household can realistically buy, and only state figures you are sure of; leave out a number rather than guess.
+Advice must work in the conditions this emergency creates. In a power outage, recommend warmth, light, cooling and cooking that work without grid power. Only recommend equipment a household can realistically buy, and only state figures you are sure of; leave out a number rather than guess. Give a duration only by subtracting two logged hours you name ("from Hour 60 to Hour 72, 12 hours"); if an event's hour isn't in the log, don't state a precise duration.
 Keep do_better to at most three, most important first, suited to the household's experience: a household with few supplies needs the first basic steps, not everything at once. Each improvement is one action with its evidence and why it matters; fewer than three is fine.`,
 };
 
@@ -125,7 +126,7 @@ const DEBRIEF_NO_TIME =
   "The debrief needed a repair, but there wasn't time before the server's limit, so it isn't shown. Request the debrief again in a minute.";
 
 type DebriefOutcome = (
-  | { report: AfterActionReport; failedFirst: DebriefProblem[] }
+  | { report: AfterActionReport; failedFirst: DebriefProblem[]; omitted?: OmittedImprovement }
   | { error: string; failedFirst: DebriefProblem[]; stillFailing?: DebriefProblem[] }
 ) & { capture: Omit<DebriefCapture, "provider" | "model"> };
 
@@ -135,6 +136,9 @@ type DebriefOutcome = (
  * exactly those, provided enough of the request's budget is left. A debrief
  * that still fails is never presented as checked: the outcome is an error the
  * participant can recover from by asking again.
+ *
+ * If the repair's only failure is one improvement's kit list, that improvement
+ * is dropped instead (omitKitImprovement), and the participant is told.
  *
  * Equipment the story introduced without the household having it is named in
  * the briefing as a known defect, so the model doesn't build on it. Every
@@ -216,6 +220,12 @@ async function generateCheckedDebrief({
     "repair",
   );
   const stillFailing = repaired.failedChecks;
+  const fallback = omitKitImprovement(repaired.report, stillFailing, turns, context);
+  if (fallback) {
+    const omitted = { action: fallback.omitted.action, checks: fallback.checks };
+    console.warn("[ttx] omitted a kit-list improvement after the repair", omitted.checks);
+    return { report: fallback.report, failedFirst, omitted, capture: { ...capture, omitted: { ...omitted, stillFailing, report: fallback.report } } };
+  }
   if (stillFailing.length) {
     console.warn("[ttx] repaired debrief still failed checks", stillFailing.map((p) => p.problem));
     return { error: DEBRIEF_STILL_FAILING, failedFirst, stillFailing, capture };
@@ -245,6 +255,15 @@ function rejectCrossSite(req: Request): Response | null {
     return errorResponse(403, "Cross-origin requests are not allowed.");
   }
   return null;
+}
+
+/**
+ * Whether this server would capture debrief drafts for this request, so a
+ * local eval can confirm it before spending a model call
+ * (lib/debrief-capture.ts). Always false in hosted mode.
+ */
+export function GET(req: Request) {
+  return Response.json({ captureDebriefDrafts: captureEnabled(req, getAppMode()) });
 }
 
 export async function POST(req: Request) {
@@ -350,7 +369,11 @@ export async function POST(req: Request) {
             }
             const metadata: TtxMetadata = {
               ...counters,
-              debriefChecks: { passedImplementedChecks: true, failedFirst: problems(outcome.failedFirst) },
+              debriefChecks: {
+                passedImplementedChecks: true,
+                failedFirst: problems(outcome.failedFirst),
+                ...(outcome.omitted ? { omittedImprovement: outcome.omitted } : {}),
+              },
             };
             const toolCallId = generateId();
             writer.write({ type: "start", messageMetadata: metadata });

@@ -11,7 +11,7 @@
  */
 import { SAFETY_RULES } from "@/lib/rules";
 import { introducedEquipment, mentions, negated, powerOutageContext, type IntroducedItem } from "@/lib/continuity";
-import type { AfterActionReport, TurnOutput } from "@/lib/ttx";
+import type { AfterActionReport, Improvement, TurnOutput } from "@/lib/ttx";
 
 export type DebriefCheckCategory = "continuity" | "suitability" | "citation" | "safety" | "accuracy";
 
@@ -168,6 +168,45 @@ export function electricalConclusion(sentence: string): { kind: string; matched:
     if (!match) continue;
     if ((kind === "capacity" || kind === "prediction") && WITHOUT_POWER.test(sentence)) continue;
     return { kind, matched: match[0] };
+  }
+  return undefined;
+}
+
+/**
+ * A precise interval between events: "took about six hours to restore after
+ * power returned" (Alex, 2026-10-31). Hyphenated amounts ("three‑day minimum")
+ * and supply durations ("1 day of water") aren't intervals.
+ */
+const NUMBER_WORDS: Record<string, number> = {
+  a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, eighteen: 18, "twenty-four": 24, "twenty four": 24, "twenty‑four": 24,
+};
+const AMOUNT = `(?:(?:about|around|roughly|nearly|almost|over|some|just|only|another)\\s+)?(\\d+|${Object.keys(NUMBER_WORDS).join("|")})\\s+(minutes?|hours?|days?)\\b`;
+const INTERVALS = [
+  new RegExp(`\\b(?:took|takes|taking|within|after|delay of|waited|lasted|spent)\\s+${AMOUNT}`, "gi"),
+  new RegExp(`\\b${AMOUNT}\\s+(?:after|later|before|until|to (?:restore|recover|return|come back|resume|arrive|be restored))\\b`, "gi"),
+];
+const amountInHours = (amount: string, unit: string) => {
+  const n = Number(amount) || NUMBER_WORDS[amount.toLowerCase()];
+  return /^day/i.test(unit) ? n * 24 : /^minute/i.test(unit) ? n / 60 : n;
+};
+
+/**
+ * An interval the log's hours don't give. One is supported only when the sentence names two logged hours,
+ * outside a parenthetical citation, that are that far apart: a citation like "(Hour 66–72)" says where a
+ * point comes from, not when its events happened.
+ */
+export function unsupportedInterval(sentence: string, hours: Set<number>): string | undefined {
+  const anchors = [...sentence.replace(/\([^)]*\)/g, "").matchAll(/\bHours? (\d+)(?:\s*[-–‑]\s*(\d+))?/gi)]
+    .flatMap((match) => [match[1], match[2]])
+    .filter(Boolean)
+    .map(Number)
+    .filter((hour) => hours.has(hour));
+  const gaps = new Set(anchors.flatMap((a) => anchors.map((b) => Math.abs(a - b))));
+  for (const pattern of INTERVALS) {
+    for (const match of sentence.matchAll(pattern)) {
+      if (!gaps.has(amountInHours(match[1], match[2]))) return match[0];
+    }
   }
   return undefined;
 }
@@ -392,6 +431,17 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[], con
       const match = known.patterns.map((pattern) => text.match(pattern)).find(Boolean);
       if (match) add("accuracy", `accuracy:${known.id}`, field, match[0], `Known inaccuracy (${known.id}): ${quote(text)}`, known.fix);
     }
+    const interval = field.startsWith("supply_checklist") || GUIDANCE.test(text) ? undefined : unsupportedInterval(text, hours);
+    if (interval) {
+      add(
+        "accuracy",
+        "accuracy:unsupported-duration",
+        field,
+        interval,
+        `States a duration the log's hours don't give: ${quote(text)}`,
+        `Give a duration only between two logged hours you name, computed from them, e.g. "from Hour 60 to Hour 72, 12 hours". A time the story narrated within a turn isn't a logged hour, so otherwise leave the precise duration out ("several hours", "later"). Logged hours: ${[...hours].map((hour) => `Hour ${hour}`).join(", ")}.`,
+      );
+    }
     const conclusion = electricalConclusion(text);
     if (conclusion) {
       add(
@@ -420,6 +470,30 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[], con
   });
 
   return problems;
+}
+
+const KIT_CHECKS = new Set(["list-shaped", "vague-kit"]);
+
+/**
+ * The narrow fallback after a repair (eval finding 28): when the only failures
+ * left are one improvement's kit list or whole-kit action, the server drops
+ * that improvement whole, with its evidence and reason. It's allowed only if
+ * another improvement remains and the result passes every check again. The
+ * checklist is left as it is, and the participant is told one was omitted.
+ */
+export function omitKitImprovement(
+  report: AfterActionReport,
+  problems: DebriefProblem[],
+  turns: TurnOutput[],
+  context: DebriefContext = {},
+): { report: AfterActionReport; omitted: Improvement; checks: string[] } | undefined {
+  if (!problems.length || !problems.every((p) => KIT_CHECKS.has(p.check))) return undefined;
+  const improvements = new Set(problems.map((p) => p.field.match(/^do_better\[(\d+)\]/)?.[1]));
+  if (improvements.size !== 1 || improvements.has(undefined)) return undefined;
+  const index = Number([...improvements][0]);
+  const result = { ...report, do_better: report.do_better.filter((_, i) => i !== index) };
+  if (!result.do_better.length || checkDebrief(result, turns, context).length) return undefined;
+  return { report: result, omitted: report.do_better[index], checks: [...new Set(problems.map((p) => p.check))] };
 }
 
 /**

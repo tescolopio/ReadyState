@@ -1,0 +1,89 @@
+{
+  "note": "Alex debrief drafts captured at 04:07 UTC on 2026-10-31 (code d8e0441), synthetic eval household. Both were rejected; neither was displayed.",
+  "first": {
+    "summary": "The exercise demonstrated that you responded effectively to the flood and power loss by securing the electrical hazard, calling 911, and using blankets and a warming center to avoid hypothermia. However, limited water and food supplies, the lack of a comprehensive emergency kit, and reliance on a high‑wattage space heater that overloaded the circuit highlighted gaps in preparedness. Installing smoke/CO detectors and ensuring a reliable source of low‑wattage heat or alternative warming methods would further reduce risk in future outages.",
+    "went_well": [
+      "You identified and shut off the main breaker when water contacted outlets, preventing electrical shock (Hour 30).",
+      "You called emergency services promptly and used the building lobby and a neighbor’s apartment to stay dry and warm, avoiding hypothermia (Hours 36–48).",
+      "You waited for central heating to restart rather than persisting with an overloaded space heater, which protected the electrical system (Hour 72)."
+    ],
+    "need_to_know": [
+      "The apartment’s central heating took about 6 hours to recover after power was restored, leaving indoor temperature at 45 °F during that period (Hour 66–72 outcome).",
+      "A 1500‑watt space heater repeatedly tripped the circuit breaker, indicating the apartment’s circuit cannot support high‑wattage heating devices (Hour 72 outcome).",
+      "The building’s flood water rose to waist height and caused electrical hazards; turning off the main breaker prevented shock risk but also limited ability to use electric heating (Hour 30–36 events).",
+      "Your stored water and food supplies were below the 3‑day minimum recommended for emergencies, which would have left you without essential sustenance if the outage lasted longer (Baseline and Hour 0–72)."
+    ],
+    "do_better": [
+      {
+        "action": "Store at least 3 gallons of water for emergency use (e.g., three 1‑gallon containers).",
+        "evidence": "Baseline: only 1 gallon stored, providing just 1 day of water (Hour 0–72 log).",
+        "why": "Ensures the household meets the CDC/FEMA minimum of 1 gal/person/day for 3 days, preventing dehydration if power outage extends."
+      },
+      {
+        "action": "Acquire a basic emergency kit that includes a battery‑powered or hand‑crank NOAA radio, first‑aid supplies, extra blankets/warm clothing, a whistle, dust masks, and a manual can opener.",
+        "evidence": "Inventory check identified 10 of 12 basic kit items missing; no warm blankets recorded (Hour 0–72 log).",
+        "why": "Provides communication, medical, and warmth resources when power is out and helps meet FEMA food‑storage guidelines."
+      },
+      {
+        "action": "Install battery‑backed smoke detectors (and CO detectors) in sleeping areas and ensure they are maintained.",
+        "evidence": "Baseline noted no smoke detectors recorded (Hour 0–72 log).",
+        "why": "Detects fire or CO hazards early, especially important when using electric heaters that may overload circuits."
+      }
+    ],
+    "supply_checklist": [
+      "3 gallons of stored water",
+      "3 days of non‑perishable, no‑cook food",
+      "Battery‑powered or hand‑crank NOAA radio",
+      "First‑aid kit with basic supplies",
+      "Extra warm blankets or sleeping bags",
+      "Manual can opener",
+      "Whistle",
+      "Dust masks",
+      "Plastic sheeting and duct tape",
+      "Extra AA/AAA batteries"
+    ]
+  },
+  "repair": {
+    "summary": "During the exercise you responded quickly to a flooding and power outage, securing the electrical hazard, calling 911, and using a neighbor’s apartment and a warming center to stay dry and warm, which prevented hypothermia. The scenario highlighted that your water and food stores were below the three‑day recommendation and that you lacked a comprehensive emergency kit and battery‑backed smoke/CO detectors. You also experienced a delay of several hours before central heating resumed, underscoring the need for additional warming methods. Overall, your actions kept you safe, but addressing the supply and preparedness gaps will improve resilience in future outages.",
+    "went_well": [
+      "You identified and shut off the main breaker when water contacted outlets, preventing electrical shock (Hour 30).",
+      "You called emergency services promptly and used a neighbor’s apartment and a warming center to stay dry and warm, avoiding hypothermia (Hours 36–48).",
+      "You relied on blankets, dry clothing, and light activity to maintain body heat while waiting for central heating to restart (Hour 72)."
+    ],
+    "need_to_know": [
+      "The central heating system took about six hours to restore after power returned, leaving indoor temperatures around 45 °F during that time (Hour 66–72 outcome).",
+      "Flood water rose to waist height in the apartment, creating electrical hazards that were mitigated by turning off the main breaker (Hours 30–36 events).",
+      "Your stored water (1 gallon) and food (2 days) were below the recommended three‑day minimum, which would be insufficient for a longer outage (Baseline and Hour 0–72 log)."
+    ],
+    "do_better": [
+      {
+        "action": "Store at least 3 gallons of water in sealed containers for emergency use.",
+        "evidence": "Baseline recorded only 1 gallon of water, providing just 1 day of supply (Hour 0–72 log).",
+        "why": "Ensures you meet the CDC/FEMA recommendation of 1 gal/person/day for 3 days, preventing dehydration if the outage extends."
+      },
+      {
+        "action": "Assemble a basic emergency kit containing a battery‑powered NOAA weather radio, first‑aid supplies, a manual can opener, extra warm blankets or sleeping bags, a whistle, dust masks, plastic sheeting, duct tape, and spare batteries.",
+        "evidence": "Inventory check identified 10 of 12 basic kit items missing and no warm blankets recorded (Hour 0–72 log).",
+        "why": "Provides communication, medical, and warmth resources when power is out, improving overall preparedness."
+      },
+      {
+        "action": "Install battery‑backed smoke detectors (and CO detectors) in sleeping areas and test them monthly.",
+        "evidence": "Baseline noted no smoke detectors recorded (Hour 0–72 log).",
+        "why": "Early detection of fire or CO hazards is critical, especially during power outages when alternative heat sources may be used."
+      }
+    ],
+    "supply_checklist": [
+      "3 gallons of stored water",
+      "3 days of non‑perishable, no‑cook food",
+      "Battery‑powered NOAA weather radio",
+      "First‑aid kit with basic supplies",
+      "Manual can opener",
+      "Extra warm blankets or sleeping bags",
+      "Whistle",
+      "Dust masks",
+      "Plastic sheeting",
+      "Duct tape",
+      "Spare AA/AAA batteries"
+    ]
+  }
+}

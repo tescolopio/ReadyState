@@ -33,7 +33,7 @@ vi.mock("@/lib/providers", async (importOriginal) => ({
 vi.mock("@/lib/config", () => ({ getAppMode: () => env.mode }));
 vi.mock("@/lib/hosted", () => ({ getHostedServices: () => env.hosted }));
 
-const { POST } = await import("./route");
+const { GET, POST } = await import("./route");
 
 const turnInput = {
   feedback: null,
@@ -430,6 +430,53 @@ describe("POST /api/ttx: the debrief", () => {
     });
   });
 
+  describe("omitting a kit-list improvement the repair kept", () => {
+    const withKit: AfterActionReport = { ...passing, do_better: [...passing.do_better, kitListItem], supply_checklist: ["Manual can opener"] };
+
+    it("drops it whole when everything else passes, leaves the checklist, and tells the participant", async () => {
+      env.model = debriefModel([withKit, withKit]);
+
+      const last = await lastMessage(await post(endedExercise));
+      expect(last?.parts.find((p) => p.type === "tool-after_action_report")).toMatchObject({
+        state: "output-available",
+        output: { ...withKit, do_better: passing.do_better },
+      });
+      expect(last?.metadata).toMatchObject({
+        debriefRepairs: 1,
+        debriefChecks: {
+          passedImplementedChecks: true,
+          omittedImprovement: { action: kitListItem.action, checks: ["list-shaped"] },
+        },
+      });
+    });
+
+    it("still returns the recoverable error when another failure remains", async () => {
+      const uncited = { ...withKit, need_to_know: [...withKit.need_to_know, "Floods are dangerous."] };
+      env.model = debriefModel([uncited, uncited]);
+
+      const body = await (await post(endedExercise)).text();
+      expect(body).toContain("didn't pass ReadyState's checks, even after one repair");
+      expect(body).not.toContain("tool-output-available");
+      expect(body).not.toContain("omittedImprovement");
+    });
+
+    it("records the omission and the displayed debrief in the capture, with the repair still marked rejected", async () => {
+      vi.stubEnv("READYSTATE_CAPTURE_DEBRIEF_DRAFTS", "1");
+      env.model = debriefModel([withKit, withKit]);
+
+      const last = await lastMessage(await post(endedExercise, undefined, { "content-type": "application/json", [CAPTURE_HEADER]: "1" }));
+      const capture = last?.metadata?.debriefCapture;
+      expect(capture?.drafts.map((d) => d.status)).toEqual(["rejected", "rejected"]);
+      expect(capture?.omitted).toMatchObject({
+        action: kitListItem.action,
+        checks: ["list-shaped"],
+        stillFailing: [expect.objectContaining({ check: "list-shaped", field: "do_better[1].action" })],
+        report: { ...withKit, do_better: passing.do_better },
+      });
+      vi.unstubAllEnvs();
+    });
+  });
+
   it("names equipment the story invented as a known defect in the debrief briefing", async () => {
     const invented = { ...ended, narrative_response: "You find a space heater in the hall closet and plug it in." };
     const exercise = endedExercise.map((message) =>
@@ -474,6 +521,17 @@ describe("POST /api/ttx: the debrief", () => {
       expect(capture.evidence.hours).toEqual([72]);
       expect(capture.evidence.log).toContain("LATEST TURN (Hour 72");
       expect(JSON.stringify(capture)).not.toContain("live in [Location 1]");
+    });
+
+    it("answers the eval's preflight without a model call, and never in hosted mode", async () => {
+      const preflight = async () => (await GET(new Request("http://localhost/api/ttx", { headers: { [CAPTURE_HEADER]: "1" } }))).json();
+      expect(await preflight()).toEqual({ captureDebriefDrafts: false });
+      vi.stubEnv("READYSTATE_CAPTURE_DEBRIEF_DRAFTS", "1");
+      expect(await preflight()).toEqual({ captureDebriefDrafts: true });
+      expect(await (await GET(new Request("http://localhost/api/ttx"))).json()).toEqual({ captureDebriefDrafts: false });
+      env.mode = "hosted";
+      expect(await preflight()).toEqual({ captureDebriefDrafts: false });
+      env.mode = "self-hosted";
     });
 
     it("marks an accepted draft as accepted", async () => {
