@@ -21,6 +21,7 @@ import { z } from "zod";
 import { storyDefects } from "@/lib/debrief-checks";
 import alexReplay from "@/lib/fixtures/alex-replay-turns.json";
 import { engineBaseline } from "@/lib/inventory";
+import { failureSummary } from "@/lib/provider-errors";
 import { GUIDANCE } from "@/lib/rules";
 import { storyFacts, storyFactsBriefing } from "@/lib/story-facts";
 import { TEST_HOUSEHOLDS } from "@/lib/test-households";
@@ -305,8 +306,7 @@ export async function judgeBatch(model: LanguageModel, batch: Batch, maxOutputTo
     if (!call) return { batch: batch.name, error: "no judgment returned", usage, ms: Date.now() - started, attempts: 1 };
     return { batch: batch.name, judgment: call.input as Judgment, usage, ms: Date.now() - started, attempts: 1 };
   } catch (error) {
-    // Never pass provider error text through: it can carry account details.
-    const name = error instanceof Error ? error.name : "Error";
-    return { batch: batch.name, error: `judge call failed (${name})`, usage: { inputTokens: 0, outputTokens: 0 }, ms: Date.now() - started, attempts: 1 };
+    // Only the status and kind: provider error text can carry account details.
+    return { batch: batch.name, error: `judge call failed (${failureSummary(error)})`, usage: { inputTokens: 0, outputTokens: 0 }, ms: Date.now() - started, attempts: 1 };
   }
 }

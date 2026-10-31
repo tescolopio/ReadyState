@@ -64,6 +64,25 @@ export function isSchemaSlip(error: unknown): boolean {
 }
 
 /**
+ * A provider failure's status and kind, without any of its text, for eval
+ * logs: the raw text can carry account or organization details.
+ */
+export function failureSummary(error: unknown): string {
+  const failure = providerFailure(error);
+  if (!failure) return error instanceof Error ? error.name : "unknown error";
+  const kind = isSchemaSlip(error)
+    ? "malformed tool call"
+    : failure.status === 429
+      ? "rate limit"
+      : failure.status === 413 || /request too large|reduce your message size/i.test(failure.text)
+        ? "request too large"
+        : /context length|maximum context/i.test(failure.text)
+          ? "context too long"
+          : "other";
+  return `status ${failure.status ?? "unknown"}, ${kind}`;
+}
+
+/**
  * Turns a model-provider failure into a message the participant can act on
  * (work item G4). Never includes the provider's raw error text, which can
  * carry account or organization details.

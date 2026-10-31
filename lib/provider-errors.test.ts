@@ -1,7 +1,7 @@
 import { APICallError, RetryError, StreamProviderError } from "ai";
 import { describe, expect, it } from "vitest";
 
-import { describeProviderError, isSchemaSlip, retryAfterSeconds } from "@/lib/provider-errors";
+import { describeProviderError, failureSummary, isSchemaSlip, retryAfterSeconds } from "@/lib/provider-errors";
 
 const apiError = (statusCode: number, responseBody = "", responseHeaders: Record<string, string> = {}) =>
   new APICallError({
@@ -81,5 +81,15 @@ describe("describeProviderError", () => {
     expect(describeProviderError(new Error("boom"), "self-hosted")).toBe(
       "Something went wrong generating this turn. Please try again.",
     );
+  });
+});
+
+describe("failureSummary", () => {
+  it("gives the status and kind, never the provider's text", () => {
+    expect(failureSummary(new RetryError({ message: "Failed", reason: "maxRetriesExceeded", errors: [dailyLimit] }))).toBe("status 429, rate limit");
+    expect(failureSummary(dailyLimit)).not.toContain("org_secret123");
+    expect(failureSummary(apiError(400, '{"error":{"code":"tool_use_failed","message":"Tool call validation failed"}}'))).toBe("status 400, malformed tool call");
+    expect(failureSummary(apiError(413, '{"error":{"message":"Request too large for model in organization org_x"}}'))).toBe("status 413, request too large");
+    expect(failureSummary(new Error("boom"))).toBe("Error");
   });
 });
