@@ -36,6 +36,12 @@ export interface ScoredCase {
   invalid: string[];
   boundaryViolations: string[];
   explanation?: string;
+  /**
+   * For a defect: its false detail and every assertion the judge didn't support, with what it cited or found missing.
+   * Quoting the whole detail is necessary for "detected" but not sufficient: whether the rejection challenges that
+   * detail, rather than another part of the quote, is confirmed by reading these.
+   */
+  review?: { falseDetail?: string; rejected: { quote: string; verdict: string; evidence: { ref: string; quote: string }[]; missing: string }[] };
 }
 
 const words = (text: string) => text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
@@ -84,6 +90,15 @@ export function score(validated: ValidatedClaim[], status: Map<string, CallStatu
       invalid: result?.invalid ?? [],
       boundaryViolations: result?.boundaryViolations ?? [],
       explanation: result?.judged?.explanation,
+      review:
+        label.kind === "defect" && result?.judged
+          ? {
+              falseDetail: label.falseDetail,
+              rejected: result.judged.assertions
+                .filter((a) => a.verdict !== "supported")
+                .map(({ quote, verdict, evidence, missing }) => ({ quote, verdict, evidence, missing })),
+            }
+          : undefined,
     };
   });
 }

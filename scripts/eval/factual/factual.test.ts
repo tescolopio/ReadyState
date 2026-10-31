@@ -13,6 +13,7 @@ import {
   describeFailedGeneration,
   estimateInputTokens,
   jsonBreak,
+  normalizeText,
   judgmentSchema,
   noteLines,
   notePrompt,
@@ -580,5 +581,24 @@ describe("the bounded pilot", () => {
     });
     expect(onFalseDetail("C25", result("you kept in the apartment"))).toBe(true);
     expect(onFalseDetail("C25", result("A 1500-watt space heater you"))).toBe(false);
+  });
+});
+
+describe("the pilot rewrites' support in the supplied evidence", () => {
+  const { lines } = batchPrompt(pilotBatches()[0]);
+  const has = (ref: string, words: string) => expect(normalizeText(lines.get(ref) ?? ""), ref).toContain(normalizeText(words));
+
+  it("C56: the story introduces a 1500-watt heater from the maintenance closet", () => {
+    has("Hour 72 outcome", "You locate a small 1500-watt space heater stored in the building's maintenance closet");
+  });
+
+  it("C57: the water calculation and power returning at Hour 60 are both supplied", () => {
+    has("Baseline: Stored", "1 gallon of stored water (about 1.0 days at 1 gallon per person per day");
+    has("Hour 60 situation", "Power is restored");
+  });
+
+  it("C58: two trips while the plugged-in heater ran", () => {
+    has("Hour 72 outcome", "plug it into an outlet near the living-room sofa. Within about 10 minutes the circuit breaker trips");
+    has("Hour 72 outcome", "The heater runs for a short time before the breaker trips again");
   });
 });

@@ -187,13 +187,13 @@ function report(
         "",
         `**Valid-result coverage of ${s.cases} cases:** provider failures ${s.coverage.providerFailures.length}; not run ${s.coverage.notRun.length}; invalid responses ${s.coverage.invalidResponses.length}; valid judgments ${s.coverage.validJudgments.length}.`,
         "",
-        `**Overall, over every labeled case (missing and invalid results count as failures):** defects detected on the exact false detail (every word of it quoted in a non-supported assertion) ${s.overall.defectsDetectedOnDetail}; accurate texts accepted ${s.overall.accurateAccepted}. These measure judgments against the labels, not call completion.`,
+        `**Overall, over every labeled case (missing and invalid results count as failures):** defects whose whole false detail a non-supported assertion quotes ${s.overall.defectsDetectedOnDetail} (necessary, not sufficient: whether each rejection challenges that detail is confirmed by hand, from the review table below); accurate texts accepted ${s.overall.accurateAccepted}. These measure judgments against the labels, not call completion.`,
         "",
         "**Valid judgments:**",
         "",
         "| Result | Count | Cases |",
         "| --- | --- | --- |",
-        `| Defects detected on the exact false detail | ${s.detected.length} | ${ids(s.detected)} |`,
+        `| Defects whose whole false detail is quoted in a rejection (pending manual confirmation) | ${s.detected.length} | ${ids(s.detected)} |`,
         `| Defects detected on another detail | ${s.detectedOnAnotherDetail.length} | ${ids(s.detectedOnAnotherDetail)} |`,
         `| …misclassified (contradicted vs unsupported) | ${s.misclassified.length} | ${ids(s.misclassified)} |`,
         `| Missed defects (judged supported) | ${s.missed.length} | ${ids(s.missed)} |`,
@@ -214,6 +214,23 @@ function report(
         ? `- ${name}: planted line ${result.planted.detected ? "**detected**" : "not detected"} (marked inconsistent ${result.planted.markedInconsistent}, on the planted detail ${result.planted.onDetail}, refuting line quoted correctly ${result.planted.refutedCorrectly}); false alarms ${result.falseAlarms.join(", ") || "none"}; unchecked ${result.unchecked.join(", ") || "none"}; invalid quotations ${result.invalid.join("; ") || "none"}`
         : `- ${name}: ${status}`,
     ),
+    "",
+    "## Rejected assertions on defects, for manual review",
+    "",
+    "Does each rejection challenge the false detail itself, rather than another part of the quote?",
+    "",
+    "| Case | False detail | Rejected assertion | Verdict | Evidence cited | Missing | Explanation |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
+    ...scored
+      .filter((c) => c.review)
+      .flatMap((c) =>
+        c.review!.rejected.length
+          ? c.review!.rejected.map(
+              (r) =>
+                `| ${c.id} | ${cell(c.review!.falseDetail)} | ${cell(r.quote)} | ${r.verdict} | ${cell(r.evidence.map((e) => `[${e.ref}] ${e.quote}`).join("; "))} | ${cell(r.missing)} | ${cell(c.explanation)} |`,
+            )
+          : [`| ${c.id} | ${cell(c.review!.falseDetail)} | (none rejected) | | | | ${cell(c.explanation)} |`],
+      ),
     "",
     "## Every case",
     "",

@@ -87,7 +87,7 @@ export const BATCHES: Batch[] = [
     evidence: "story",
     omitHours: [6, 12, 18, 24],
     cases: [
-      { id: "C56", claim: "A 1500-watt space heater from the building's maintenance closet repeatedly tripped the breaker." },
+      { id: "C56", claim: "The story introduced a 1500-watt space heater from the building's maintenance closet." },
       { id: "C57", claim: "Your stored water, about one day's worth, would have run out well before power returned at Hour 60." },
       { id: "C58", claim: "The breaker tripped twice when you plugged in a 1500-watt space heater." },
     ],
