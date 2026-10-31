@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -568,10 +568,10 @@ describe("the bounded pilot", () => {
     }
   });
 
-  it("fits a preflight budget with every call at its full allowance and under the per-minute limit", () => {
+  it("fits the 29,643-token cap authorized for the pilot, with every call at its full allowance and under the per-minute limit", () => {
     const allowances = batches.map((b) => estimateInputTokens(batchPrompt(b).text) + MAX_OUTPUT_TOKENS);
     for (const a of allowances) expect(a).toBeLessThan(TOKENS_PER_MINUTE);
-    expect(allowances.reduce((sum, a) => sum + a, 0)).toBeLessThanOrEqual(30_000);
+    expect(allowances.reduce((sum, a) => sum + a, 0)).toBeLessThanOrEqual(29_643);
   });
 
   it("counts a defect as detected only when one non-supported assertion quotes its whole false detail", () => {
@@ -584,6 +584,18 @@ describe("the bounded pilot", () => {
     });
     expect(onFalseDetail("C25", result("you kept in the apartment"))).toBe(true);
     expect(onFalseDetail("C25", result("A 1500-watt space heater you"))).toBe(false);
+  });
+
+  it("needs the whole claim quoted in one rejection when a defect's label names no false detail", () => {
+    const claim = ALL_CASES.find((c) => c.id === "C49")!.claim;
+    const result = (quote: string) => ({
+      id: "C49",
+      invalid: [],
+      boundaryViolations: [],
+      judged: { id: "C49", claim, basis: "story" as const, verdict: "contradicted" as const, explanation: "x", assertions: [assertion("contradicted", quote, [])] },
+    });
+    expect(onFalseDetail("C49", result("While waiting in the car"))).toBe(false);
+    expect(onFalseDetail("C49", result(claim))).toBe(true);
   });
 });
 
@@ -616,13 +628,28 @@ describe("the pilot rewrites' support in the supplied evidence", () => {
 });
 
 describe("the judge stays eval-only", () => {
+  // Resolved from this file, not the working directory: scripts/eval/factual -> the repo root.
+  const repo = path.resolve(import.meta.dirname, "../../..");
+  const skip = new Set(["node_modules", ".next", ".git", "scripts", "docs", "eval-results", "coverage", "public"]);
+  const sources = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) return skip.has(entry.name) ? [] : sources(full);
+      return /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(entry.name) ? [full] : [];
+    });
+  // A static import, an export from, a dynamic import() or a require() of anything under scripts/eval.
+  const IMPORTS_EVAL = /(\bfrom|\bimport\s*\(|\brequire\s*\()\s*["'][^"']*scripts\/eval/;
+
   it("no app, server or shared code imports the eval scripts", () => {
-    const roots = ["app", "lib", "components", "utils", "store"];
-    const files = roots.flatMap((root) =>
-      existsSync(root) ? readdirSync(root, { recursive: true, encoding: "utf8" }).filter((f) => /\.(ts|tsx)$/.test(f)).map((f) => path.join(root, f)) : [],
-    );
-    expect(files.length).toBeGreaterThan(0);
-    const importers = files.filter((file) => /from\s+["'][^"']*scripts\/eval/.test(readFileSync(file, "utf8")));
-    expect(importers).toEqual([]);
+    const files = sources(repo);
+    expect(files.some((file) => file.includes(`${path.sep}app${path.sep}`))).toBe(true);
+    expect(files.filter((file) => IMPORTS_EVAL.test(readFileSync(file, "utf8"))).map((file) => path.relative(repo, file))).toEqual([]);
+  });
+
+  it("catches static, dynamic and require imports", () => {
+    expect(IMPORTS_EVAL.test('import { judgeBatch } from "@/scripts/eval/factual/judge";')).toBe(true);
+    expect(IMPORTS_EVAL.test('const judge = await import("@/scripts/eval/factual/judge");')).toBe(true);
+    expect(IMPORTS_EVAL.test('const judge = require("../scripts/eval/factual/judge");')).toBe(true);
+    expect(IMPORTS_EVAL.test(" * scripts/eval/run-households.mjs.")).toBe(false);
   });
 });

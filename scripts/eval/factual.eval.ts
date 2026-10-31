@@ -11,8 +11,9 @@
  * EVAL_FACTUAL_DRY_RUN=1 prints the plan and its token allowance without any
  * model call. It calls the provider directly with the server's env key, not
  * the ReadyState server. Claim batches are split to at most two claims a call
- * (scripts/eval/factual/run.ts). A hard budget (EVAL_JUDGE_BUDGET, default
- * 25,000) stops it before any call whose allowance could exceed it. There are
+ * (scripts/eval/factual/run.ts). A hard budget (EVAL_JUDGE_BUDGET, required:
+ * the authorized cap, with no default) stops it before any call whose allowance
+ * could exceed it. There are
  * no retries, the SDK's included, unless EVAL_FACTUAL_ATTEMPTS is above 1. A
  * call without reported usage is charged at its full allowance: the charge is
  * budget accounting, not measured usage, and the report keeps the two apart.
@@ -47,7 +48,8 @@ import { score, summarize, type ScoredCase } from "./factual/score";
 const ENABLED = process.env.EVAL_FACTUAL === "1";
 const DRY_RUN = process.env.EVAL_FACTUAL_DRY_RUN === "1";
 const SET = process.env.EVAL_FACTUAL_SET ?? "development";
-const BUDGET = Number(process.env.EVAL_JUDGE_BUDGET ?? 25_000);
+/** The authorized cap. No default: a run without an explicit cap makes no calls. */
+const BUDGET = process.env.EVAL_JUDGE_BUDGET ? Number(process.env.EVAL_JUDGE_BUDGET) : undefined;
 const ATTEMPTS = Number(process.env.EVAL_FACTUAL_ATTEMPTS ?? 1);
 /** Groq's limit is per minute; a pause between calls keeps a call from being refused for the previous one. */
 const PAUSE_MS = 62_000;
@@ -87,9 +89,10 @@ describe.skipIf(!ENABLED)("G11 factual-consistency judge, eval only", () => {
     const worstCase = calls.reduce((sum, c) => sum + c.allowance, 0);
     // Written directly: the test runner hides console output from passing tests.
     process.stdout.write(
-      `\nPlan for ${SET}: ${calls.length} calls, ${ATTEMPTS} attempt(s) each: ${calls.map((c) => `${c.name} ≤${c.allowance}`).join(", ")}; worst case ${worstCase * ATTEMPTS} of a ${BUDGET}-token budget.\n`,
+      `\nPlan for ${SET}: ${calls.length} calls, ${ATTEMPTS} attempt(s) each: ${calls.map((c) => `${c.name} ≤${c.allowance}`).join(", ")}; worst case ${worstCase * ATTEMPTS} of ${BUDGET ? `a ${BUDGET}-token budget` : "no budget (EVAL_JUDGE_BUDGET not set)"}.\n`,
     );
     if (DRY_RUN) return;
+    if (!BUDGET) throw new Error("Set EVAL_JUDGE_BUDGET to the authorized token cap; no calls made.");
     // Preflight: every call charged at its full allowance must fit, or nothing runs.
     if (worstCase * ATTEMPTS > BUDGET) throw new Error(`Worst case ${worstCase * ATTEMPTS} exceeds the ${BUDGET}-token budget; no calls made.`);
 
@@ -141,7 +144,8 @@ describe.skipIf(!ENABLED)("G11 factual-consistency judge, eval only", () => {
     mkdirSync(outDir, { recursive: true });
     const meta = { model: `${resolved.provider}/${modelId}`, set: SET, budget: BUDGET, charged, reported, providerCalls, elapsedMs: Date.now() - started, revision: revision() };
     writeFileSync(path.join(outDir, "factual-judge.json"), JSON.stringify({ ...meta, runs, validated, notes, scored }, null, 2));
-    writeFileSync(path.join(outDir, "factual-judge.md"), report(meta, runs, scored, notes));
+    const setOf = new Map(claimBatches(SET).map((batch) => [batch.name, batch.set as string]));
+    writeFileSync(path.join(outDir, "factual-judge.md"), report(meta, runs, scored, notes, setOf));
     process.stdout.write(`Factual judge report written to ${path.resolve(outDir)}\n`);
     expect(charged).toBeLessThanOrEqual(BUDGET);
   });
@@ -165,6 +169,8 @@ function report(
   runs: CallRun<unknown>[],
   scored: ScoredCase[],
   notes: { name: string; status: CallStatus; result?: NoteCheckResult }[],
+  /** Each claim call's set, so a set's completion counts only its own claim calls. */
+  setOf: Map<string, string>,
 ) {
   const sets = [...new Set(scored.map((c) => c.set))];
   return [
@@ -180,10 +186,11 @@ function report(
     "",
     ...sets.flatMap((set) => {
       const s = summarize(scored, set);
+      const setRuns = runs.filter((run) => setOf.get(run.name) === set);
       return [
         `## ${set}`,
         "",
-        `**Provider completion:** ${runs.filter((run) => run.status === "completed").length} of ${runs.length} call attempt(s) returned a tool call.`,
+        `**Provider completion:** ${setRuns.filter((run) => run.status === "completed").length} of ${setRuns.length} claim call attempt(s) returned a tool call (note checks are reported below).`,
         "",
         `**Valid-result coverage of ${s.cases} cases:** provider failures ${s.coverage.providerFailures.length}; not run ${s.coverage.notRun.length}; invalid responses ${s.coverage.invalidResponses.length}; valid judgments ${s.coverage.validJudgments.length}.`,
         "",
@@ -219,17 +226,19 @@ function report(
     "",
     "Does each rejection challenge the false detail itself, rather than another part of the quote?",
     "",
-    "| Case | False detail | Rejected assertion | Verdict | Evidence cited | Missing | Explanation |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
+    "A rejection from an invalid result is listed for completeness but can't count as a detection.",
+    "",
+    "| Case | Result | False detail | Rejected assertion | Verdict | Evidence cited | Missing | Explanation |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ...scored
       .filter((c) => c.review)
       .flatMap((c) =>
         c.review!.rejected.length
           ? c.review!.rejected.map(
               (r) =>
-                `| ${c.id} | ${cell(c.review!.falseDetail)} | ${cell(r.quote)} | ${r.verdict} | ${cell(r.evidence.map((e) => `[${e.ref}] ${e.quote}`).join("; "))} | ${cell(r.missing)} | ${cell(c.explanation)} |`,
+                `| ${c.id} | ${c.review!.valid ? "valid" : "**invalid**"} | ${cell(c.review!.falseDetail)} | ${cell(r.quote)} | ${r.verdict} | ${cell(r.evidence.map((e) => `[${e.ref}] ${e.quote}`).join("; "))} | ${cell(r.missing)} | ${cell(c.explanation)} |`,
             )
-          : [`| ${c.id} | ${cell(c.review!.falseDetail)} | (none rejected) | | | | ${cell(c.explanation)} |`],
+          : [`| ${c.id} | ${c.review!.valid ? "valid" : "**invalid**"} | ${cell(c.review!.falseDetail)} | (none rejected) | | | | ${cell(c.explanation)} |`],
       ),
     "",
     "## Every case",

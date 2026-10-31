@@ -224,15 +224,16 @@ export const PILOT_PAIRS = [
 
 export const PILOT_CALLS: string[][] = PILOT_PAIRS.map(({ defect }, i) => [defect, PILOT_PAIRS[(i + 1) % PILOT_PAIRS.length].rewrite]);
 
-/** The pilot's calls as claim batches, with the story evidence the development story batches use. */
+/** The pilot's calls as claim batches, with the evidence settings of the rewrites' batch, "alex story D". */
 export function pilotBatches(): Batch[] {
   const byId = new Map(ALL_CASES.map((c) => [c.id, c]));
+  const { set, household, evidence, omitHours } = BATCHES.find((batch) => batch.name === "alex story D")!;
   return PILOT_CALLS.map((ids, i) => ({
     name: `pilot ${i + 1} of ${PILOT_CALLS.length}`,
-    set: "development",
-    household: "alex",
-    evidence: "story",
-    omitHours: [6, 12, 18, 24],
+    set,
+    household,
+    evidence,
+    omitHours,
     cases: ids.map((id) => ({ id, claim: byId.get(id)!.claim })),
   }));
 }

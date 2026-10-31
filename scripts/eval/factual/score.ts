@@ -41,18 +41,21 @@ export interface ScoredCase {
    * Quoting the whole detail is necessary for "detected" but not sufficient: whether the rejection challenges that
    * detail, rather than another part of the quote, is confirmed by reading these.
    */
-  review?: { falseDetail?: string; rejected: { quote: string; verdict: string; evidence: { ref: string; quote: string }[]; missing: string }[] };
+  review?: { valid: boolean; falseDetail: string; rejected: { quote: string; verdict: string; evidence: { ref: string; quote: string }[]; missing: string }[] };
 }
 
 const words = (text: string) => text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
 
+/** A defect's false detail: the label's, or the whole claim when the label names none (the claim is false throughout). */
+const falseDetailOf = (id: string) => LABELS[id].falseDetail ?? ALL_CASES.find((c) => c.id === id)!.claim;
+
 /**
- * Whether an assertion the judge didn't support quotes the label's whole false detail. Every word must be in that
- * one assertion's quote (2026-10-31; it was half the words), so "you" alone doesn't count for "you kept".
+ * Whether an assertion the judge didn't support quotes the defect's whole false detail. Every word must be in that
+ * one assertion's quote (2026-10-31; it was half the words), so "you" alone doesn't count for "you kept". A defect
+ * without a labeled detail needs the whole claim quoted in one rejection, not just any rejection.
  */
 export function onFalseDetail(id: string, result: ValidatedClaim): boolean {
-  const detail = LABELS[id].falseDetail;
-  if (!detail) return true;
+  const detail = falseDetailOf(id);
   const wanted = words(detail);
   return result.judged!.assertions.some((assertion) => {
     if (assertion.verdict === "supported") return false;
@@ -93,7 +96,8 @@ export function score(validated: ValidatedClaim[], status: Map<string, CallStatu
       review:
         label.kind === "defect" && result?.judged
           ? {
-              falseDetail: label.falseDetail,
+              valid: outcome !== "invalid response",
+              falseDetail: falseDetailOf(id),
               rejected: result.judged.assertions
                 .filter((a) => a.verdict !== "supported")
                 .map(({ quote, verdict, evidence, missing }) => ({ quote, verdict, evidence, missing })),
