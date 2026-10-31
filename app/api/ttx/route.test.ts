@@ -226,7 +226,40 @@ describe("POST /api/ttx", () => {
     const part = last?.parts.find((p) => p.type === "tool-generate_turn");
     expect(part).toMatchObject({ state: "output-available", output: turnInput });
     // The eval reads actual usage and the number of provider calls from the metadata.
-    expect(last?.metadata).toEqual({ usage: { inputTokens: 1, outputTokens: 1 }, providerCalls: 1, schemaRetries: 0 });
+    expect(last?.metadata).toEqual({
+      usage: { inputTokens: 1, outputTokens: 1 },
+      providerCalls: 1,
+      calls: [{ inputTokens: 1, outputTokens: 1 }],
+      schemaRetries: 0,
+    });
+  });
+
+  it("states the exercise clock in the prompt: 72 hours, or a local eval's longer clock", async () => {
+    env.model = mockToolCallModel("generate_turn", turnInput);
+    await lastMessage(await post([userMessage]));
+    expect(systemText(env.model as MockLanguageModelV4)).toContain("runs for 72 in-game hours");
+
+    vi.stubEnv("READYSTATE_EVAL_TARGET_HOURS", "168");
+    const model = mockToolCallModel("generate_turn", turnInput);
+    env.model = model;
+    await lastMessage(await post([userMessage]));
+    expect(systemText(model)).toContain("runs for 168 in-game hours");
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps playing past Hour 72 under a local eval's longer clock, instead of starting the debrief", async () => {
+    const at72 = { ...turnInput, hours_elapsed: 72, time_elapsed: "Hour 72", scenario_status: "ongoing" as const };
+    const messages: TtxUIMessage[] = [
+      userMessage,
+      { id: "a1", role: "assistant", parts: [{ type: "tool-generate_turn", toolCallId: "c1", state: "output-available", input: at72, output: at72 }] },
+      { id: "u2", role: "user", parts: [{ type: "text", text: "We stay put." }] },
+    ];
+    vi.stubEnv("READYSTATE_EVAL_TARGET_HOURS", "168");
+    const model = mockToolCallModel("generate_turn", turnInput);
+    env.model = model;
+    await lastMessage(await post(messages));
+    expect(model.doStreamCalls).toHaveLength(1);
+    vi.unstubAllEnvs();
   });
 
   it("retries once when the provider rejects a malformed turn before any output", async () => {
@@ -238,6 +271,8 @@ describe("POST /api/ttx", () => {
     const last = await lastMessage(await post([userMessage]));
     expect(model.doStreamCalls).toHaveLength(2);
     expect(last?.metadata).toMatchObject({ providerCalls: 2, schemaRetries: 1 });
+    // The rejected call has a status and no usage; the call that streamed has its own.
+    expect(last?.metadata?.calls).toEqual([{ rejected: true, status: 400 }, { inputTokens: 1, outputTokens: 1 }]);
     expect(last?.parts.find((p) => p.type === "tool-generate_turn")).toMatchObject({
       state: "output-available",
       output: turnInput,
@@ -263,6 +298,8 @@ describe("POST /api/ttx", () => {
     const last = await lastMessage(await post([userMessage]));
     expect(model.doStreamCalls).toHaveLength(2);
     expect(last?.metadata).toMatchObject({ providerCalls: 2, schemaRetries: 1 });
+    // The discarded attempt was cut off before the provider reported usage.
+    expect(last?.metadata?.calls).toEqual([{}, { inputTokens: 1, outputTokens: 1 }]);
     expect(last?.parts.find((p) => p.type === "tool-generate_turn")).toMatchObject({
       state: "output-available",
       output: turnInput,
@@ -284,6 +321,7 @@ describe("POST /api/ttx", () => {
 
     const last = await lastMessage(await post([userMessage]));
     expect(last?.metadata).toMatchObject({ providerCalls: 2, schemaRetries: 0 });
+    expect(last?.metadata?.calls).toEqual([{ rejected: true, status: 429 }, { inputTokens: 1, outputTokens: 1 }]);
   });
 
   it("explains a malformed turn that fails twice instead of retrying again", async () => {
@@ -370,6 +408,7 @@ describe("POST /api/ttx: the debrief", () => {
     expect(last?.metadata).toEqual({
       usage: { inputTokens: 10, outputTokens: 5 },
       providerCalls: 1,
+      calls: [{ inputTokens: 10, outputTokens: 5 }],
       schemaRetries: 0,
       debriefRepairs: 0,
       debriefChecks: { passedImplementedChecks: true, failedFirst: [] },
@@ -389,8 +428,13 @@ describe("POST /api/ttx: the debrief", () => {
     expect(repair).toContain("YOUR PREVIOUS DEBRIEF (JSON)");
     expect(last?.parts.find((p) => p.type === "tool-after_action_report")).toMatchObject({ output: passing });
     expect(last?.metadata).toMatchObject({
+      // The response's usage is the draft plus the repair; each call's own is in calls.
       usage: { inputTokens: 20, outputTokens: 10 },
       providerCalls: 2,
+      calls: [
+        { inputTokens: 10, outputTokens: 5 },
+        { inputTokens: 10, outputTokens: 5 },
+      ],
       schemaRetries: 0,
       debriefRepairs: 1,
       debriefChecks: { passedImplementedChecks: true, failedFirst: [expect.stringContaining("action is a list")] },
@@ -531,12 +575,12 @@ describe("POST /api/ttx: the debrief", () => {
 
     it("answers the eval's preflight without a model call, and never in hosted mode", async () => {
       const preflight = async () => (await GET(new Request("http://localhost/api/ttx", { headers: { [CAPTURE_HEADER]: "1" } }))).json();
-      expect(await preflight()).toEqual({ captureDebriefDrafts: false });
+      expect(await preflight()).toEqual({ captureDebriefDrafts: false, exerciseHours: 72 });
       vi.stubEnv("READYSTATE_CAPTURE_DEBRIEF_DRAFTS", "1");
-      expect(await preflight()).toEqual({ captureDebriefDrafts: true });
-      expect(await (await GET(new Request("http://localhost/api/ttx"))).json()).toEqual({ captureDebriefDrafts: false });
+      expect(await preflight()).toEqual({ captureDebriefDrafts: true, exerciseHours: 72 });
+      expect(await (await GET(new Request("http://localhost/api/ttx"))).json()).toEqual({ captureDebriefDrafts: false, exerciseHours: 72 });
       env.mode = "hosted";
-      expect(await preflight()).toEqual({ captureDebriefDrafts: false });
+      expect(await preflight()).toEqual({ captureDebriefDrafts: false, exerciseHours: 72 });
       env.mode = "self-hosted";
     });
 

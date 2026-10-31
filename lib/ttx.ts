@@ -140,14 +140,32 @@ export interface OmittedImprovement {
 export const OMITTED_IMPROVEMENT_NOTICE = "One suggested improvement was omitted because it didn't meet our quality checks.";
 
 /**
+ * One provider call behind a response, with its own usage. A call the provider
+ * rejected, or one cut off before it reported usage (a discarded retry
+ * attempt), has none. `status` is the HTTP status of a rejection, never its text.
+ */
+export interface ProviderCallUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  rejected?: boolean;
+  status?: number;
+}
+
+/**
  * What the server reports about the model calls behind a response, for the
  * eval. Never shown to participants, except the omitted-improvement notice.
  */
 export interface TtxMetadata {
-  /** Actual tokens, as the provider reported them. */
+  /**
+   * Actual tokens, as the provider reported them, for the whole response: for a
+   * turn, the attempt that streamed; for a debrief, the first draft plus any
+   * repair. Not a single call's size: that is in `calls`.
+   */
   usage?: { inputTokens?: number; outputTokens?: number };
   /** Every provider call, including the SDK's silent retries after a rate limit. */
   providerCalls?: number;
+  /** Each provider call's own usage, in order, retries and repairs included. */
+  calls?: ProviderCallUsage[];
   /** Retries after a malformed tool call (work item G4). */
   schemaRetries?: number;
   /** Debrief repairs after failed content checks (0 or 1). */
