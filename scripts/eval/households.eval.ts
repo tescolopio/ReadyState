@@ -14,7 +14,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { privateTerms } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { PRIVACY_LEAKS, TEST_HOUSEHOLDS, type TestHousehold } from "@/lib/test-households";
-import { deriveTtxState, type AfterActionReport, type TtxUIMessage, type TurnOutput } from "@/lib/ttx";
+import { deriveTtxState, improvementText, type AfterActionReport, type TtxUIMessage, type TurnOutput } from "@/lib/ttx";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { maskInput } from "@/utils/obfuscator";
 
@@ -362,7 +362,7 @@ function reportMarkdown({ household, baseline, turns, debrief, report, findings,
       list(report.need_to_know),
       "",
       "**What you can do better**",
-      list(report.do_better),
+      list(report.do_better.map(improvementText)),
       "",
       "**What went well**",
       list(report.went_well),

@@ -10,7 +10,7 @@
  * categories, and factual support only covers the known inaccuracies below.
  */
 import { SAFETY_RULES } from "@/lib/rules";
-import type { AfterActionReport, TurnOutput } from "@/lib/ttx";
+import type { AfterActionReport, Improvement, TurnOutput } from "@/lib/ttx";
 
 export type DebriefCheckCategory = "suitability" | "citation" | "safety" | "accuracy";
 
@@ -74,6 +74,8 @@ const SUPPLIES = [
 ];
 const suppliesIn = (text: string) => SUPPLIES.filter((pattern) => pattern.test(text)).length;
 const separators = (text: string) => (text.match(/[,;]/g) ?? []).length;
+const listShaped = (text: string) => suppliesIn(text) >= 3 || separators(text) >= 4 || text.length > 260;
+const improvementParts = ({ action, evidence, why }: Improvement) => [action, evidence, why];
 
 /** A moment in the exercise ("Hour 18", "Hours 48–66") or a household fact. */
 const TRACED = /\bHours? \d+|\b(baseline|household profile|your profile|inventory check|at the start)\b/i;
@@ -106,55 +108,65 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[]): De
   const add = (category: DebriefCheckCategory, problem: string, fix: string) => problems.push({ category, problem, fix });
 
   // Suitability: at most three improvements, each one concrete action, bulk supplies in the checklist.
+  // The structure doesn't prevent a list: an action or its reason can still be one.
   if (report.do_better.length > MAX_IMPROVEMENTS) {
     add(
       "suitability",
       `do_better has ${report.do_better.length} improvements`,
-      `Keep the ${MAX_IMPROVEMENTS} most important; move supply items to supply_checklist and drop the rest.`,
+      `Keep the ${MAX_IMPROVEMENTS} most important and drop the rest; move supply items to supply_checklist.`,
     );
   }
   for (const item of report.do_better) {
-    if (suppliesIn(item) >= 3 || separators(item) >= 4 || item.length > 260) {
-      add(
-        "suitability",
-        `Improvement is a list rather than one action: ${quote(item)}`,
-        "Rewrite it as one concrete next action; put the individual supplies in supply_checklist, one per item.",
-      );
+    for (const [field, text] of [["action", item.action], ["why", item.why]] as const) {
+      if (listShaped(text)) {
+        add(
+          "suitability",
+          `Improvement's ${field} is a list rather than one action: ${quote(text)}`,
+          "Rewrite it as one concrete step and put the individual supplies in supply_checklist, one per item, or drop this improvement.",
+        );
+      }
     }
   }
 
   // Citation validity: each point says where it comes from, and cited hours happened.
   const hours = new Set(turns.map((turn) => turn.hours_elapsed));
-  const cite = (point: string, allowGuidance: boolean) => {
-    if (!TRACED.test(point) && !(allowGuidance && GUIDANCE.test(point))) {
-      add(
-        "citation",
-        `Point doesn't say what it comes from: ${quote(point)}`,
-        allowGuidance
-          ? "End it with the hour, decision, household fact or official guidance it comes from, e.g. \"(from Hour 18: …)\"."
-          : "End it with the hour, decision or household fact it comes from, e.g. \"(from Hour 18: …)\".",
-      );
-      return;
-    }
-    // Ranges ("Hours 48–66") name a span, so only single hours are checked.
-    const missing = [...point.matchAll(/\bHour (\d+)\b(?!\s*[-–‑]\s*\d)/gi)]
-      .map((match) => Number(match[1]))
-      .filter((hour) => !hours.has(hour));
+  // Ranges ("Hours 48–66") name a span, so only single hours are checked.
+  const checkHours = (texts: string[], shown: string, fix = "") => {
+    const cited = texts.flatMap((text) => [...text.matchAll(/\bHour (\d+)\b(?!\s*[-–‑]\s*\d)/gi)].map((match) => Number(match[1])));
+    const missing = [...new Set(cited)].filter((hour) => !hours.has(hour));
     if (missing.length) {
       add(
         "citation",
-        `Point cites Hour ${missing.join(", Hour ")}, which never happened: ${quote(point)}`,
-        `Cite only hours from the log: ${[...hours].map((hour) => `Hour ${hour}`).join(", ")}.`,
+        `Point cites Hour ${missing.join(", Hour ")}, which never happened: ${quote(shown)}`,
+        `Cite only hours from the log: ${[...hours].map((hour) => `Hour ${hour}`).join(", ")}${fix}.`,
       );
     }
   };
-  report.need_to_know.forEach((point) => cite(point, true));
-  report.do_better.forEach((point) => cite(point, false));
+  for (const point of report.need_to_know) {
+    if (!TRACED.test(point) && !GUIDANCE.test(point)) {
+      add(
+        "citation",
+        `Point doesn't say what it comes from: ${quote(point)}`,
+        "End it with the hour, decision, household fact or official guidance it comes from, e.g. \"(from Hour 18: …)\".",
+      );
+    } else checkHours([point], point);
+  }
+  // Improvements must trace to what happened, not to general guidance.
+  for (const item of report.do_better) {
+    if (!TRACED.test(item.evidence)) {
+      add(
+        "citation",
+        `Improvement's evidence doesn't name an exercise event or household fact: ${quote(item.evidence || "(empty)")} for ${quote(item.action, 80)}`,
+        "Set evidence to the hour, decision or household fact it comes from, e.g. \"Hour 18: the cooler warming\", or drop this improvement if nothing in the exercise supports it.",
+      );
+    } else checkHours(improvementParts(item), item.action, ", or drop this improvement");
+  }
 
-  const all = [report.summary, ...report.need_to_know, ...report.do_better, ...report.went_well, ...(report.supply_checklist ?? [])];
+  const improvements = report.do_better.flatMap(improvementParts);
+  const all = [report.summary, ...report.need_to_know, ...improvements, ...report.went_well, ...(report.supply_checklist ?? [])];
 
   // Safety: the detect patterns of data/rules/safety.json.
-  for (const { rule, prompt, sentence } of unsafeSentences([...report.need_to_know, ...report.do_better, ...(report.supply_checklist ?? [])])) {
+  for (const { rule, prompt, sentence } of unsafeSentences([...report.need_to_know, ...improvements, ...(report.supply_checklist ?? [])])) {
     add("safety", `Breaks safety rule ${rule}: ${quote(sentence)}`, prompt);
   }
 
@@ -168,10 +180,15 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[]): De
   return problems;
 }
 
-/** The repair request: exactly which checks failed and how to fix each. */
+/**
+ * The repair request: exactly which checks failed and how to fix each. A
+ * failing improvement may be dropped instead of fixed, so the repair never has
+ * to invent a replacement to fill a slot.
+ */
 export function repairInstructions(problems: DebriefProblem[]): string {
   return [
-    "Your debrief failed these checks. Write the whole debrief again, fixing every one and keeping what was right:",
+    "Your debrief failed these checks. Write the whole debrief again, fixing every one and keeping what passed:",
     ...problems.map((p, i) => `${i + 1}. ${p.problem}\n   Fix: ${p.fix}`),
+    "You may drop a failing improvement instead of fixing it. Fewer than three improvements is fine; don't replace a dropped one with a new one.",
   ].join("\n");
 }

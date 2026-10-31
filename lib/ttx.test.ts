@@ -46,7 +46,7 @@ const report: AfterActionReport = {
   summary: "Water storage carried the household; heat was the weak point.",
   went_well: ["Water storage"],
   need_to_know: ["The furnace needs power to run"],
-  do_better: ["Plan a safe backup heat source"],
+  do_better: [{ action: "Plan a safe backup heat source", evidence: "Hour 12: the cold house", why: "The furnace needs power." }],
   supply_checklist: [],
 };
 

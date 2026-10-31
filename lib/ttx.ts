@@ -60,6 +60,24 @@ export const turnSchema = z.object({
 });
 
 /**
+ * One debrief improvement. The parts are separate so each can be checked:
+ * the action for being one step, the evidence for citing what happened.
+ */
+const improvementSchema = z.object({
+  action: z
+    .string()
+    .describe(
+      'One concrete next step, in one sentence, e.g. "Freeze two water jugs this week to use as ice and drinking water". One action, not a list of supplies: individual supplies go in supply_checklist.',
+    ),
+  evidence: z
+    .string()
+    .describe(
+      'The exercise event or household fact it comes from, e.g. "Hour 18: the cooler warming" or "household profile: 1 gallon of water stored".',
+    ),
+  why: z.string().describe("One short sentence on why it matters, tied to that evidence."),
+});
+
+/**
  * End-of-exercise debrief. There's no win or lose (decision D8): it answers
  * "what do I need to know?" and "what can I/we do better?".
  */
@@ -76,10 +94,8 @@ export const afterActionReportSchema = z.object({
       'What this household needs to know about its own situation, learned from the exercise: dependencies, timings and risks, stated factually. End each with where it comes from, e.g. "Without power, your cooler keeps the insulin in range for about a day if the ice is replaced (from Hour 18: the cooler warming)".',
     ),
   do_better: z
-    .array(z.string())
-    .describe(
-      'One to three improvements, most important first. Each is one sentence naming the improvement and one concrete next action, ending with where it comes from, e.g. "Freeze two water jugs this week to use as ice and drinking water (from Hour 18: the cooler warming)". Put longer supply lists in supply_checklist instead.',
-    ),
+    .array(improvementSchema)
+    .describe("At most three improvements, most important first. Fewer is fine: never pad the list to reach three."),
   supply_checklist: z
     .array(z.string())
     .describe("Optional: individual supplies worth gathering, one per item, for a household that wants a fuller list. Empty if the improvements cover it."),
@@ -88,6 +104,10 @@ export const afterActionReportSchema = z.object({
 export type TurnOutput = z.infer<typeof turnSchema>;
 export type TurnFeedback = z.infer<typeof feedbackSchema>;
 export type AfterActionReport = z.infer<typeof afterActionReportSchema>;
+export type Improvement = z.infer<typeof improvementSchema>;
+
+/** An improvement as one line, for plain-text reports. */
+export const improvementText = ({ action, evidence, why }: Improvement) => `${action} Why: ${why} (from ${evidence})`;
 
 /**
  * Structured "tools" the model is forced to call. They simply echo their

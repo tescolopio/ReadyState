@@ -316,16 +316,23 @@ describe("POST /api/ttx: the debrief", () => {
     summary: "Heat was the weak point.",
     went_well: ["You layered clothes early."],
     need_to_know: ["Your furnace needs power to run (from your household profile: gas furnace)."],
-    do_better: ["Put a sleeping bag on this week's shopping list (from Hour 72: the cold apartment)."],
+    do_better: [
+      {
+        action: "Put a sleeping bag on this week's shopping list.",
+        evidence: "Hour 72: the cold apartment",
+        why: "The apartment fell to 50°F with no other way to stay warm.",
+      },
+    ],
     supply_checklist: [],
   };
   /** Alex's embedded kit list (eval finding 16): fails the one-action check. */
-  const kitList: AfterActionReport = {
-    ...passing,
-    do_better: [
-      "Assemble a basic emergency kit that includes a sleeping bag or warm blanket, a battery‑powered NOAA radio, first‑aid supplies, a manual can opener, extra batteries, dust masks, plastic sheeting, duct tape, a whistle, and hand sanitizer (from Hour 72).",
-    ],
+  const kitListItem = {
+    action:
+      "Assemble a basic emergency kit that includes a sleeping bag or warm blanket, a battery‑powered NOAA radio, first‑aid supplies, a manual can opener, extra batteries, dust masks, plastic sheeting, duct tape, a whistle, and hand sanitizer.",
+    evidence: "Hour 72: the inventory gaps",
+    why: "You had few supplies.",
   };
+  const kitList: AfterActionReport = { ...passing, do_better: [kitListItem] };
 
   /** Answers each debrief call with the next report, and records what it was asked. */
   const debriefModel = (reports: AfterActionReport[], onCall?: (call: number) => void) => {
@@ -377,7 +384,7 @@ describe("POST /api/ttx: the debrief", () => {
     expect(promptText(model, 0)).not.toContain("failed these checks");
     const repair = promptText(model, 1);
     expect(repair).toContain("Your debrief failed these checks");
-    expect(repair).toContain("Improvement is a list rather than one action");
+    expect(repair).toContain("action is a list rather than one action");
     expect(repair).toContain("YOUR PREVIOUS DEBRIEF (JSON)");
     expect(last?.parts.find((p) => p.type === "tool-after_action_report")).toMatchObject({ output: passing });
     expect(last?.metadata).toMatchObject({
@@ -385,8 +392,19 @@ describe("POST /api/ttx: the debrief", () => {
       providerCalls: 2,
       schemaRetries: 0,
       debriefRepairs: 1,
-      debriefChecks: { passedImplementedChecks: true, failedFirst: [expect.stringContaining("Improvement is a list")] },
+      debriefChecks: { passedImplementedChecks: true, failedFirst: [expect.stringContaining("action is a list")] },
     });
+  });
+
+  it("lets the repair drop a failing improvement and returns fewer than three", async () => {
+    const model = debriefModel([{ ...passing, do_better: [...passing.do_better, kitListItem] }, passing]);
+    env.model = model;
+
+    const last = await lastMessage(await post(endedExercise));
+    expect(promptText(model, 1)).toContain("You may drop a failing improvement instead of fixing it");
+    const report = last?.parts.find((p) => p.type === "tool-after_action_report");
+    expect(report).toMatchObject({ output: { do_better: passing.do_better } });
+    expect(last?.metadata).toMatchObject({ debriefRepairs: 1, debriefChecks: { passedImplementedChecks: true } });
   });
 
   it("returns a recoverable error, not the debrief, when the repair still fails", async () => {

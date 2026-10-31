@@ -6,7 +6,7 @@
  * Regression examples live in checks.test.ts and lib/debrief-checks.test.ts.
  */
 import { checkDebrief, unsafeSentences, type DebriefCheckCategory } from "@/lib/debrief-checks";
-import type { AfterActionReport, TurnOutput } from "@/lib/ttx";
+import { improvementText, type AfterActionReport, type TurnOutput } from "@/lib/ttx";
 
 export const CHECK_CATEGORIES = [
   "privacy",
@@ -118,7 +118,7 @@ export function contentFindings({ baseline, turns, participantText, report, repl
     if (!report.do_better.length) out.push({ category: "completion", text: "Debrief has no 'what you can do better'" });
     // Citations are checked against every hour, replayed or not.
     out.push(...checkDebrief(report, turns).map((p) => ({ category: DEBRIEF_CATEGORY[p.category], text: p.problem })));
-    const verdict = [report.summary, ...report.need_to_know, ...report.do_better, ...report.went_well].join(" ").match(VERDICT);
+    const verdict = [report.summary, ...report.need_to_know, ...report.do_better.map(improvementText), ...report.went_well].join(" ").match(VERDICT);
     if (verdict) out.push({ category: "suitability", text: `Debrief uses grading language: "${verdict[0]}"` });
   }
   return out;

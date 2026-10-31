@@ -22,6 +22,7 @@ import {
   TARGET_DURATION_HOURS,
   deriveTtxState,
   type AfterActionReport,
+  type Improvement,
   type TtxUIMessage,
   type TurnFeedback,
   type TurnOutput,
@@ -586,24 +587,32 @@ function KeepableList({
   ready,
 }: {
   title: string;
-  items?: (string | undefined)[];
+  /** Steps, or debrief improvements whose action is the step and whose reason and evidence are shown beneath it. */
+  items?: (string | DeepPartial<Improvement> | undefined)[];
   label: string;
   source: LessonSource;
   ready: boolean;
 }) {
   const plan = usePlanStore((state) => state.items);
   const add = usePlanStore((state) => state.add);
-  const present = items?.filter((item): item is string => Boolean(item)).map(unmaskOutput);
+  const present = items
+    ?.map((item) => (typeof item === "string" ? { action: item } : item))
+    .filter((item): item is DeepPartial<Improvement> & { action: string } => Boolean(item?.action));
   if (!present?.length) return null;
   return (
     <div>
       <h3 className="font-sans text-sm font-semibold">{title}</h3>
       <ul className="mt-2 space-y-2">
-        {present.map((text, index) => {
-          const kept = plan.some((item) => item.text === text);
+        {present.map((item, index) => {
+          const text = unmaskOutput(item.action);
+          const kept = plan.some((planned) => planned.text === text);
           return (
             <li key={index} className="flex flex-wrap items-start justify-between gap-2 rounded-control border border-line px-3 py-2">
-              <span className="min-w-0 flex-1 basis-60">{text}</span>
+              <div className="min-w-0 flex-1 basis-60">
+                <p>{text}</p>
+                {item.why && <p className="mt-1 text-sm text-ink-2">{unmaskOutput(item.why)}</p>}
+                {item.evidence && <p className="mt-1 text-xs text-ink-3">From {unmaskOutput(item.evidence)}</p>}
+              </div>
               {ready && source.keepable &&
                 (kept ? (
                   <span className="inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-success">

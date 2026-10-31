@@ -54,7 +54,13 @@ const debrief: AfterActionReport = {
   summary: "Water and warmth were the pressure points.",
   went_well: ["You layered clothes early (Hour 0)."],
   need_to_know: ["Stairs are your only way out without power (from Hour 0: the elevator stopping)"],
-  do_better: ["Store two more gallons of water this week (from your household profile: 1 gallon stored)"],
+  do_better: [
+    {
+      action: "Store two more gallons of water this week",
+      evidence: "household profile: 1 gallon stored",
+      why: "One gallon lasts one person a day.",
+    },
+  ],
   supply_checklist: ["Hand-crank radio", "Manual can opener"],
 };
 
@@ -91,7 +97,7 @@ describe("contentFindings", () => {
       baseline: alexBaseline,
       turns: alexTurns,
       participantText: [],
-      report: { ...debrief, do_better: ["Store 3 gallons of water, per CDC guidance."] },
+      report: { ...debrief, do_better: [{ action: "Store 3 gallons of water", evidence: "CDC guidance", why: "It lasts three days." }] },
       replayedTurns: alexTurns.length,
     });
     const known = findings.filter((f) => f.replayed);
