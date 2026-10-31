@@ -30,7 +30,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { describeHousehold, hasProfile, privateTerms, type HouseholdProfile } from "@/lib/household";
+import { hasProfile, privateTerms, type HouseholdProfile } from "@/lib/household";
+import { engineBaseline } from "@/lib/inventory";
 import {
   TARGET_DURATION_HOURS,
   deriveTtxState,
@@ -137,7 +138,7 @@ export default function TtxDashboard() {
   };
   const startWithHousehold = (profile: HouseholdProfile) => {
     setWizardOpen(false);
-    submitText(describeHousehold(profile), profile);
+    submitText(engineBaseline(profile), profile);
   };
   // Guided responses fill the box rather than sending, so the participant can edit them.
   const chooseOption = (option: string) => {

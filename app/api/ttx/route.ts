@@ -7,6 +7,7 @@ import {
 
 import { getAppMode } from "@/lib/config";
 import { getHostedServices, type HostedAccount } from "@/lib/hosted";
+import { describeProviderError } from "@/lib/provider-errors";
 import { providerSettingsSchema, resolveModel } from "@/lib/providers";
 import {
   TARGET_DURATION_HOURS,
@@ -33,13 +34,16 @@ Rules:
   - Credit protective actions such as shutting off gas after a suspected leak, evacuating, or calling for help, even when they make other things harder.
   - For injuries and medical emergencies, recommend contacting emergency services or a medical professional, and don't give treatment instructions beyond basic first aid.
 - The household baseline may be a structured profile. Use the facts it gives, including stored supplies and backup power, and treat anything it lists as "not provided" as unknown: ask about it through injects rather than assuming it.
+- Never give the household resources it doesn't have. A generator, heater, vehicle, pet or supply exists only if the baseline lists it or the participant says they have or obtained it. Narratives and response_options may use other resources only by obtaining them in the story, such as borrowing from a neighbor or buying at a store, and that should cost time or effort.
+- Use the inventory check's gaps: build injects that test them, so the household discovers what it's missing.
+- Vary the developments: don't repeat a hazard that has already been resolved, and move through different parts of the emergency (utilities, health, supplies, communication, neighbors, travel, deciding whether to stay or go).
 - Never reply with plain text. Always respond by calling the required tool.`;
 
 const FEEDBACK_RULES = `Feedback on the latest response goes in feedback: "covered" lists what it handled well, citing what the participant actually wrote; "consider" lists what it missed or could strengthen; "why" explains in one to three sentences why that matters, grounded in preparedness guidance. Different circumstances support different reasonable decisions, so acknowledge a sound alternative instead of marking it wrong. Add at most two real-world preparedness steps to suggested_actions.`;
 
 const PHASE_INSTRUCTIONS: Record<Exclude<TtxPhase, "aar">, string> = {
   baseline: `Phase 1 - Baseline Generation: the participant just provided their sanitized household parameters. Set feedback to null and suggested_actions to []. Generate the inciting incident in narrative_response, set time_elapsed to "Hour 0" and hours_elapsed to 0, describe the first inject in new_inject, offer response_options for it, and set scenario_status to "ongoing".`,
-  loop: `Phase 2 - Response, Feedback & Inject: ${FEEDBACK_RULES} Then report the result of the action in narrative_response, advance the clock by a realistic increment (typically 6-12 hours), and add a new development in new_inject that follows from the participant's choices, with response_options for it. The participant may pick one of your earlier options or write their own; evaluate either the same way. Set scenario_status to "complete" if hours_elapsed reaches ${TARGET_DURATION_HOURS}, otherwise "ongoing".`,
+  loop: `Phase 2 - Response, Feedback & Inject: ${FEEDBACK_RULES} Then report the result of the action in narrative_response, advance the clock by 6 to 12 hours (so the exercise takes about 8 to 10 turns; use shorter steps only for a fast-moving crisis), and add a new development in new_inject that follows from the participant's choices, with response_options for it. The participant may pick one of your earlier options or write their own; evaluate either the same way. Set scenario_status to "complete" if hours_elapsed reaches ${TARGET_DURATION_HOURS}, otherwise "ongoing".`,
   ended: `Phase 4 - Debrief: the exercise is over. There is no win or lose. Help the household answer two questions from everything that happened: what do we need to know about our situation, and what can we do better? Note what went well, too. Don't grade, score or give a verdict.`,
 };
 
@@ -131,6 +135,12 @@ export async function POST(req: Request) {
   });
 
   return createUIMessageStreamResponse({
-    stream: toUIMessageStream({ stream: result.stream }),
+    stream: toUIMessageStream({
+      stream: result.stream,
+      onError: (error) => {
+        console.error("[ttx] model call failed", error);
+        return describeProviderError(error, mode);
+      },
+    }),
   });
 }

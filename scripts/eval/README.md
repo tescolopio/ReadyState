@@ -40,8 +40,9 @@ PowerShell: `$env:EVAL_ONLY="alex"; npm run eval`.
 | `EVAL_TURNS` | `14` | Stop after this many turns. The debrief only runs if the exercise ended (72 in-game hours usually takes 8–12 turns). |
 | `EVAL_DELAY_MS` | `8000` | Pause between calls. Groq's free tier allows 8,000 tokens per minute; lower this on a paid tier. |
 | `EVAL_CHOOSE` | `cycle` | Which offered response to pick: `cycle` (1st, 2nd, 3rd…), `first` or `last` |
+| `EVAL_PROVIDER`, `EVAL_MODEL` | server default | Send these as the app's provider settings, to test another provider or model (for example `EVAL_MODEL=openai/gpt-oss-20b`, which has its own Groq quota) |
 
-A full run of all seven households takes about 15–20 minutes on Groq's free tier.
+A full run of all seven households takes about 15–20 minutes and **about a day's free Groq quota**: Groq's free tier allows 200,000 tokens per day per model, and a full run makes 60 or more calls of 2,500–4,000 tokens each. Use `EVAL_ONLY` and `EVAL_TURNS`, split runs across days, or point `EVAL_MODEL` at a second model. Playing the app yourself uses the same quota.
 
 ## Results
 
