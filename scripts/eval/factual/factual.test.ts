@@ -21,6 +21,7 @@ import {
   uncoveredWords,
   untraceableNoteLines,
   validate,
+  type CallRun,
   type CallStatus,
   type JudgedAssertion,
   type JudgedClaim,
@@ -29,6 +30,7 @@ import {
 } from "./judge";
 import { LABELS } from "./labels";
 import { CURRENT_RUN, DIAGNOSTIC_CAP, OUTPUT_LIMIT_RUN, RELAXED_KIND_RUN, TOKENS_PER_MINUTE, chargeFor, diagnosticCalls, stopsTheRun, validateDiagnostic } from "./diagnostic";
+import { MAX_CLAIMS_PER_CALL, collectResults, runCalls, splitBatches } from "./run";
 import { score, summarize } from "./score";
 
 describe("the G11 case set", () => {
@@ -440,5 +442,92 @@ describe("describing a rejected generation without its content", () => {
     });
     expect(JSON.stringify(described)).not.toContain("secret");
     expect(describeFailedGeneration('{"claims":[]}', judgmentSchema)).toEqual({ length: 13, json: true, schemaIssues: [] });
+  });
+});
+
+describe("batching claims at most two a call", () => {
+  const parts = splitBatches(BATCHES);
+  const parentOf = (part: Batch) => BATCHES.find((b) => part.name === b.name || part.name.startsWith(`${b.name} `))!;
+
+  it("includes every claim exactly once, at most two a call, in the original order", () => {
+    const ids = parts.flatMap((part) => part.cases.map((c) => c.id));
+    expect(ids).toEqual(BATCHES.flatMap((b) => b.cases.map((c) => c.id)));
+    expect(new Set(ids).size).toBe(ALL_CASES.length);
+    for (const part of parts) {
+      expect(part.cases.length).toBeGreaterThan(0);
+      expect(part.cases.length).toBeLessThanOrEqual(MAX_CLAIMS_PER_CALL);
+    }
+    expect(new Set(parts.map((p) => p.name)).size).toBe(parts.length);
+  });
+
+  it("preserves claim ids, wording and every evidence reference of the original batch", () => {
+    for (const part of parts) {
+      const parent = parentOf(part);
+      expect({ ...part, name: parent.name, cases: parent.cases }).toEqual(parent);
+      for (const c of part.cases) expect(parent.cases).toContainEqual(c);
+      // The same cited lines, word for word: only the claims differ.
+      expect(batchPrompt(part).lines).toEqual(batchPrompt(parent).lines);
+      for (const { id, claim } of part.cases) expect(batchPrompt(part).text).toContain(`${id}: ${claim}`);
+    }
+  });
+
+  it("keeps every call under Groq's 8k tokens a minute", () => {
+    for (const part of parts) expect(estimateInputTokens(batchPrompt(part).text) + MAX_OUTPUT_TOKENS, part.name).toBeLessThan(TOKENS_PER_MINUTE);
+  });
+
+  it("reports a failed call's cases as missing results, keeping the calls that completed", () => {
+    const dev = splitBatches(BATCHES.filter((b) => b.set === "development"));
+    const runs: CallRun<unknown>[] = dev.map((part, i) =>
+      i === 1
+        ? { name: part.name, status: "provider failure", error: "status 400, malformed tool call", usage: { inputTokens: 0, outputTokens: 0 }, ms: 0, attempts: 1 }
+        : { name: part.name, status: "completed", result: judgment(part), usage: { inputTokens: 1000, outputTokens: 500 }, ms: 0, attempts: 1 },
+    );
+    const { status, validated } = collectResults(dev, runs);
+    expect([...status.keys()].sort()).toEqual(dev.flatMap((p) => p.cases.map((c) => c.id)).sort());
+    const failedIds = dev[1].cases.map((c) => c.id);
+    expect(validated.map((v) => v.id).sort()).toEqual(dev.flatMap((p, i) => (i === 1 ? [] : p.cases.map((c) => c.id))).sort());
+    const scored = score(validated, status);
+    for (const id of failedIds) expect(scored.find((c) => c.id === id)!.outcome).toBe("provider failure");
+    expect(summarize(scored).coverage.providerFailures).toHaveLength(failedIds.length);
+    expect(summarize(scored).coverage.validJudgments.length + summarize(scored).coverage.invalidResponses.length).toBe(scored.length - failedIds.length);
+  });
+
+  it("counts the evidence repeated in every call in the allowance", () => {
+    const dev = BATCHES.filter((b) => b.set === "development");
+    const allowance = (batches: Batch[]) => batches.reduce((sum, b) => sum + estimateInputTokens(batchPrompt(b).text) + MAX_OUTPUT_TOKENS, 0);
+    const split = splitBatches(dev);
+    for (const parent of dev) {
+      const own = split.filter((p) => parentOf(p) === parent);
+      // Each part carries its batch's whole evidence, instructions and output limit: n parts cost n − 1 more of each.
+      const evidenceOnly = estimateInputTokens(batchPrompt({ ...parent, cases: [] }).text) + MAX_OUTPUT_TOKENS;
+      expect(Math.abs(allowance(own) - allowance([parent]) - (own.length - 1) * evidenceOnly)).toBeLessThanOrEqual(own.length);
+    }
+  });
+
+  it("stays within the budget, charging the full allowance when usage is unknown, and records skipped calls as not run", async () => {
+    const results: Record<string, CallRun<unknown>> = {
+      a: { name: "a", status: "provider failure", usage: { inputTokens: 0, outputTokens: 0 }, ms: 0, attempts: 1 },
+      b: { name: "b", status: "completed", usage: { inputTokens: 0, outputTokens: 0 }, ms: 0, attempts: 1 },
+      c: { name: "c", status: "completed", usage: { inputTokens: 900, outputTokens: 300 }, ms: 0, attempts: 1 },
+      d: { name: "d", status: "completed", usage: { inputTokens: 900, outputTokens: 300 }, ms: 0, attempts: 1 },
+    };
+    const started: string[] = [];
+    const call = (name: string, allowance: number) => ({ name, allowance, run: async () => (started.push(name), { ...results[name] }) });
+    const { runs, charged } = await runCalls([call("a", 4000), call("b", 3000), call("c", 2000), call("d", 2000)], { budget: 10_000 });
+    // a and b report no usage, so each is charged in full; c is charged what it reported; d's allowance would pass the budget.
+    expect(started).toEqual(["a", "b", "c"]);
+    expect(charged).toBe(4000 + 3000 + 1200);
+    expect(runs.map((r) => [r.name, r.status])).toEqual([["a", "provider failure"], ["b", "completed"], ["c", "completed"], ["d", "not run"]]);
+  });
+
+  it("makes no retries unless asked, and charges each attempt", async () => {
+    let calls = 0;
+    const failing = { name: "a", allowance: 3000, run: async () => (calls++, { name: "a", status: "provider failure" as const, usage: { inputTokens: 0, outputTokens: 0 }, ms: 0, attempts: 1 }) };
+    expect((await runCalls([failing], { budget: 10_000 })).charged).toBe(3000);
+    expect(calls).toBe(1);
+    expect((await runCalls([failing], { budget: 10_000, attempts: 2 })).charged).toBe(6000);
+    expect(calls).toBe(3);
+    // A second attempt that would pass the budget isn't made.
+    expect((await runCalls([failing], { budget: 5000, attempts: 2 })).runs).toHaveLength(1);
   });
 });

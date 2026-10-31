@@ -8,9 +8,11 @@
  * EVAL_FACTUAL_SET is development, reserved or all (default development).
  * EVAL_FACTUAL_DRY_RUN=1 prints the plan and its token allowance without any
  * model call. It calls the provider directly with the server's env key, not
- * the ReadyState server. A hard budget (EVAL_JUDGE_BUDGET, default 25,000)
- * stops it before any call whose allowance could exceed it. A failed call
- * reports no usage, so it is charged at its full allowance: the charge is
+ * the ReadyState server. Claim batches are split to at most two claims a call
+ * (scripts/eval/factual/run.ts). A hard budget (EVAL_JUDGE_BUDGET, default
+ * 25,000) stops it before any call whose allowance could exceed it. There are
+ * no retries, the SDK's included, unless EVAL_FACTUAL_ATTEMPTS is above 1. A
+ * call without reported usage is charged at its full allowance: the charge is
  * budget accounting, not measured usage, and the report keeps the two apart.
  */
 import { execSync } from "node:child_process";
@@ -33,17 +35,18 @@ import {
   judgeBatch,
   judgeNote,
   notePrompt,
-  validate,
   type CallRun,
   type CallStatus,
   type NoteCheckResult,
 } from "./factual/judge";
+import { collectResults, runCalls, splitBatches } from "./factual/run";
 import { score, summarize, type ScoredCase } from "./factual/score";
 
 const ENABLED = process.env.EVAL_FACTUAL === "1";
 const DRY_RUN = process.env.EVAL_FACTUAL_DRY_RUN === "1";
 const SET = process.env.EVAL_FACTUAL_SET ?? "development";
 const BUDGET = Number(process.env.EVAL_JUDGE_BUDGET ?? 25_000);
+const ATTEMPTS = Number(process.env.EVAL_FACTUAL_ATTEMPTS ?? 1);
 /** Groq's limit is per minute; a pause between calls keeps a call from being refused for the previous one. */
 const PAUSE_MS = 62_000;
 const outDir = path.join("eval-results", `${new Date().toISOString().replace(/[:.]/g, "-")}-factual`);
@@ -55,19 +58,23 @@ interface PlannedCall {
   run: (model: LanguageModel) => Promise<CallRun<unknown>>;
 }
 
-/** The calls a set makes, in order, and the most each may use. */
+const inSet = (set: string) => (s: string) => set === "all" || s === set;
+
+/** The claim calls a set makes: its batches split to at most two claims each. */
+export const claimBatches = (set: string) => splitBatches(BATCHES.filter((batch) => inSet(set)(batch.set)));
+
+/** The calls a set makes, in order, and the most each may use. SDK retries are off: every provider call is one the plan counts. */
 export function plan(set: string): PlannedCall[] {
-  const inSet = (s: string) => set === "all" || s === set;
   return [
-    ...BATCHES.filter((batch) => inSet(batch.set)).map((batch) => ({
+    ...claimBatches(set).map((batch) => ({
       name: batch.name,
       allowance: estimateInputTokens(batchPrompt(batch).text) + MAX_OUTPUT_TOKENS,
-      run: (model: LanguageModel) => judgeBatch(model, batch),
+      run: (model: LanguageModel) => judgeBatch(model, batch, 0),
     })),
-    ...NOTE_CHECKS.filter((check) => inSet(check.set)).map((check) => ({
+    ...NOTE_CHECKS.filter((check) => inSet(set)(check.set)).map((check) => ({
       name: check.name,
       allowance: estimateInputTokens(notePrompt(check).text, NOTE_INSTRUCTIONS) + NOTE_MAX_OUTPUT_TOKENS,
-      run: (model: LanguageModel) => judgeNote(model, check),
+      run: (model: LanguageModel) => judgeNote(model, check, 0),
     })),
   ];
 }
@@ -77,7 +84,9 @@ describe.skipIf(!ENABLED)("G11 factual-consistency judge, eval only", () => {
     const calls = plan(SET);
     const worstCase = calls.reduce((sum, c) => sum + c.allowance, 0);
     // Written directly: the test runner hides console output from passing tests.
-    process.stdout.write(`\nPlan for ${SET}: ${calls.map((c) => `${c.name} ≤${c.allowance}`).join(", ")}; worst case ${worstCase} of a ${BUDGET}-token budget.\n`);
+    process.stdout.write(
+      `\nPlan for ${SET}: ${calls.length} calls, ${ATTEMPTS} attempt(s) each: ${calls.map((c) => `${c.name} ≤${c.allowance}`).join(", ")}; worst case ${worstCase * ATTEMPTS} of a ${BUDGET}-token budget.\n`,
+    );
     if (DRY_RUN) return;
 
     if (!process.env.GROQ_API_KEY) {
@@ -101,32 +110,23 @@ describe.skipIf(!ENABLED)("G11 factual-consistency judge, eval only", () => {
     const modelId = typeof resolved.model === "string" ? resolved.model : resolved.model.modelId;
 
     const started = Date.now();
-    const runs: CallRun<unknown>[] = [];
-    let charged = 0;
-    for (const planned of calls) {
-      let last: CallRun<unknown> | undefined;
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        if (charged + planned.allowance > BUDGET) break;
-        if (runs.length) await sleep(PAUSE_MS);
-        const before = providerCalls;
-        last = await planned.run(model);
-        last.attempts = attempt;
-        last.providerCalls = providerCalls - before;
-        charged += last.status === "provider failure" ? planned.allowance * Math.max(1, last.providerCalls) : last.usage.inputTokens + last.usage.outputTokens;
-        runs.push(last);
-        if (last.status === "completed") break;
-      }
-      if (!last) runs.push({ name: planned.name, status: "not run", usage: { inputTokens: 0, outputTokens: 0 }, ms: 0, attempts: 0 });
-    }
+    const { runs, charged } = await runCalls(
+      calls.map((planned) => ({
+        name: planned.name,
+        allowance: planned.allowance,
+        run: async () => {
+          const before = providerCalls;
+          const run = await planned.run(model);
+          run.providerCalls = providerCalls - before;
+          return run;
+        },
+      })),
+      { budget: BUDGET, attempts: ATTEMPTS, pause: () => sleep(PAUSE_MS) },
+    );
 
-    // Each case's call outcome: the last attempt of its batch.
+    // Each case's call outcome: the last attempt of its batch. A failed batch leaves only its own cases missing.
     const lastRun = (name: string) => runs.filter((run) => run.name === name).at(-1)!;
-    const status = new Map<string, CallStatus>();
-    const validated = BATCHES.filter((batch) => calls.some((c) => c.name === batch.name)).flatMap((batch) => {
-      const run = lastRun(batch.name);
-      for (const { id } of batch.cases) status.set(id, run.status);
-      return run.status === "completed" ? validate(batch, run.result as Parameters<typeof validate>[1]).claims : [];
-    });
+    const { status, validated } = collectResults(claimBatches(SET), runs);
     const notes = NOTE_CHECKS.filter((check) => calls.some((c) => c.name === check.name)).map((check) => {
       const run = lastRun(check.name);
       return { name: check.name, status: run.status, result: run.status === "completed" ? checkNote(check, run.result as Parameters<typeof checkNote>[1]) : undefined };
@@ -168,7 +168,7 @@ function report(
     "",
     `Model ${meta.model}, set ${meta.set}, code ${meta.revision}. ${runs.length} call attempt(s), ${meta.providerCalls} provider call(s) including SDK retries; ${Math.round(meta.elapsedMs / 1000)} s elapsed.`,
     "",
-    `**Tokens:** ${meta.reported.input + meta.reported.output} reported (${meta.reported.input} input, ${meta.reported.output} output); ${meta.charged} conservatively charged against the budget. The charge is budget accounting, not measured usage: a failed call reports no usage and is charged at its full allowance.`,
+    `**Tokens:** ${meta.reported.input + meta.reported.output} reported (${meta.reported.input} input, ${meta.reported.output} output); ${meta.charged} conservatively charged against the budget. The charge is budget accounting, not measured usage: a call without reported usage is charged at its full allowance.`,
     "",
     "| Call | Attempt | Status | Failure | Input | Output | ms | Provider calls |",
     "| --- | --- | --- | --- | --- | --- | --- | --- |",

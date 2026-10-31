@@ -561,8 +561,8 @@ async function call<T>(
 export const judgeClaimsText = (model: LanguageModel, name: string, content: string, maxRetries?: number, maxOutputTokens = MAX_OUTPUT_TOKENS) =>
   call<ProviderJudgment>(model, name, JUDGE_INSTRUCTIONS, content, providerJudgmentSchema, maxOutputTokens, maxRetries, judgmentSchema);
 
-export const judgeBatch = (model: LanguageModel, batch: Batch) =>
-  call<ProviderJudgment>(model, batch.name, JUDGE_INSTRUCTIONS, batchPrompt(batch).text, providerJudgmentSchema, MAX_OUTPUT_TOKENS, undefined, judgmentSchema);
+export const judgeBatch = (model: LanguageModel, batch: Batch, maxRetries?: number) =>
+  call<ProviderJudgment>(model, batch.name, JUDGE_INSTRUCTIONS, batchPrompt(batch).text, providerJudgmentSchema, MAX_OUTPUT_TOKENS, maxRetries, judgmentSchema);
 
-export const judgeNote = (model: LanguageModel, check: NoteCheck) =>
-  call<NoteJudgment>(model, check.name, NOTE_INSTRUCTIONS, notePrompt(check).text, noteJudgmentSchema, NOTE_MAX_OUTPUT_TOKENS);
+export const judgeNote = (model: LanguageModel, check: NoteCheck, maxRetries?: number) =>
+  call<NoteJudgment>(model, check.name, NOTE_INSTRUCTIONS, notePrompt(check).text, noteJudgmentSchema, NOTE_MAX_OUTPUT_TOKENS, maxRetries);

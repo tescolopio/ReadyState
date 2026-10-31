@@ -104,10 +104,7 @@ export const CURRENT_RUN = OUTPUT_LIMIT_RUN;
 export const TOKENS_PER_MINUTE = 8_000;
 
 /** The charge for a call: its full allowance unless the provider reported its usage. */
-export const chargeFor = (run: CallRun<unknown>, allowance: number) => {
-  const reported = run.usage.inputTokens + run.usage.outputTokens;
-  return run.status === "provider failure" || !run.usage.inputTokens || !run.usage.outputTokens ? Math.max(allowance, reported) : reported;
-};
+export { chargeFor } from "./run";
 
 /** A diagnostic call's judgment checked against the full contract, using the lines and claims in its content. */
 export function validateDiagnostic(content: string, judgment: ProviderJudgment) {

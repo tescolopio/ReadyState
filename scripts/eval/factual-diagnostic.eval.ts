@@ -113,14 +113,16 @@ describe.skipIf(!ENABLED)("G11 provider diagnostic, call completion only", () =>
             `| ${run.name} | ${run.varies} | ${run.status} | ${run.error ?? ""} | ${run.errorCode ?? ""} | ${run.finishReason ?? ""} | ${failedGeneration(run)} | ${run.usage.inputTokens} | ${run.usage.outputTokens} | ${run.charged} | ${run.ms} |`,
         ),
         "",
-        "## Local validation (completed calls only)",
+        "## Local validation of a returned tool call",
+        "",
+        "A rejected generation never reaches this check; when it parses, it is inspected against the provider's schema instead (Failed generation, above).",
         "",
         "| Call | Full schema valid (kinds included) | Schema issues | Claims valid under the contract | Contract problems |",
         "| --- | --- | --- | --- | --- |",
         ...runs.map((run) =>
           run.validation
             ? `| ${run.name} | ${run.schemaValid} | ${(run.schemaIssues ?? []).join(", ") || "none"} | ${run.validation.valid} of ${run.validation.claims} | ${run.validation.problems.join("; ") || "none"} |`
-            : `| ${run.name} | not checked (no tool call returned) | | | |`,
+            : `| ${run.name} | no returned tool call to validate${run.failedGeneration ? `; the rejected generation was inspected against the provider's schema (above)` : ""} | | | |`,
         ),
         "",
         ...(notRun.length ? ["**Not run:**", ...notRun.map((n) => `- ${n}`), ""] : []),
