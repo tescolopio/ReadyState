@@ -1,6 +1,8 @@
 import { tool, type InferUITools, type UIDataTypes, type UIMessage } from "ai";
 import { z } from "zod";
 
+import type { DebriefCapture } from "@/lib/debrief-capture";
+
 /** The exercise runs for this many in-game hours. */
 export const TARGET_DURATION_HOURS = 72;
 
@@ -150,6 +152,8 @@ export interface TtxMetadata {
    * rejected.
    */
   debriefChecks?: { passedImplementedChecks: boolean; failedFirst: string[]; stillFailing?: string[] };
+  /** Every debrief draft and what it failed, only when a local eval asks for it (lib/debrief-capture.ts). Never displayed. */
+  debriefCapture?: DebriefCapture;
 }
 
 export type TtxUIMessage = UIMessage<

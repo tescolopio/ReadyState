@@ -29,41 +29,89 @@ const EQUIPMENT = [
 ];
 const OBTAINED =
   /\b(borrow\w*|buy\w*|bought|purchas\w*|neighbou?rs?|friends?|stores?|shops?|offer\w*|lends?|lent|brings?|brought|rent\w*|warming cent(er|re)|shelters?|responders?|crews?|staff)\b/i;
-/** Finding equipment isn't having it: the model offered "find an electric space heater in the unit" (eval finding 16). */
-const FOUND = /\b(find|finds|found|locat\w*|discover\w*|come across)\b/i;
+/** The participant's claim to own the item: "my old heater", "we have a radio", "the heater I keep in the closet". */
+const possessed = (text: string, item: string) =>
+  new RegExp(`\\b(my|our)\\s+(\\S+\\s+){0,3}${item}`, "i").test(text) ||
+  new RegExp(`\\b(I|we)\\s+(have|own|keep|kept|stored?|'ve got)\\s+(\\S+\\s+){0,4}${item}`, "i").test(text) ||
+  new RegExp(`${item}s?\\s+(that\\s+)?(I|we)\\s+(have|own|keep|kept|stored?)\\b`, "i").test(text);
 
 export const mentions = (text: string, item: string) => new RegExp(`\\b${item}s?\\b`, "i").test(text);
 /** "no radio", "without a car", "lacks a working generator": a missing item, not an introduced one. */
 export const negated = (text: string, item: string) =>
   new RegExp(`\\b(no|without|lacks?|lacking|doesn't have|don't have)\\s+(an?\\s+|any\\s+)?(\\w+\\s+)?${item}`, "i").test(text);
 
+const words = (text: string) => text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+/**
+ * A response taken from an offered option. Its wording, including "my" and
+ * "find", is the story's, so choosing it doesn't establish anything. Masking
+ * can change a word or two, so most of the words matching is enough.
+ */
+const fromOption = (sentence: string, options: string[]) => {
+  const own = words(sentence);
+  if (own.length < 4) return false;
+  return options.some((option) => {
+    const offered = new Set(words(option));
+    return own.filter((word) => offered.has(word)).length / own.length >= 0.8;
+  });
+};
+
 export interface IntroducedItem {
   item: string;
   /** When it first appeared, e.g. "Hour 60". */
   time: string;
+  /** Index of that turn. */
+  turnIndex: number;
   sentence: string;
+  /** When the participant later said in their own words that they have or obtained it. */
+  establishedLater?: string;
 }
 
 /**
- * Equipment that appears in the story without being in the baseline or
- * obtained (finding 2, eval finding 16). The participant's own words count as
- * establishing an item, except where they only find it.
+ * Equipment the story introduced without the household having or obtaining
+ * it (finding 2, eval finding 16). `responses[i]` is the participant's message
+ * after `turns[i]`.
+ *
+ * The participant establishes an item in their own words: by claiming it
+ * ("my heater", "the radio we keep", "I find my old heater"), by obtaining it,
+ * or by bringing it up before the story did, however they came by it. Choosing
+ * an offered option establishes nothing, and neither does acting on an item
+ * the story introduced without claiming it ("I find the heater and plug it
+ * in"): that adopts the story's invention.
  */
-export function introducedEquipment(baseline: string, turns: TurnOutput[], participantText: string[]): IntroducedItem[] {
-  const known = [baseline, ...sentences(participantText).filter((sentence) => !FOUND.test(sentence))].join("\n");
+export function introducedEquipment(baseline: string, turns: TurnOutput[], responses: string[]): IntroducedItem[] {
+  const established = new Set(EQUIPMENT.filter((item) => mentions(baseline, item)));
+  const toldBy = new Set<string>();
   const flagged = new Map<string, IntroducedItem>();
-  for (const turn of turns) {
-    const told = sentences([turn.narrative_response, turn.new_inject, ...turn.response_options]);
-    for (const sentence of told) {
+  const offered: string[] = [];
+
+  const establish = (item: string, time: string) => {
+    const introduced = flagged.get(item);
+    if (introduced) introduced.establishedLater ??= time;
+    else established.add(item);
+  };
+
+  turns.forEach((turn, turnIndex) => {
+    for (const sentence of sentences([turn.narrative_response, turn.new_inject, ...turn.response_options])) {
       if (OBTAINED.test(sentence)) continue;
       for (const item of EQUIPMENT) {
-        if (flagged.has(item) || mentions(known, item) || !mentions(sentence, item) || negated(sentence, item)) continue;
+        if (!mentions(sentence, item) || negated(sentence, item)) continue;
+        toldBy.add(item);
+        if (flagged.has(item) || established.has(item)) continue;
         // "space heater" covers "heater".
         if (item === "heater" && flagged.has("space heater")) continue;
-        flagged.set(item, { item, time: turn.time_elapsed, sentence });
+        flagged.set(item, { item, time: turn.time_elapsed, turnIndex, sentence });
       }
     }
-  }
+    offered.push(...turn.response_options);
+
+    for (const sentence of sentences([responses[turnIndex] ?? ""])) {
+      if (fromOption(sentence, offered)) continue;
+      for (const item of EQUIPMENT) {
+        if (!mentions(sentence, item) || negated(sentence, item)) continue;
+        if (possessed(sentence, item) || OBTAINED.test(sentence) || !toldBy.has(item)) establish(item, turn.time_elapsed);
+      }
+    }
+  });
   return [...flagged.values()];
 }
 

@@ -11,7 +11,8 @@ import {
   type LanguageModelMiddleware,
 } from "ai";
 
-import { checkDebrief, repairInstructions, type DebriefProblem } from "@/lib/debrief-checks";
+import { briefingWithoutBaseline, captureEnabled, type DebriefCapture, type DebriefDraft } from "@/lib/debrief-capture";
+import { checkDebrief, repairInstructions, storyDefects, storyDefectsBriefing, type DebriefProblem } from "@/lib/debrief-checks";
 
 import { getAppMode } from "@/lib/config";
 import { getHostedServices, type HostedAccount } from "@/lib/hosted";
@@ -123,9 +124,10 @@ const DEBRIEF_STILL_FAILING =
 const DEBRIEF_NO_TIME =
   "The debrief needed a repair, but there wasn't time before the server's limit, so it isn't shown. Request the debrief again in a minute.";
 
-type DebriefOutcome =
+type DebriefOutcome = (
   | { report: AfterActionReport; failedFirst: DebriefProblem[] }
-  | { error: string; failedFirst: DebriefProblem[]; stillFailing?: DebriefProblem[] };
+  | { error: string; failedFirst: DebriefProblem[]; stillFailing?: DebriefProblem[] }
+) & { capture: Omit<DebriefCapture, "provider" | "model"> };
 
 /**
  * Generates the debrief whole and runs the implemented checks
@@ -133,6 +135,11 @@ type DebriefOutcome =
  * exactly those, provided enough of the request's budget is left. A debrief
  * that still fails is never presented as checked: the outcome is an error the
  * participant can recover from by asking again.
+ *
+ * Equipment the story introduced without the household having it is named in
+ * the briefing as a known defect, so the model doesn't build on it. Every
+ * draft is kept in the outcome's capture, which only reaches a local eval
+ * that asked for it (lib/debrief-capture.ts).
  */
 async function generateCheckedDebrief({
   model,
@@ -153,7 +160,9 @@ async function generateCheckedDebrief({
   counts: CallCounts;
   usage: { inputTokens: number; outputTokens: number };
 }): Promise<DebriefOutcome> {
-  const attempt = async (content: string) => {
+  const drafts: DebriefDraft[] = [];
+  const attempt = async (content: string, label: DebriefDraft["attempt"]) => {
+    const started = Date.now();
     const result = await generateText({
       model,
       instructions,
@@ -164,33 +173,54 @@ async function generateCheckedDebrief({
       toolChoice: { type: "tool", toolName: "after_action_report" },
       abortSignal: budget.signal,
     });
-    usage.inputTokens += result.totalUsage.inputTokens ?? 0;
-    usage.outputTokens += result.totalUsage.outputTokens ?? 0;
+    const draftUsage = { inputTokens: result.totalUsage.inputTokens ?? 0, outputTokens: result.totalUsage.outputTokens ?? 0 };
+    usage.inputTokens += draftUsage.inputTokens;
+    usage.outputTokens += draftUsage.outputTokens;
     const call = result.toolCalls.find((toolCall) => toolCall.toolName === "after_action_report");
     if (!call) throw new Error("The model returned no debrief.");
-    return call.input as AfterActionReport;
+    const report = call.input as AfterActionReport;
+    const failedChecks = checkDebrief(report, turns, context);
+    drafts.push({
+      attempt: label,
+      status: failedChecks.length ? "rejected" : "accepted",
+      report,
+      failedChecks,
+      ms: Date.now() - started,
+      usage: draftUsage,
+    });
+    return { report, failedChecks };
   };
 
   const { turns } = deriveTtxState(messages);
+  // participantText[i] is the participant's message after turns[i].
   const [baseline = "", ...participantText] = participantMessages(messages);
   const context = { baseline, participantText };
-  const first = await attempt(briefing);
-  const failedFirst = checkDebrief(first, turns, context);
-  if (!failedFirst.length) return { report: first, failedFirst };
+  const defects = storyDefects(turns, context);
+  const debriefBriefing = [briefing, storyDefectsBriefing(defects)].filter(Boolean).join("\n\n");
+  const capture = {
+    drafts,
+    evidence: { hours: turns.map((turn) => turn.hours_elapsed), log: briefingWithoutBaseline(debriefBriefing) },
+    knownStoryDefects: defects.map(({ item, time, sentence }) => ({ item, time, sentence })),
+  };
+
+  const first = await attempt(debriefBriefing, "first");
+  const failedFirst = first.failedChecks;
+  if (!failedFirst.length) return { report: first.report, failedFirst, capture };
 
   console.warn("[ttx] debrief failed checks", failedFirst.map((p) => p.problem));
-  if (budget.remainingMs() < MIN_REPAIR_BUDGET_MS) return { error: DEBRIEF_NO_TIME, failedFirst };
+  if (budget.remainingMs() < MIN_REPAIR_BUDGET_MS) return { error: DEBRIEF_NO_TIME, failedFirst, capture };
 
   counts.debriefRepairs++;
   const repaired = await attempt(
-    `${briefing}\n\n${repairInstructions(failedFirst)}\n\nYOUR PREVIOUS DEBRIEF (JSON):\n${JSON.stringify(first)}`,
+    `${debriefBriefing}\n\n${repairInstructions(failedFirst)}\n\nYOUR PREVIOUS DEBRIEF (JSON):\n${JSON.stringify(first.report)}`,
+    "repair",
   );
-  const stillFailing = checkDebrief(repaired, turns, context);
+  const stillFailing = repaired.failedChecks;
   if (stillFailing.length) {
     console.warn("[ttx] repaired debrief still failed checks", stillFailing.map((p) => p.problem));
-    return { error: DEBRIEF_STILL_FAILING, failedFirst, stillFailing };
+    return { error: DEBRIEF_STILL_FAILING, failedFirst, stillFailing, capture };
   }
-  return { report: repaired, failedFirst };
+  return { report: repaired.report, failedFirst, capture };
 }
 
 const errorResponse = (status: number, error: string) =>
@@ -277,6 +307,8 @@ export async function POST(req: Request) {
   };
 
   if (phase === "ended") {
+    const capture = captureEnabled(req, mode);
+    const modelId = typeof resolved.model === "string" ? resolved.model : resolved.model.modelId;
     return createUIMessageStreamResponse({
       stream: createUIMessageStream<TtxUIMessage>({
         execute: async ({ writer }) => {
@@ -298,6 +330,7 @@ export async function POST(req: Request) {
               providerCalls: counts.providerCalls,
               schemaRetries: counts.schemaRetries,
               debriefRepairs: counts.debriefRepairs,
+              ...(capture ? { debriefCapture: { provider: resolved.provider, model: modelId, ...outcome.capture } } : {}),
             };
             if ("error" in outcome) {
               // The counters and failed checks still go out, for the eval; the debrief doesn't.

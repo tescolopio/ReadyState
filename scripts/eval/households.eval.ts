@@ -5,12 +5,14 @@
  * readable report per household and a summary of automatic checks to
  * eval-results/<timestamp>/. See scripts/eval/README.md for options.
  */
+import { execSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { readUIMessageStream, type UIMessageChunk } from "ai";
 import { afterAll, describe, expect, it } from "vitest";
 
+import { CAPTURE_HEADER, type DebriefCapture } from "@/lib/debrief-capture";
 import { privateTerms } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { PRIVACY_LEAKS, TEST_HOUSEHOLDS, type TestHousehold } from "@/lib/test-households";
@@ -36,6 +38,12 @@ const CHOOSE = process.env.EVAL_CHOOSE ?? "cycle";
  */
 const REPLAY = process.env.EVAL_REPLAY;
 const DEBRIEF_REQUEST = "The exercise is over. Please prepare the debrief.";
+/**
+ * Asks the server for every debrief draft, rejected ones included, and writes
+ * them to <household>-debrief-drafts.json and .md for manual review. The
+ * server must also set READYSTATE_CAPTURE_DEBRIEF_DRAFTS=1 (lib/debrief-capture.ts).
+ */
+const CAPTURE = process.env.EVAL_CAPTURE_DRAFTS === "1";
 
 const outDir = path.join("eval-results", new Date().toISOString().replace(/[:.]/g, "-"));
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -107,7 +115,7 @@ const SETTINGS =
 async function send(messages: TtxUIMessage[]): Promise<SendOutcome<TtxUIMessage>> {
   const res = await fetch(`${BASE_URL}/api/ttx`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(CAPTURE ? { [CAPTURE_HEADER]: "1" } : {}) },
     body: JSON.stringify({ messages, settings: SETTINGS }),
   });
   if (!res.ok || !res.body) return { error: `HTTP ${res.status}: ${(await res.text()).slice(0, 300)}` };
@@ -194,6 +202,7 @@ async function play(household: TestHousehold): Promise<Result> {
       inputTokens: metadata?.usage?.inputTokens,
       outputTokens: metadata?.usage?.outputTokens,
     };
+    if (metadata?.debriefCapture) writeCapture(household, record, outcome.error, metadata.debriefCapture);
     if (outcome.error || !outcome.message) {
       result.turns.push({ ...record, error: outcome.error });
       result.findings.push({ category: "completion", text: `Call ${i + 1} failed: ${outcome.error}` });
@@ -261,7 +270,7 @@ function check(result: Result, messages: TtxUIMessage[]) {
 
   // Continuity, safety, suitability (scripts/eval/checks.ts).
   const replayedTurns = result.turns.filter((record) => record.replayed).length;
-  findings.push(...contentFindings({ baseline: result.baseline, turns, participantText, report: result.report, replayedTurns }));
+  findings.push(...contentFindings({ baseline: result.baseline, turns, participantText: participantText.slice(1), report: result.report, replayedTurns }));
 
   const calls = [...result.turns, ...(result.debrief ? [result.debrief] : [])].filter(
     // A rejected debrief still used the provider, and reports what it used.
@@ -385,6 +394,106 @@ function reportMarkdown({ household, baseline, turns, debrief, report, findings,
     );
   }
   return out.join("\n") + "\n";
+}
+
+/** The code the server ran, assuming it serves this working tree. */
+function revision() {
+  try {
+    const commit = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+    const dirty = execSync("git status --porcelain", { encoding: "utf8" }).trim() !== "";
+    return { commit, dirty };
+  } catch {
+    return { commit: "unknown", dirty: false };
+  }
+}
+
+const reportLines = (report: AfterActionReport) => [
+  `**Summary:** ${report.summary}`,
+  "",
+  "**What you need to know**",
+  list(report.need_to_know),
+  "",
+  "**What you can do better**",
+  list(report.do_better.map(({ action, evidence, why }) => `${action}\n  - Evidence: ${evidence}\n  - Why: ${why}`)),
+  "",
+  "**What went well**",
+  list(report.went_well),
+  "",
+  "**Supply checklist (optional)**",
+  list(report.supply_checklist ?? []),
+];
+
+const cellText = (text: string) => text.replace(/\|/g, "\\|").replace(/\s+/g, " ");
+
+/**
+ * Every debrief draft of a call, for manual review. Identifies the household
+ * by its synthetic id; the profile and the baseline stay out.
+ */
+function writeCapture(household: TestHousehold, call: CallRecord, error: string | undefined, capture: DebriefCapture) {
+  mkdirSync(outDir, { recursive: true });
+  const artifact = {
+    note: "Debrief drafts captured for eval review. Rejected drafts were never shown to the participant.",
+    household: { id: household.id, persona: household.persona },
+    scenario: household.profile.scenario,
+    revision: revision(),
+    server: BASE_URL,
+    delivered: !error,
+    error,
+    call: {
+      requestMs: call.requestMs,
+      waitedMs: call.waitedMs,
+      attempts: call.attempts,
+      providerCalls: call.providerCalls,
+      schemaRetries: call.schemaRetries,
+      debriefRepairs: call.debriefRepairs,
+      inputTokens: call.inputTokens,
+      outputTokens: call.outputTokens,
+    },
+    ...capture,
+  };
+  writeFileSync(path.join(outDir, `${household.id}-debrief-drafts.json`), JSON.stringify(artifact, null, 2));
+  const { revision: rev, call: c } = artifact;
+  const md = [
+    `# Debrief drafts: ${household.persona}`,
+    "",
+    `${artifact.note}`,
+    "",
+    `Scenario ${artifact.scenario}; model ${capture.provider}/${capture.model}; code ${rev.commit.slice(0, 7)}${rev.dirty ? " (uncommitted changes)" : ""}.`,
+    `Delivered: ${error ? `**no**, the participant got the error "${error}"` : "yes"}.`,
+    `Request ${c.requestMs} ms; ${c.providerCalls ?? "?"} provider call(s), ${c.schemaRetries ?? 0} schema retries, ${c.debriefRepairs ?? 0} debrief repair(s); ${c.inputTokens ?? "?"} input / ${c.outputTokens ?? "?"} output tokens.`,
+    "",
+    ...capture.drafts.flatMap((draft) => [
+      `## ${draft.attempt === "first" ? "First draft" : "Repair"}: ${draft.status === "rejected" ? "REJECTED, not displayed" : "accepted"}`,
+      "",
+      `_${draft.ms} ms, ${draft.usage.inputTokens} input / ${draft.usage.outputTokens} output tokens._`,
+      "",
+      ...reportLines(draft.report),
+      "",
+      ...(draft.failedChecks.length
+        ? [
+            "**Failed checks**",
+            "",
+            "| Check | Field | Matched | Problem |",
+            "| --- | --- | --- | --- |",
+            ...draft.failedChecks.map((p) => `| ${p.check} | ${p.field} | ${cellText(p.matched)} | ${cellText(p.problem)} |`),
+          ]
+        : ["**Failed checks:** none."]),
+      "",
+    ]),
+    "## Known story defects given to the model",
+    "",
+    list(capture.knownStoryDefects.map(({ item, time, sentence }) => `${time}: the ${item}: "${sentence}"`)),
+    "",
+    `## Evidence given to the model (hours ${capture.evidence.hours.join(", ")})`,
+    "",
+    "The briefing without the household baseline:",
+    "",
+    "```text",
+    capture.evidence.log,
+    "```",
+    "",
+  ];
+  writeFileSync(path.join(outDir, `${household.id}-debrief-drafts.md`), md.join("\n"));
 }
 
 const households = TEST_HOUSEHOLDS.filter((household) => !ONLY || ONLY.includes(household.id));

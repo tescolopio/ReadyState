@@ -75,7 +75,10 @@ describe("Alex's 2026-10-30 turn defects are caught", () => {
   it("still flags equipment the participant only found, from an offered option (Alex, 2026-10-31)", () => {
     const chosen = ["I go back to my apartment alone right away, find an electric space heater in the unit, and try to heat the space."];
     expect(introducedEquipment(alexBaseline, [alexTurns[2]], chosen)[0]).toContain('"space heater"');
-    expect(introducedEquipment(alexBaseline, [alexTurns[2]], ["I plug in the space heater I keep in the closet."])).toEqual([]);
+    // Claiming it after the story introduced it establishes it, but the introduction stays on record.
+    expect(introducedEquipment(alexBaseline, [alexTurns[2]], ["I plug in the space heater I keep in the closet."])[0]).toContain(
+      "the participant said they have it at Hour 66",
+    );
   });
 
   it("doesn't flag equipment obtained from a neighbor, or listed in the baseline", () => {

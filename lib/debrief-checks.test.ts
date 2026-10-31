@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { checkDebrief, repairInstructions } from "@/lib/debrief-checks";
+import { introducedEquipment } from "@/lib/continuity";
+import { checkDebrief, repairInstructions, storyDefects } from "@/lib/debrief-checks";
 import type { AfterActionReport, TurnOutput } from "@/lib/ttx";
 
 const turnAt = (hours: number): TurnOutput => ({
@@ -66,12 +67,14 @@ describe("checkDebrief: Alex's rerun debrief", () => {
     expect(list[0].fix).toContain("or drop this improvement");
   });
 
-  it("flags the misleading heater-circuit and detector claims as known inaccuracies", () => {
-    const accuracy = problems.filter((p) => p.category === "accuracy").map((p) => p.problem);
-    expect(accuracy).toEqual([
-      expect.stringContaining("heater-exceeds-circuit"),
-      expect.stringContaining("detectors-electrical-hazards"),
+  it("flags the misleading heater-circuit and detector claims as known inaccuracies, and the stated cause of the trip", () => {
+    const accuracy = problems.filter((p) => p.category === "accuracy");
+    expect(accuracy.map((p) => p.check)).toEqual([
+      "accuracy:heater-exceeds-circuit",
+      "accuracy:unsupported-electrical-conclusion",
+      "accuracy:detectors-electrical-hazards",
     ]);
+    expect(accuracy[1]).toMatchObject({ field: "need_to_know[0]", matched: expect.stringContaining("cause the breaker to trip") });
   });
 
   it("finds its citations valid: every point cites something, and every cited hour happened", () => {
@@ -79,7 +82,7 @@ describe("checkDebrief: Alex's rerun debrief", () => {
   });
 
   it("finds nothing else: these are the only failures", () => {
-    expect(problems).toHaveLength(3);
+    expect(problems).toHaveLength(4);
   });
 
   it("passes with the kit list dropped and the claims fixed, though only two improvements remain", () => {
@@ -220,12 +223,14 @@ const alex31Turns = alexTurns.map((turn) => {
   }
   return turn;
 });
-/** The participant chose the Hour 60 option: finding the heater doesn't establish it. */
+/** The participant's responses, `responses[i]` after `alexTurns[i]`. */
+const responsesAfter = (byHour: Record<number, string>) => alexTurns.map((turn) => byHour[turn.hours_elapsed] ?? "");
+/** After Hour 60 the participant chose the option that found the heater, which doesn't establish it. */
 const alex31Context = {
   baseline: alex31Baseline,
-  participantText: [
-    "I go back to my apartment alone right away, find an electric space heater in the unit, and try to heat the space despite the low temperature.",
-  ],
+  participantText: responsesAfter({
+    60: "I go back to my apartment alone right away, find an electric space heater in the unit, and try to heat the space despite the low temperature.",
+  }),
 };
 const alex31: AfterActionReport = {
   summary:
@@ -266,9 +271,10 @@ describe("checkDebrief: Alex's 2026-10-31 debrief", () => {
 
   it("rejects points that rely on the space heater the story invented, though the event is in the log", () => {
     const premise = problems.filter((p) => p.category === "continuity");
-    expect(premise).toHaveLength(1);
+    expect(premise.map((p) => p.field)).toEqual(["summary", "need_to_know[0]", "went_well[1]", "do_better[2].evidence"]);
+    expect(premise.every((p) => p.check === "invented-premise")).toBe(true);
     expect(premise[0].problem).toContain("Relies on the space heater, which the story introduced at Hour 60");
-    expect(premise[0].problem).toContain("high‑wattage space heater overloaded");
+    expect(premise[0].matched).toContain("high‑wattage space heater overloaded");
   });
 
   it("applies the outage-heating rule from the scenario, though the sentence never says outage", () => {
@@ -288,16 +294,14 @@ describe("checkDebrief: Alex's 2026-10-31 debrief", () => {
   });
 
   it("rejects electrical conclusions the narrated breaker trip doesn't support", () => {
-    const electrical = about("unsupported-electrical-conclusion").map((p) => p.problem);
-    expect(electrical).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining("overloaded the circuit"),
-        expect.stringContaining("cannot sustain a 1500‑W heater"),
-        expect.stringContaining("electrical capacity"),
-        expect.stringContaining("bases a purchase on a breaker trip"),
-      ]),
-    );
-    expect(about("unsupported-electrical-conclusion")[0].fix).not.toMatch(/80 ?%/);
+    const electrical = problems.filter((p) => p.check === "accuracy:unsupported-electrical-conclusion");
+    expect(electrical.map((p) => [p.field, p.matched])).toEqual([
+      ["summary", "overloaded"],
+      ["need_to_know[0]", "cannot sustain"],
+      ["do_better[2].action", "electrical capacity"],
+    ]);
+    expect(problems.find((p) => p.check === "accuracy:purchase-on-trip")).toMatchObject({ field: "do_better[2].action" });
+    expect(electrical[0].fix).not.toMatch(/80 ?%/);
   });
 
   it("doesn't reject the repair's correct statement that electric heat is unavailable in an outage (false positive, 2026-10-31)", () => {
@@ -418,6 +422,84 @@ describe("checkDebrief: invented premises", () => {
   });
 });
 
+describe("equipment provenance", () => {
+  const after60 = (text: string) => ({ ...alex31Context, participantText: responsesAfter({ 60: text }) });
+  const defects = (context: { baseline: string; participantText: string[] }) => storyDefects(alex31Turns, context).map((d) => d.item);
+  const relies: AfterActionReport = {
+    ...alexRerun,
+    need_to_know: ["Your space heater warmed the living room until the breaker tripped (Hour 72)."],
+    do_better: [],
+    supply_checklist: [],
+  };
+
+  it("treats choosing the story's option to find equipment as adopting the invention, not owning it", () => {
+    expect(defects(alex31Context)).toEqual(["space heater"]);
+    expect(defects(after60("I find the space heater and plug it in."))).toEqual(["space heater"]);
+  });
+
+  it("doesn't count an option's own wording, such as 'my', as the participant's claim", () => {
+    const turns = alex31Turns.map((turn) => (turn.hours_elapsed === 60 ? { ...turn, response_options: ["I plug in my space heater by the sofa."] } : turn));
+    const context = { ...alex31Context, participantText: responsesAfter({ 60: "I plug in my space heater by the sofa." }) };
+    expect(storyDefects(turns, context).map((d) => d.item)).toEqual(["space heater"]);
+  });
+
+  it("lets finding equipment establish it when the participant claims it in their own words", () => {
+    const context = after60("I find my old space heater in the hall closet and plug it in.");
+    expect(defects(context)).toEqual([]);
+    expect(introducedEquipment(context.baseline, alex31Turns, context.participantText)[0]).toMatchObject({ item: "space heater", establishedLater: "Hour 60" });
+    expect(checkDebrief(relies, alex31Turns, context).filter((p) => p.category === "continuity")).toEqual([]);
+  });
+
+  it("counts equipment the participant obtained, or brought up before the story did", () => {
+    expect(defects(after60("I borrow a space heater from my neighbor down the hall."))).toEqual([]);
+    const first = { ...alex31Context, participantText: responsesAfter({ 12: "I set up a space heater in the bedroom." }) };
+    expect(introducedEquipment(first.baseline, alex31Turns, first.participantText)).toEqual([]);
+  });
+
+  it("still rejects reliance on equipment nobody established", () => {
+    expect(checkDebrief(relies, alex31Turns, alex31Context).map((p) => p.check)).toContain("invented-premise");
+  });
+});
+
+describe("checkDebrief: electrical conclusions", () => {
+  const base: AfterActionReport = { ...alexRerun, need_to_know: [], do_better: [], supply_checklist: [] };
+  const fact = (text: string) => checkDebrief({ ...base, need_to_know: [text] }, alexTurns).map((p) => `${p.check} ${p.problem}`);
+
+  it("allows descriptions of what happened, and reasons for the participant's actions", () => {
+    expect(fact("The breaker tripped and the lights went out (Hour 72).")).toEqual([]);
+    expect(fact("You called maintenance because the breaker tripped (Hour 72).")).toEqual([]);
+    expect(fact("When the breaker tripped, you reset it and switched to blankets (Hour 72).")).toEqual([]);
+    expect(fact("The breaker panel is in the hallway, and you couldn't reach it in the dark (Hour 30).")).toEqual([]);
+  });
+
+  it("allows saying equipment won't work without power, and advice not to overload circuits", () => {
+    expect(fact("Outlets won't power anything during an outage (Hour 0).")).toEqual([]);
+    expect(fact("Electric heat won't run while the power is out, so plan warmth that doesn't need outlets (Hour 0).")).toEqual([]);
+    expect(fact("Avoid overloading circuits with extra devices (Hour 72).")).toEqual([]);
+  });
+
+  it("rejects stated causes, capacity claims, predictions and generalizations", () => {
+    const kinds = [
+      "The heater caused the breaker to trip (Hour 72).",
+      "The breaker tripped because the heater drew too much current (Hour 72).",
+      "Your circuit can't handle more than one heater (Hour 72).",
+      "Use a dedicated circuit for heating (Hour 72).",
+      "Plugging in a kettle will trip the breaker again (Hour 72).",
+      "The trip shows that your apartment's wiring is undersized (Hour 72).",
+    ].map((text) => fact(text).join().match(/\((cause|capacity|prediction|generalization)\)/)?.[1]);
+    expect(kinds).toEqual(["cause", "cause", "capacity", "capacity", "prediction", "generalization"]);
+  });
+
+  it("rejects a purchase of electrical gear based on the trip, but not non-grid supplies", () => {
+    const buy = (action: string) =>
+      checkDebrief({ ...base, do_better: [{ action, evidence: "Hour 72: the breaker tripped and the lights went out", why: "You were left in the dark." }] }, alexTurns).map(
+        (p) => p.check,
+      );
+    expect(buy("Buy a battery lantern this week.")).toEqual([]);
+    expect(buy("Buy a surge protector this week.")).toEqual(["accuracy:purchase-on-trip"]);
+  });
+});
+
 describe("repairInstructions", () => {
   const text = repairInstructions(checkDebrief(alexRerun, alexTurns));
 
@@ -426,7 +508,8 @@ describe("repairInstructions", () => {
     expect(text).toContain("1. Improvement's action is a list");
     expect(text).toContain("2. Known inaccuracy (heater-exceeds-circuit)");
     expect(text).toContain("Fix: The exercise narrated a breaker trip");
-    expect(text.match(/^\d+\./gm)).toHaveLength(3);
+    expect(text.match(/^\d+\./gm)).toHaveLength(4);
+    expect(text).toContain("(in do_better[1].action)");
   });
 
   it("permits dropping a failing improvement rather than replacing it", () => {

@@ -10,13 +10,19 @@
  * categories, and factual support only covers the known inaccuracies below.
  */
 import { SAFETY_RULES } from "@/lib/rules";
-import { introducedEquipment, mentions, negated, powerOutageContext } from "@/lib/continuity";
-import type { AfterActionReport, Improvement, TurnOutput } from "@/lib/ttx";
+import { introducedEquipment, mentions, negated, powerOutageContext, type IntroducedItem } from "@/lib/continuity";
+import type { AfterActionReport, TurnOutput } from "@/lib/ttx";
 
 export type DebriefCheckCategory = "continuity" | "suitability" | "citation" | "safety" | "accuracy";
 
 export interface DebriefProblem {
   category: DebriefCheckCategory;
+  /** Which check failed, e.g. "vague-kit" or "accuracy:smoke-alarm-detects-co". */
+  check: string;
+  /** Where, e.g. "do_better[1].action" or "need_to_know[0]". */
+  field: string;
+  /** The text the check matched. */
+  matched: string;
   /** What's wrong, quoting the debrief. */
   problem: string;
   /** What the repair should do. */
@@ -25,8 +31,20 @@ export interface DebriefProblem {
 
 export const MAX_IMPROVEMENTS = 3;
 
-const sentences = (texts: string[]) => texts.flatMap((text) => text.split(/(?<=[.!?])\s+/));
+/** A piece of the debrief and where it is. */
+interface Located {
+  field: string;
+  text: string;
+}
+
+const split = (text: string) => text.split(/(?<=[.!?])\s+/);
+const sentences = (texts: string[]) => texts.flatMap(split);
+const sentencesOf = (located: Located[]) => located.flatMap(({ field, text }) => split(text).map((sentence) => ({ field, text: sentence })));
 const quote = (text: string, max = 140) => `"${text.length > max ? `${text.slice(0, max)}…` : text}"`;
+
+const list = (field: string, texts: string[] = []): Located[] => texts.map((text, i) => ({ field: `${field}[${i}]`, text }));
+const improvementFields = (report: AfterActionReport, parts: ("action" | "evidence" | "why")[] = ["action", "evidence", "why"]) =>
+  report.do_better.flatMap((item, i) => parts.map((part) => ({ field: `do_better[${i}].${part}`, text: item[part] })));
 
 /**
  * Advice that breaks a safety rule, using each rule's `detect` patterns from
@@ -40,12 +58,14 @@ const DETECTORS = SAFETY_RULES.filter((rule) => rule.detect).map((rule) => ({
   except: rule.exceptWhen ? new RegExp(rule.exceptWhen, "i") : undefined,
 }));
 
+const unsafeMatches = (sentence: string) =>
+  DETECTORS.flatMap((rule) => {
+    const match = rule.except?.test(sentence) ? null : rule.patterns.map((pattern) => sentence.match(pattern)).find(Boolean);
+    return match ? [{ rule: rule.id, prompt: rule.prompt, matched: match[0] }] : [];
+  });
+
 export function unsafeSentences(texts: string[]) {
-  return sentences(texts).flatMap((sentence) =>
-    DETECTORS.filter(
-      (rule) => rule.patterns.some((pattern) => pattern.test(sentence)) && !rule.except?.test(sentence),
-    ).map((rule) => ({ rule: rule.id, prompt: rule.prompt, sentence })),
-  );
+  return sentences(texts).flatMap((sentence) => unsafeMatches(sentence).map(({ rule, prompt }) => ({ rule, prompt, sentence })));
 }
 
 /**
@@ -76,7 +96,6 @@ const SUPPLIES = [
 const suppliesIn = (text: string) => SUPPLIES.filter((pattern) => pattern.test(text)).length;
 const separators = (text: string) => (text.match(/[,;]/g) ?? []).length;
 const listShaped = (text: string) => suppliesIn(text) >= 3 || separators(text) >= 4 || text.length > 260;
-const improvementParts = ({ action, evidence, why }: Improvement) => [action, evidence, why];
 
 /** A moment in the exercise ("Hour 18", "Hours 48–66") or a household fact. */
 const TRACED = /\bHours? \d+|\b(baseline|household profile|your profile|inventory check|at the start)\b/i;
@@ -88,7 +107,7 @@ const GUIDANCE = /\b(guidance|CDC|FEMA|Ready\.gov|Red Cross|USDA|NWS)\b/;
  * else is unchecked here (the model judge, G11).
  */
 const ELECTRICAL_FIX =
-  "The exercise narrated a breaker trip, which doesn't show why it tripped or what the circuit can carry. Leave out conclusions about circuit capacity, wattage limits or dedicated circuits; if it matters, the household can ask building maintenance or an electrician.";
+  "The exercise narrated a breaker trip, which doesn't show why it tripped or what the circuit can carry. Describe what happened if it matters, but leave out its cause and any conclusion about circuit capacity, wattage limits or dedicated circuits; if it matters, the household can ask building maintenance or an electrician.";
 
 export const KNOWN_INACCURACIES: { id: string; patterns: RegExp[]; except?: RegExp; fix: string }[] = [
   {
@@ -113,23 +132,45 @@ export const KNOWN_INACCURACIES: { id: string; patterns: RegExp[]; except?: RegE
     except: /\b(combination|combo|dual[- ‑]sensor)\b|\bsmoke\s*(\/|and|&)\s*(CO|carbon monoxide) (alarms?|detectors?)\b|\b(CO|carbon monoxide) (alarms?|detectors?)\b/i,
     fix: "A smoke alarm detects smoke, not carbon monoxide; that takes a CO alarm or a combination smoke/CO alarm. Name the right device, or leave it out.",
   },
+];
+
+/**
+ * Electrical conclusions a narrated breaker trip doesn't support (Alex,
+ * 2026-10-31). A sentence is one only when it is about the electrical system
+ * and draws a conclusion: a cause for an event, what a circuit can carry, a
+ * prediction, or a generalization from what happened. Describing the event
+ * ("the breaker tripped and the lights went out") and saying equipment won't
+ * work without power are fine.
+ */
+const ELECTRICAL = /\b(circuits?|breakers?|fuses?|wiring|outlets?|electrical (system|panel|load)|amps?|amperage|(high|power)[- ‑]draw)\b/i;
+const CONCLUSIONS: { kind: string; pattern: RegExp }[] = [
+  // A cause for the event itself; "you called maintenance because the breaker tripped" gives a reason for an action.
   {
-    // A narrated breaker trip shows neither why it tripped nor what the circuit carries (Alex, 2026-10-31).
-    id: "unsupported-electrical-conclusion",
-    patterns: [
-      /\b(circuits?|breakers?|wiring|outlets?|electrical (system|panel))\b[^.]{0,80}\b(cannot|can't|can ?not|unable to|won't|will not)\s+(sustain|handle|support|carry|take|run|power)\b/i,
-      /\b(will|would|always)\s+(trip|overload)\w*\b[^.]{0,40}\b(breakers?|circuits?)\b/i,
-      /\b(breakers?|circuits?)\b[^.]{0,40}\b(will|would|always)\s+(trip|overload)\w*\b/i,
-      /\b(electrical|circuit) capacity\b|\bdedicated circuit\b|\bamp(erage)? rating\b/i,
-      /\b80 ?(%|percent)\b[^.]{0,40}\b(circuit|load|breaker|capacity)\b/i,
-      // A stated cause: "overloaded the circuit". Recounting the trip ("when the breaker tripped") and
-      // advice ("a heat source that does not overload circuits") are fine.
-      /\boverload(ed|s)\b[^.]{0,20}\b(circuits?|breakers?)\b/i,
-      /\bcaus(ed|es|ing)\b[^.]{0,40}\b(circuits?|breakers?)\b[^.]{0,20}\btrip/i,
-    ],
-    fix: ELECTRICAL_FIX,
+    kind: "cause",
+    pattern:
+      /\b(caus(e|ed|es|ing)|led to|triggered|result(ed|s|ing)? in)\b[^.]{0,50}\b(trip|blow|overload|short)\w*|\b(tripp(ed|ing)|trips|blew|blown|shorted)\b[^.]{0,20}\b(because|due to|from|as a result of)\b|(?<!\b(avoid|not|don't|never|without|prevent)\s+)\boverload(ed|s|ing)\b|\btoo much (power|load|current|draw)\b/i,
+  },
+  { kind: "capacity", pattern: /\b(cannot|can't|can ?not|unable to|won't|will not|isn't able to)\s+(sustain|handle|support|carry|take|run|power)\b|\b(electrical|circuit) capacity\b|\bdedicated circuit\b|\bamp(erage)? rating\b|\b80 ?(%|percent)\b|\b(compatible|within) (with )?(the |your )?(apartment's |home's )?(electrical|circuit)/i },
+  { kind: "prediction", pattern: /\b(will|would|always)\s+(trip|overload|blow)\w*\b/i },
+  {
+    kind: "generalization",
+    pattern: /\b(showing|shows|showed|proves?|proving|demonstrat\w*|means?|indicat\w*) that\b[^.]{0,80}\b(circuits?|breakers?|wiring|outlets?|heaters?|watt\w*|draw|electrical)\b/i,
   },
 ];
+/** Equipment won't work without power: advice about unavailability, not about capacity. */
+const WITHOUT_POWER =
+  /\b(unavailable|without (grid |electric )?power|during (a|an|the) (power )?outages?|(in|during) outages|when the power('s| is| goes)? out|while the power is out|power is out|no power)\b/i;
+
+export function electricalConclusion(sentence: string): { kind: string; matched: string } | undefined {
+  if (!ELECTRICAL.test(sentence)) return undefined;
+  for (const { kind, pattern } of CONCLUSIONS) {
+    const match = sentence.match(pattern);
+    if (!match) continue;
+    if ((kind === "capacity" || kind === "prediction") && WITHOUT_POWER.test(sentence)) continue;
+    return { kind, matched: match[0] };
+  }
+  return undefined;
+}
 
 /** A whole kit as the action, with no specific first step: "Assemble a basic emergency kit." */
 const GENERIC_KIT = /\b(kits?|go[- ‑]bags?|supplies|preparedness items)\b/i;
@@ -137,6 +178,8 @@ const GENERIC_KIT = /\b(kits?|go[- ‑]bags?|supplies|preparedness items)\b/i;
 /** Heat that needs grid power. */
 const GRID_HEAT =
   /\b(space heaters?|electric (space )?heaters?|plug[- ‑]in heaters?|ceramic heaters?|oil[- ‑]filled (radiators?|heaters?)|(low|high)[- ‑]wattage (space )?heaters?|\d+[- ‑]?(w|watts?)\b[^.]{0,20}\bheaters?|electric blankets?|heated blankets?|heating pads?)\b/i;
+/** Electrical gear a breaker trip might tempt a purchase of. */
+const GRID_GEAR = /\b(surge protectors?|extension cords?|power strips?|circuits?)\b/i;
 /** A recommendation, in the present or imperative; "You used…" recounts. */
 const RECOMMENDS =
   /\b(get|buy|obtain|acquire|purchase|use|keep|have|consider|choose|add|invest in|pick up|rely on|bring|plug in|run|such as|e\.g\.)\b/i;
@@ -150,8 +193,27 @@ const OUTAGE_HEATING = SAFETY_RULES.find((rule) => rule.id === "outage-appropria
 /** What the participant established, for checks that need more than the turns. */
 export interface DebriefContext {
   baseline?: string;
-  /** The participant's responses. */
+  /** The participant's responses: `participantText[i]` came after `turns[i]`. */
   participantText?: string[];
+}
+
+/**
+ * Equipment the story introduced that the household never had or obtained:
+ * known defects of the exercise, which no debrief point may rely on. Items
+ * the participant later established are left out.
+ */
+export function storyDefects(turns: TurnOutput[], context: DebriefContext): IntroducedItem[] {
+  if (context.baseline === undefined) return [];
+  return introducedEquipment(context.baseline, turns, context.participantText ?? []).filter((item) => !item.establishedLater);
+}
+
+/** The known defects as a briefing section for the debrief call, or "" when there are none. */
+export function storyDefectsBriefing(defects: IntroducedItem[]): string {
+  if (!defects.length) return "";
+  return [
+    "KNOWN STORY DEFECTS (equipment the story introduced that the household never had or obtained; don't rely on it, don't recommend using it, and don't draw conclusions from events involving it):",
+    ...defects.map(({ item, time, sentence }) => `- The ${item}, first at ${time}: ${quote(sentence, 160)}`),
+  ].join("\n");
 }
 
 /**
@@ -161,134 +223,201 @@ export interface DebriefContext {
  */
 export function checkDebrief(report: AfterActionReport, turns: TurnOutput[], context: DebriefContext = {}): DebriefProblem[] {
   const problems: DebriefProblem[] = [];
-  const add = (category: DebriefCheckCategory, problem: string, fix: string) => problems.push({ category, problem, fix });
+  const add = (category: DebriefCheckCategory, check: string, field: string, matched: string, problem: string, fix: string) =>
+    problems.push({ category, check, field, matched, problem, fix });
 
   // Suitability: at most three improvements, each one concrete action, bulk supplies in the checklist.
   // The structure doesn't prevent a list: an action or its reason can still be one.
   if (report.do_better.length > MAX_IMPROVEMENTS) {
     add(
       "suitability",
+      "improvement-count",
+      "do_better",
+      `${report.do_better.length} improvements`,
       `do_better has ${report.do_better.length} improvements`,
       `Keep the ${MAX_IMPROVEMENTS} most important and drop the rest; move supply items to supply_checklist.`,
     );
   }
-  for (const item of report.do_better) {
-    for (const [field, text] of [["action", item.action], ["why", item.why]] as const) {
-      if (listShaped(text)) {
-        add(
-          "suitability",
-          `Improvement's ${field} is a list rather than one action: ${quote(text)}`,
-          "Rewrite it as one concrete step and put the individual supplies in supply_checklist, one per item, or drop this improvement.",
-        );
-      }
-    }
-    if (GENERIC_KIT.test(item.action) && !suppliesIn(item.action) && !listShaped(item.action)) {
+  for (const { field, text } of improvementFields(report, ["action", "why"])) {
+    if (listShaped(text)) {
       add(
         "suitability",
+        "list-shaped",
+        field,
+        text,
+        `Improvement's ${field.split(".")[1]} is a list rather than one action: ${quote(text)}`,
+        "Rewrite it as one concrete step and put the individual supplies in supply_checklist, one per item, or drop this improvement.",
+      );
+    }
+  }
+  report.do_better.forEach((item, i) => {
+    const kit = item.action.match(GENERIC_KIT);
+    if (kit && !suppliesIn(item.action) && !listShaped(item.action)) {
+      add(
+        "suitability",
+        "vague-kit",
+        `do_better[${i}].action`,
+        kit[0],
         `Improvement's action is a whole kit, not a specific first step: ${quote(item.action)}`,
         "Name one specific item or step that fills a gap the exercise showed, e.g. \"Buy a battery radio this week\" (Hour 30: you missed the alert), or drop this improvement.",
       );
     }
-  }
+  });
 
   // Citation validity: each point says where it comes from, and cited hours happened.
   const hours = new Set(turns.map((turn) => turn.hours_elapsed));
   // Ranges ("Hours 48–66") name a span, so only single hours are checked.
-  const checkHours = (texts: string[], shown: string, fix = "") => {
-    const cited = texts.flatMap((text) => [...text.matchAll(/\bHour (\d+)\b(?!\s*[-–‑]\s*\d)/gi)].map((match) => Number(match[1])));
-    const missing = [...new Set(cited)].filter((hour) => !hours.has(hour));
-    if (missing.length) {
-      add(
-        "citation",
-        `Point cites Hour ${missing.join(", Hour ")}, which never happened: ${quote(shown)}`,
-        `Cite only hours from the log: ${[...hours].map((hour) => `Hour ${hour}`).join(", ")}${fix}.`,
-      );
+  const checkHours = (located: Located[], shown: string, fix = "") => {
+    for (const { field, text } of located) {
+      const cited = [...text.matchAll(/\bHour (\d+)\b(?!\s*[-–‑]\s*\d)/gi)].map((match) => Number(match[1]));
+      const missing = [...new Set(cited)].filter((hour) => !hours.has(hour));
+      if (missing.length) {
+        add(
+          "citation",
+          "hour-not-in-log",
+          field,
+          missing.map((hour) => `Hour ${hour}`).join(", "),
+          `Point cites Hour ${missing.join(", Hour ")}, which never happened: ${quote(shown)}`,
+          `Cite only hours from the log: ${[...hours].map((hour) => `Hour ${hour}`).join(", ")}${fix}.`,
+        );
+      }
     }
   };
-  for (const point of report.need_to_know) {
-    if (!TRACED.test(point) && !GUIDANCE.test(point)) {
+  list("need_to_know", report.need_to_know).forEach((point) => {
+    if (!TRACED.test(point.text) && !GUIDANCE.test(point.text)) {
       add(
         "citation",
-        `Point doesn't say what it comes from: ${quote(point)}`,
+        "uncited",
+        point.field,
+        point.text,
+        `Point doesn't say what it comes from: ${quote(point.text)}`,
         "End it with the hour, decision, household fact or official guidance it comes from, e.g. \"(from Hour 18: …)\".",
       );
-    } else checkHours([point], point);
-  }
+    } else checkHours([point], point.text);
+  });
   // Improvements must trace to what happened, not to general guidance.
-  for (const item of report.do_better) {
+  report.do_better.forEach((item, i) => {
     if (!TRACED.test(item.evidence)) {
       add(
         "citation",
+        "uncited",
+        `do_better[${i}].evidence`,
+        item.evidence,
         `Improvement's evidence doesn't name an exercise event or household fact: ${quote(item.evidence || "(empty)")} for ${quote(item.action, 80)}`,
         "Set evidence to the hour, decision or household fact it comes from, e.g. \"Hour 18: the cooler warming\", or drop this improvement if nothing in the exercise supports it.",
       );
-    } else checkHours(improvementParts(item), item.action, ", or drop this improvement");
-  }
+    } else {
+      const parts = (["action", "evidence", "why"] as const).map((part) => ({ field: `do_better[${i}].${part}`, text: item[part] }));
+      checkHours(parts, item.action, ", or drop this improvement");
+    }
+  });
 
-  const improvements = report.do_better.flatMap(improvementParts);
-  const checklist = report.supply_checklist ?? [];
-  const all = [report.summary, ...report.need_to_know, ...improvements, ...report.went_well, ...checklist];
+  const checklist = list("supply_checklist", report.supply_checklist);
+  const all: Located[] = [
+    { field: "summary", text: report.summary },
+    ...list("need_to_know", report.need_to_know),
+    ...improvementFields(report),
+    ...list("went_well", report.went_well),
+    ...checklist,
+  ];
 
   // Continuity: an event in the log isn't a valid premise if the story invented it. Equipment the
   // story introduced without the household having or obtaining it can't ground a point, and the
   // original defect stays attributed to the turn that introduced it.
-  if (context.baseline !== undefined) {
-    for (const { item, time } of introducedEquipment(context.baseline, turns, context.participantText ?? [])) {
-      // A general statement that such equipment won't work isn't a premise about this one.
-      const refersTo = (text: string) =>
-        (mentions(text, item) || (item === "space heater" && mentions(text, "heater"))) && !negated(text, item) && !UNAVAILABLE.test(text);
-      const premises = [
-        report.summary,
-        ...report.need_to_know,
-        ...report.went_well,
-        ...report.do_better.flatMap(({ action, evidence, why }) => [evidence, why, ...(ACQUIRE.test(action) ? [] : [action])]),
-      ];
-      const relying = sentences(premises).filter(refersTo);
-      if (relying.length) {
-        add(
-          "continuity",
-          `Relies on the ${item}, which the story introduced at ${time} without the household having or obtaining it: ${relying.slice(0, 3).map((s) => quote(s, 100)).join("; ")}`,
-          `Leave the ${item} out: it isn't a valid premise. Base every point on what the household had or obtained, and drop an improvement that depends on it.`,
-        );
-      }
+  for (const { item, time } of storyDefects(turns, context)) {
+    // A general statement that such equipment won't work isn't a premise about this one.
+    const refersTo = (text: string) =>
+      (mentions(text, item) || (item === "space heater" && mentions(text, "heater"))) && !negated(text, item) && !UNAVAILABLE.test(text);
+    const premises: Located[] = [
+      { field: "summary", text: report.summary },
+      ...list("need_to_know", report.need_to_know),
+      ...list("went_well", report.went_well),
+      // Recommending to obtain the item doesn't rely on having had it.
+      ...report.do_better.flatMap((improvement, i) =>
+        (ACQUIRE.test(improvement.action) ? (["evidence", "why"] as const) : (["evidence", "why", "action"] as const)).map((part) => ({
+          field: `do_better[${i}].${part}`,
+          text: improvement[part],
+        })),
+      ),
+    ];
+    for (const sentence of sentencesOf(premises).filter(({ text }) => refersTo(text))) {
+      add(
+        "continuity",
+        "invented-premise",
+        sentence.field,
+        sentence.text,
+        `Relies on the ${item}, which the story introduced at ${time} without the household having or obtaining it: ${quote(sentence.text, 120)}`,
+        `Leave the ${item} out: it isn't a valid premise. Base every point on what the household had or obtained, and drop an improvement that depends on it.`,
+      );
     }
   }
 
   // Safety: the detect patterns of data/rules/safety.json.
   const flagged = new Set<string>();
-  for (const { rule, prompt, sentence } of unsafeSentences([...report.need_to_know, ...improvements, ...checklist])) {
-    flagged.add(`${rule}:${sentence}`);
-    add("safety", `Breaks safety rule ${rule}: ${quote(sentence)}`, prompt);
+  const advice: Located[] = [...list("need_to_know", report.need_to_know), ...improvementFields(report), ...checklist];
+  for (const sentence of sentencesOf(advice)) {
+    for (const { rule, prompt, matched } of unsafeMatches(sentence.text)) {
+      flagged.add(`${rule}:${sentence.text}`);
+      add("safety", `safety:${rule}`, sentence.field, matched, `Breaks safety rule ${rule}: ${quote(sentence.text)}`, prompt);
+    }
   }
   // In an exercise with a power outage, the outage-heating rule applies to any recommendation of grid-powered
   // heat, whether or not the sentence says "outage", and even after power returned in the story.
   if (OUTAGE_HEATING && powerOutageContext(context.baseline ?? "", turns)) {
     const recommends = (sentence: string) => GRID_HEAT.test(sentence) && RECOMMENDS.test(sentence) && !NOT_ADVICE.test(sentence);
     const recommending = [
-      ...sentences([report.summary, ...report.need_to_know, ...report.do_better.flatMap(({ action, why }) => [action, why])]).filter(recommends),
+      ...sentencesOf([{ field: "summary", text: report.summary }, ...list("need_to_know", report.need_to_know), ...improvementFields(report, ["action", "why"])]).filter(
+        ({ text }) => recommends(text),
+      ),
       // A checklist item is a recommendation by being on the list.
-      ...checklist.filter((entry) => GRID_HEAT.test(entry) && !NOT_ADVICE.test(entry)),
+      ...checklist.filter(({ text }) => GRID_HEAT.test(text) && !NOT_ADVICE.test(text)),
     ];
-    for (const sentence of recommending) {
-      if (flagged.has(`${OUTAGE_HEATING.id}:${sentence}`)) continue;
-      add("safety", `Recommends grid-powered heat in a power-outage exercise (rule ${OUTAGE_HEATING.id}): ${quote(sentence)}`, OUTAGE_HEATING.prompt);
+    for (const { field, text } of recommending) {
+      if (flagged.has(`${OUTAGE_HEATING.id}:${text}`)) continue;
+      add(
+        "safety",
+        "outage-grid-heat",
+        field,
+        text.match(GRID_HEAT)![0],
+        `Recommends grid-powered heat in a power-outage exercise (rule ${OUTAGE_HEATING.id}): ${quote(text)}`,
+        OUTAGE_HEATING.prompt,
+      );
     }
   }
 
   // Factual support, for known inaccuracies only.
-  for (const sentence of sentences(all)) {
+  for (const { field, text } of sentencesOf(all)) {
     for (const known of KNOWN_INACCURACIES) {
-      if (known.patterns.some((pattern) => pattern.test(sentence)) && !known.except?.test(sentence)) {
-        add("accuracy", `Known inaccuracy (${known.id}): ${quote(sentence)}`, known.fix);
-      }
+      if (known.except?.test(text)) continue;
+      const match = known.patterns.map((pattern) => text.match(pattern)).find(Boolean);
+      if (match) add("accuracy", `accuracy:${known.id}`, field, match[0], `Known inaccuracy (${known.id}): ${quote(text)}`, known.fix);
+    }
+    const conclusion = electricalConclusion(text);
+    if (conclusion) {
+      add(
+        "accuracy",
+        "accuracy:unsupported-electrical-conclusion",
+        field,
+        conclusion.matched,
+        `Unsupported electrical conclusion (${conclusion.kind}): ${quote(text)}`,
+        ELECTRICAL_FIX,
+      );
     }
   }
-  // A breaker trip in the story doesn't justify buying anything.
-  for (const item of report.do_better) {
-    if (ACQUIRE.test(item.action) && /\b(breakers?|circuits?|tripp?(ed|ing)?)\b/i.test(`${item.evidence} ${item.why}`)) {
-      add("accuracy", `Improvement bases a purchase on a breaker trip (unsupported-electrical-conclusion): ${quote(item.action)}`, ELECTRICAL_FIX);
+  // A breaker trip in the story doesn't justify buying grid-powered heat or electrical gear.
+  report.do_better.forEach((item, i) => {
+    const gear = item.action.match(GRID_HEAT) ?? item.action.match(GRID_GEAR);
+    if (gear && ACQUIRE.test(item.action) && /\b(breakers?|tripp?(ed|ing)?)\b/i.test(`${item.evidence} ${item.why}`)) {
+      add(
+        "accuracy",
+        "accuracy:purchase-on-trip",
+        `do_better[${i}].action`,
+        gear[0],
+        `Improvement bases a purchase on a breaker trip: ${quote(item.action)}`,
+        ELECTRICAL_FIX,
+      );
     }
-  }
+  });
 
   return problems;
 }
@@ -301,7 +430,7 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[], con
 export function repairInstructions(problems: DebriefProblem[]): string {
   return [
     "Your debrief failed these checks. Write the whole debrief again, fixing every one and keeping what passed:",
-    ...problems.map((p, i) => `${i + 1}. ${p.problem}\n   Fix: ${p.fix}`),
-    "You may drop a failing improvement instead of fixing it. Fewer than three improvements is fine; don't replace a dropped one with a new one.",
+    ...problems.map((p, i) => `${i + 1}. ${p.problem} (in ${p.field})\n   Fix: ${p.fix}`),
+    "You may drop a failing improvement instead of fixing it. Fewer than three improvements is fine; don't replace a dropped one with a new one. Removing a claim means removing all of it: don't keep its cause or conclusion in other words.",
   ].join("\n");
 }

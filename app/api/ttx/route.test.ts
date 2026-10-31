@@ -7,10 +7,11 @@ import {
   type UIMessageChunk,
 } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AfterActionReport, TtxUIMessage } from "@/lib/ttx";
 
+import { CAPTURE_HEADER } from "@/lib/debrief-capture";
 import type { HostedServices } from "@/lib/hosted";
 import { SAFETY_RULES } from "@/lib/rules";
 
@@ -426,6 +427,60 @@ describe("POST /api/ttx: the debrief", () => {
         failedFirst: [expect.stringContaining("action is a list")],
         stillFailing: [expect.stringContaining("action is a list")],
       },
+    });
+  });
+
+  it("names equipment the story invented as a known defect in the debrief briefing", async () => {
+    const invented = { ...ended, narrative_response: "You find a space heater in the hall closet and plug it in." };
+    const exercise = endedExercise.map((message) =>
+      message.id === "a1"
+        ? { ...message, parts: [{ type: "tool-generate_turn" as const, toolCallId: "c1", state: "output-available" as const, input: invented, output: invented }] }
+        : message,
+    );
+    const model = debriefModel([passing]);
+    env.model = model;
+
+    await (await post(exercise)).text();
+    expect(promptText(model, 0)).toContain("KNOWN STORY DEFECTS");
+    expect(promptText(model, 0)).toContain("The space heater, first at Hour 72");
+  });
+
+  describe("draft capture", () => {
+    const capturing = { "content-type": "application/json", [CAPTURE_HEADER]: "1" };
+    const startMetadata = (body: string) => JSON.parse(body.split("\n").find((line) => line.includes('"type":"start"'))!.slice(6)).messageMetadata;
+    afterEach(() => vi.unstubAllEnvs());
+
+    it("is off by default, and when only one side asks for it", async () => {
+      env.model = debriefModel([kitList, kitList]);
+      expect(startMetadata(await (await post(endedExercise, undefined, capturing)).text())).not.toHaveProperty("debriefCapture");
+      vi.stubEnv("READYSTATE_CAPTURE_DEBRIEF_DRAFTS", "1");
+      expect(startMetadata(await (await post(endedExercise)).text())).not.toHaveProperty("debriefCapture");
+    });
+
+    it("sends both rejected drafts, each failed check with its field and match, and the evidence without the baseline", async () => {
+      vi.stubEnv("READYSTATE_CAPTURE_DEBRIEF_DRAFTS", "1");
+      env.model = debriefModel([kitList, kitList]);
+
+      const body = await (await post(endedExercise, undefined, capturing)).text();
+      expect(body).toContain("didn't pass ReadyState's checks");
+      const capture = startMetadata(body).debriefCapture;
+      expect(capture.drafts.map((d: { attempt: string; status: string }) => [d.attempt, d.status])).toEqual([
+        ["first", "rejected"],
+        ["repair", "rejected"],
+      ]);
+      expect(capture.drafts[0].report).toEqual(kitList);
+      expect(capture.drafts[0].failedChecks[0]).toMatchObject({ check: "list-shaped", field: "do_better[0].action", matched: kitListItem.action });
+      expect(capture.drafts[0].usage).toEqual({ inputTokens: 10, outputTokens: 5 });
+      expect(capture.evidence.hours).toEqual([72]);
+      expect(capture.evidence.log).toContain("LATEST TURN (Hour 72");
+      expect(JSON.stringify(capture)).not.toContain("live in [Location 1]");
+    });
+
+    it("marks an accepted draft as accepted", async () => {
+      vi.stubEnv("READYSTATE_CAPTURE_DEBRIEF_DRAFTS", "1");
+      env.model = debriefModel([kitList, passing]);
+      const last = await lastMessage(await post(endedExercise, undefined, capturing));
+      expect(last?.metadata?.debriefCapture?.drafts.map((d) => d.status)).toEqual(["rejected", "accepted"]);
     });
   });
 

@@ -5,7 +5,7 @@
  * accurate. Debrief checks are shared with the server (lib/debrief-checks.ts).
  * Regression examples live in checks.test.ts and lib/debrief-checks.test.ts.
  */
-import { introducedEquipment as introducedItems } from "@/lib/continuity";
+import { introducedEquipment as introducedItems, type IntroducedItem } from "@/lib/continuity";
 import { checkDebrief, unsafeSentences, type DebriefCheckCategory } from "@/lib/debrief-checks";
 import { improvementText, type AfterActionReport, type TurnOutput } from "@/lib/ttx";
 
@@ -39,11 +39,15 @@ export function turnAdvice(turns: TurnOutput[]) {
   ]);
 }
 
-/** Equipment that appears in the story without being in the baseline or obtained (lib/continuity.ts). */
-export const introducedEquipment = (baseline: string, turns: TurnOutput[], participantText: string[]) =>
-  introducedItems(baseline, turns, participantText).map(
-    ({ item, time, sentence }) => `${time}: "${item}" appears without being in the baseline or obtained: "${sentence}"`,
-  );
+const describeIntroduced = ({ item, time, sentence, establishedLater }: IntroducedItem) =>
+  `${time}: "${item}" appears without being in the baseline or obtained: "${sentence}"${establishedLater ? ` (the participant said they have it at ${establishedLater})` : ""}`;
+
+/**
+ * Equipment the story introduced without the household having or obtaining it
+ * (lib/continuity.ts). `responses[i]` is the participant's message after `turns[i]`.
+ */
+export const introducedEquipment = (baseline: string, turns: TurnOutput[], responses: string[]) =>
+  introducedItems(baseline, turns, responses).map(describeIntroduced);
 
 const DEBRIEF_CATEGORY: Record<DebriefCheckCategory, CheckCategory> = {
   continuity: "continuity",
@@ -56,6 +60,7 @@ const DEBRIEF_CATEGORY: Record<DebriefCheckCategory, CheckCategory> = {
 export interface RunForChecks {
   baseline: string;
   turns: TurnOutput[];
+  /** The participant's responses after the baseline: `participantText[i]` came after `turns[i]`. */
   participantText: string[];
   report?: AfterActionReport;
   /** Leading turns copied from an earlier run (EVAL_REPLAY). Their findings are marked `replayed`. */
@@ -65,13 +70,13 @@ export interface RunForChecks {
 /** Continuity, citation, accuracy, safety, suitability and debrief completion findings for one run. */
 export function contentFindings({ baseline, turns, participantText, report, replayedTurns = 0 }: RunForChecks): Finding[] {
   const out: Finding[] = [];
-  const turnFindings = (slice: TurnOutput[], replayed: boolean) => {
-    const mark = (category: CheckCategory) => (text: string): Finding => ({ category, text, ...(replayed ? { replayed } : {}) });
-    out.push(...introducedEquipment(baseline, slice, participantText).map(mark("continuity")));
-    out.push(...unsafeAdvice(turnAdvice(slice)).map((text) => mark("safety")(`(review) ${text}`)));
-  };
-  turnFindings(turns.slice(0, replayedTurns), true);
-  turnFindings(turns.slice(replayedTurns), false);
+  const mark = (category: CheckCategory, replayed: boolean) => (text: string): Finding => ({ category, text, ...(replayed ? { replayed } : {}) });
+  // Provenance needs the whole story in order, so introductions are found once and attributed to their turn.
+  for (const introduced of introducedItems(baseline, turns, participantText)) {
+    out.push(mark("continuity", introduced.turnIndex < replayedTurns)(describeIntroduced(introduced)));
+  }
+  out.push(...unsafeAdvice(turnAdvice(turns.slice(0, replayedTurns))).map((text) => mark("safety", true)(`(review) ${text}`)));
+  out.push(...unsafeAdvice(turnAdvice(turns.slice(replayedTurns))).map((text) => mark("safety", false)(`(review) ${text}`)));
 
   if (report) {
     if (!report.need_to_know.length) out.push({ category: "completion", text: "Debrief has no 'what you need to know'" });
