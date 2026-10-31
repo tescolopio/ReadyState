@@ -12,7 +12,8 @@ import {
 } from "ai";
 
 import { briefingWithoutBaseline, captureEnabled, type DebriefCapture, type DebriefDraft } from "@/lib/debrief-capture";
-import { checkDebrief, omitKitImprovement, repairInstructions, storyDefects, storyDefectsBriefing, type DebriefProblem } from "@/lib/debrief-checks";
+import { checkDebrief, omitKitImprovement, repairInstructions, storyDefects, type DebriefProblem } from "@/lib/debrief-checks";
+import { storyFacts, storyFactsBriefing } from "@/lib/story-facts";
 
 import { getAppMode } from "@/lib/config";
 import { getHostedServices, type HostedAccount } from "@/lib/hosted";
@@ -140,8 +141,9 @@ type DebriefOutcome = (
  * If the repair's only failure is one improvement's kit list, that improvement
  * is dropped instead (omitKitImprovement), and the participant is told.
  *
- * Equipment the story introduced without the household having it is named in
- * the briefing as a known defect, so the model doesn't build on it. Every
+ * The briefing ends with a note of story facts (lib/story-facts.ts): logged
+ * hours, power and heating after it returned, equipment the story invented,
+ * and that only the participant's responses are their actions. Every
  * draft is kept in the outcome's capture, which only reaches a local eval
  * that asked for it (lib/debrief-capture.ts).
  */
@@ -200,7 +202,7 @@ async function generateCheckedDebrief({
   const [baseline = "", ...participantText] = participantMessages(messages);
   const context = { baseline, participantText };
   const defects = storyDefects(turns, context);
-  const debriefBriefing = [briefing, storyDefectsBriefing(defects)].filter(Boolean).join("\n\n");
+  const debriefBriefing = `${briefing}\n\n${storyFactsBriefing(storyFacts(turns, defects))}`;
   const capture = {
     drafts,
     evidence: { hours: turns.map((turn) => turn.hours_elapsed), log: briefingWithoutBaseline(debriefBriefing) },

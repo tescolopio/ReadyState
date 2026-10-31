@@ -477,8 +477,11 @@ describe("POST /api/ttx: the debrief", () => {
     });
   });
 
-  it("names equipment the story invented as a known defect in the debrief briefing", async () => {
-    const invented = { ...ended, narrative_response: "You find a space heater in the hall closet and plug it in." };
+  it("ends the debrief briefing with the story facts, including invented equipment and power returning", async () => {
+    const invented = {
+      ...ended,
+      narrative_response: "Power is restored but the central heating is slow to recover. You find a space heater in the hall closet and plug it in.",
+    };
     const exercise = endedExercise.map((message) =>
       message.id === "a1"
         ? { ...message, parts: [{ type: "tool-generate_turn" as const, toolCallId: "c1", state: "output-available" as const, input: invented, output: invented }] }
@@ -488,8 +491,11 @@ describe("POST /api/ttx: the debrief", () => {
     env.model = model;
 
     await (await post(exercise)).text();
-    expect(promptText(model, 0)).toContain("KNOWN STORY DEFECTS");
-    expect(promptText(model, 0)).toContain("The space heater, first at Hour 72");
+    const prompt = promptText(model, 0);
+    expect(prompt).toContain("STORY FACTS");
+    expect(prompt).toContain("Power returned at Hour 72");
+    expect(prompt).toContain("The space heater, first at Hour 72");
+    expect(prompt).toContain("Don't credit them with anything else, such as coordinating with building staff");
   });
 
   describe("draft capture", () => {

@@ -101,7 +101,35 @@ const listShaped = (text: string) => suppliesIn(text) >= 3 || separators(text) >
  * A moment in the exercise ("Hour 18", "Hours 48–66") or a household fact. The model sometimes writes a
  * no-break space after "Hour" (U+202F, Alex, 11:42 on 2026-10-31), so hour patterns match any space.
  */
-const TRACED = /\bHours?\s\d+|\b(baseline|household profile|your profile|inventory (check|gaps?)|at the start)\b/i;
+const TRACED = /\bHours?\s\d+|\b(baseline|household profile|your profile|at the start)\b/i;
+/**
+ * The inventory check as a source counts only when one of the findings supplied in the baseline is about the
+ * same thing: "You lack a basic emergency kit (inventory gaps)" matches "Missing 10 of 12 basic kit items".
+ */
+const INVENTORY_CITED = /\binventory( check| gaps?| findings?)?\b/i;
+const NOT_A_TOPIC = new Set(
+  "the and for with when each person recorded found below minimum cover covers about missing basic item day days stored run short cold outage turn off local extra the inventory check gap gaps your you only".split(" "),
+);
+const topics = (text: string) =>
+  new Set((text.toLowerCase().match(/[a-z]{3,}/g) ?? []).map((word) => word.replace(/(?<=..)s$/, "")).filter((word) => !NOT_A_TOPIC.has(word)));
+
+/** The inventory check's findings as supplied in the baseline ("Gaps found by the inventory check (…): a; b; …"). */
+export function inventoryFindings(baseline: string): string[] {
+  const listed = baseline.match(/Gaps found by the inventory check[^:\n]*:\s*(.+)/i)?.[1];
+  return listed ? listed.split(/;\s*/).map((finding) => finding.replace(/\.$/, "").trim()).filter(Boolean) : [];
+}
+
+/** How a citation traces: to the log or the household, to a matching inventory finding, or not at all. */
+function citation(text: string, support: string, findings: string[] | undefined): "traced" | "inventory-unmatched" | "uncited" {
+  if (TRACED.test(text)) return "traced";
+  if (!INVENTORY_CITED.test(text)) return "uncited";
+  // Without the baseline (some unit tests) the inventory can't be checked.
+  if (!findings) return "traced";
+  const about = topics(support);
+  return findings.some((finding) => [...topics(finding)].some((topic) => about.has(topic))) ? "traced" : "inventory-unmatched";
+}
+const INVENTORY_FIX =
+  'Cite the inventory finding it comes from, as the baseline words it, e.g. "(inventory check: no smoke detectors recorded)", or the hour or household fact instead.';
 /** For facts to know, official guidance is also a source; improvements must trace to what happened. */
 const GUIDANCE = /\b(guidance|CDC|FEMA|Ready\.gov|Red Cross|USDA|NWS)\b/;
 
@@ -157,7 +185,7 @@ const CONCLUSIONS: { kind: string; pattern: RegExp }[] = [
   { kind: "prediction", pattern: /\b(will|would|always)\s+(trip|overload|blow)\w*\b/i },
   // "High‑wattage electric heaters can trip circuit breakers repeatedly in an older building's wiring" (Alex,
   // 11:35 on 2026-10-31). Only a possibility of tripping or overloading counts, not any "can"; "you can" is an action.
-  { kind: "generalization", pattern: /(?<!\b(you|we)\s+)\b(can|could|may|might|tends? to|often|frequently|commonly)\s+(repeatedly\s+|easily\s+)?(trip|overload|blow|short)\w*/i },
+  { kind: "generalization", pattern: /(?<!\b(you|we)\s+)\b(can|could|may|might|tends? to|(is|are) likely to|often|frequently|commonly)\s+(repeatedly\s+|easily\s+)?(trip|overload|blow|short)\w*|\bprone to (trip|overload|blow)\w*/i },
   {
     kind: "generalization",
     pattern: /\b(showing|shows|showed|proves?|proving|demonstrat\w*|means?|indicat\w*) that\b[^.]{0,80}\b(circuits?|breakers?|wiring|outlets?|heaters?|watt\w*|draw|electrical)\b/i,
@@ -228,6 +256,13 @@ const GRID_GEAR = /\b(surge protectors?|extension cords?|power strips?|circuits?
 /** A recommendation, in the present or imperative; "You used…" recounts. */
 const RECOMMENDS =
   /\b(get|buy|obtain|acquire|purchase|use|keep|have|consider|choose|add|invest in|pick up|rely on|bring|plug in|run|ensure|ensuring|install|such as|e\.g\.)\b/i;
+/**
+ * Verb forms that recount rather than advise: an auxiliary "have" ("could have led", "you have used") and
+ * "had to …" (finding 35, "reliance on a high‑wattage heater exposed vulnerabilities that could have led to…").
+ */
+const RECOUNTING = /\b(have|has|had)\s+(been|\w+ed|led|had|done|made|gone|kept|run|brought|got|gotten|taken|found|felt|left|spent)\b|\bhad to\s+\w+/gi;
+/** Whether a sentence advises by `pattern`, once its recounting verb forms are set aside. */
+const advises = (pattern: RegExp, text: string) => pattern.test(text.replace(RECOUNTING, ""));
 /** Says grid heat won't help: "Electric heating … is unavailable during a power outage" (Alex, 2026-10-31). */
 const UNAVAILABLE = /\b(unavailable|useless|won't (work|run|help)|doesn't (work|run|help)|don't (work|run|help)|can't (work|run)|stops? working)\b/i;
 const NOT_ADVICE = /\b(don't|do not|never|avoid|won't|will not|doesn't|does not|can't|cannot|not|instead of|rather than|useless|unavailable)\b/i;
@@ -239,7 +274,7 @@ const ACQUIRE = /\b(get|buy|obtain|acquire|purchase|add|borrow|pick up|invest in
  * warmth from the approved guidance ("alternative heat sources such as blankets"), and in a warning.
  */
 const VAGUE_HEAT =
-  /\b(non[- ‑]?electric(al)?|alternative|alternate|other|backup|back[- ‑]up|secondary|supplemental|additional|extra|emergency|off[- ‑]grid|safe|personal|portable|independent)\s+(heat(ing)?|warming|warmth)(\s+(sources?|methods?|options?|devices?|solutions?|strategies|strategy|approaches|plans?|measures))?\b|\b(non[- ‑]?electric(al)?|alternative|backup|safe|portable)\s+heaters?\b|\bsources? of (heat|warmth)\b/i;
+  /\b(non[- ‑]?electric(al)?|alternative|alternate|other|backup|back[- ‑]up|secondary|supplemental|additional|extra|emergency|off[- ‑]grid|safe|personal|portable|independent)\s+(heat(ing)?|warming|warmth)(\s+(sources?|methods?|options?|devices?|solutions?|strategies|strategy|approaches|plans?|measures))?\b|\b(non[- ‑]?electric(al)?|alternative|backup|safe|portable)\s+heaters?\b|\bsources? of (heat|warmth)\b|\b(other|alternative|alternate|backup|non[- ‑]?electric(al)?)\s+ways?\s+(to|of)\s+(heat|heating|warm|keep warm)\b|\b(heat|heating|warmth)(\s+sources?)?\s+(that|which)\s+((works?|runs?)\s+without|(doesn't|does not|don't|do not|won't)\s+(need|require|use))\s+(grid |electric )?(power|electricity)\b/i;
 const VAGUE_HEAT_ADVICE = new RegExp(`${RECOMMENDS.source}|\\b(need|needs|should|plan( for)?|prepare|identify|arrange|stock|store|seek|find|importance of|important|essential|critical|key)\\b`, "i");
 /** Safe warmth from rule outage-appropriate-heating, named right after the vague phrase. */
 const SAFE_EXAMPLES =
@@ -252,8 +287,9 @@ const clauses = (sentence: string) => sentence.split(/;|:|,\s+(?=but\b|so\b)/);
 export function vagueHeating(sentence: string, listItem = false): string | undefined {
   for (const clause of clauses(sentence)) {
     const match = clause.match(VAGUE_HEAT);
-    if (!match || HEAT_WARNING.test(clause)) continue;
-    if (!listItem && !VAGUE_HEAT_ADVICE.test(clause)) continue;
+    // The warning has to be outside the phrase: "a heat source that doesn't need power" isn't a warning.
+    if (!match || HEAT_WARNING.test(clause.replace(match[0], ""))) continue;
+    if (!listItem && !advises(VAGUE_HEAT_ADVICE, clause)) continue;
     const after = clause.slice(match.index! + match[0].length);
     if (SAFE_EXAMPLES.test(after) && !FUEL_HEAT.test(clause)) continue;
     return match[0];
@@ -278,15 +314,6 @@ export interface DebriefContext {
 export function storyDefects(turns: TurnOutput[], context: DebriefContext): IntroducedItem[] {
   if (context.baseline === undefined) return [];
   return introducedEquipment(context.baseline, turns, context.participantText ?? []).filter((item) => !item.establishedLater);
-}
-
-/** The known defects as a briefing section for the debrief call, or "" when there are none. */
-export function storyDefectsBriefing(defects: IntroducedItem[]): string {
-  if (!defects.length) return "";
-  return [
-    "KNOWN STORY DEFECTS (equipment the story introduced that the household never had or obtained; don't rely on it, don't recommend using it, and don't draw conclusions from events involving it):",
-    ...defects.map(({ item, time, sentence }) => `- The ${item}, first at ${time}: ${quote(sentence, 160)}`),
-  ].join("\n");
 }
 
 /**
@@ -356,8 +383,19 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[], con
       }
     }
   };
+  const findings = context.baseline === undefined ? undefined : inventoryFindings(context.baseline);
   list("need_to_know", report.need_to_know).forEach((point) => {
-    if (!TRACED.test(point.text) && !GUIDANCE.test(point.text)) {
+    const traced = GUIDANCE.test(point.text) ? "traced" : citation(point.text, point.text, findings);
+    if (traced === "inventory-unmatched") {
+      add(
+        "citation",
+        "inventory-unmatched",
+        point.field,
+        point.text.match(INVENTORY_CITED)![0],
+        `Point cites the inventory check, but none of its findings is about this: ${quote(point.text)}`,
+        INVENTORY_FIX,
+      );
+    } else if (traced === "uncited") {
       add(
         "citation",
         "uncited",
@@ -370,7 +408,17 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[], con
   });
   // Improvements must trace to what happened, not to general guidance.
   report.do_better.forEach((item, i) => {
-    if (!TRACED.test(item.evidence)) {
+    const traced = citation(item.evidence, `${item.action} ${item.evidence}`, findings);
+    if (traced === "inventory-unmatched") {
+      add(
+        "citation",
+        "inventory-unmatched",
+        `do_better[${i}].evidence`,
+        item.evidence.match(INVENTORY_CITED)![0],
+        `Improvement cites the inventory check, but none of its findings is about it: ${quote(item.evidence)} for ${quote(item.action, 80)}`,
+        INVENTORY_FIX,
+      );
+    } else if (traced === "uncited") {
       add(
         "citation",
         "uncited",
@@ -452,7 +500,7 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[], con
   // In an exercise with a power outage, the outage-heating rule applies to any recommendation of grid-powered
   // heat, whether or not the sentence says "outage", and even after power returned in the story.
   if (OUTAGE_HEATING && powerOutageContext(context.baseline ?? "", turns)) {
-    const recommends = (sentence: string) => GRID_HEAT.test(sentence) && RECOMMENDS.test(sentence) && !NOT_ADVICE.test(sentence);
+    const recommends = (sentence: string) => GRID_HEAT.test(sentence) && advises(RECOMMENDS, sentence) && !NOT_ADVICE.test(sentence);
     const recommending = [
       ...sentencesOf([{ field: "summary", text: report.summary }, ...list("need_to_know", report.need_to_know), ...improvementFields(report, ["action", "why"])]).filter(
         ({ text }) => recommends(text),
