@@ -97,8 +97,11 @@ const suppliesIn = (text: string) => SUPPLIES.filter((pattern) => pattern.test(t
 const separators = (text: string) => (text.match(/[,;]/g) ?? []).length;
 const listShaped = (text: string) => suppliesIn(text) >= 3 || separators(text) >= 4 || text.length > 260;
 
-/** A moment in the exercise ("Hour 18", "Hours 48–66") or a household fact. */
-const TRACED = /\bHours? \d+|\b(baseline|household profile|your profile|inventory check|at the start)\b/i;
+/**
+ * A moment in the exercise ("Hour 18", "Hours 48–66") or a household fact. The model sometimes writes a
+ * no-break space after "Hour" (U+202F, Alex, 11:42 on 2026-10-31), so hour patterns match any space.
+ */
+const TRACED = /\bHours?\s\d+|\b(baseline|household profile|your profile|inventory (check|gaps?)|at the start)\b/i;
 /** For facts to know, official guidance is also a source; improvements must trace to what happened. */
 const GUIDANCE = /\b(guidance|CDC|FEMA|Ready\.gov|Red Cross|USDA|NWS)\b/;
 
@@ -200,7 +203,7 @@ const amountInHours = (amount: string, unit: string) => {
  * point comes from, not when its events happened.
  */
 export function unsupportedInterval(sentence: string, hours: Set<number>): string | undefined {
-  const anchors = [...sentence.replace(/\([^)]*\)/g, "").matchAll(/\bHours? (\d+)(?:\s*[-–‑]\s*(\d+))?/gi)]
+  const anchors = [...sentence.replace(/\([^)]*\)/g, "").matchAll(/\bHours?\s(\d+)(?:\s*[-–‑]\s*(\d+))?/gi)]
     .flatMap((match) => [match[1], match[2]])
     .filter(Boolean)
     .map(Number)
@@ -236,8 +239,8 @@ const ACQUIRE = /\b(get|buy|obtain|acquire|purchase|add|borrow|pick up|invest in
  * warmth from the approved guidance ("alternative heat sources such as blankets"), and in a warning.
  */
 const VAGUE_HEAT =
-  /\b(non[- ‑]?electric(al)?|alternative|alternate|other|backup|back[- ‑]up|secondary|supplemental|additional|extra|emergency|off[- ‑]grid|safe|personal|portable|independent)\s+(heat(ing)?|warming|warmth)(\s+(sources?|methods?|options?|devices?|solutions?))?\b|\b(non[- ‑]?electric(al)?|alternative|backup|safe|portable)\s+heaters?\b|\bsources? of (heat|warmth)\b/i;
-const VAGUE_HEAT_ADVICE = new RegExp(`${RECOMMENDS.source}|\\b(need|needs|should|plan( for)?|prepare|identify|arrange|stock|store|seek|find)\\b`, "i");
+  /\b(non[- ‑]?electric(al)?|alternative|alternate|other|backup|back[- ‑]up|secondary|supplemental|additional|extra|emergency|off[- ‑]grid|safe|personal|portable|independent)\s+(heat(ing)?|warming|warmth)(\s+(sources?|methods?|options?|devices?|solutions?|strategies|strategy|approaches|plans?|measures))?\b|\b(non[- ‑]?electric(al)?|alternative|backup|safe|portable)\s+heaters?\b|\bsources? of (heat|warmth)\b/i;
+const VAGUE_HEAT_ADVICE = new RegExp(`${RECOMMENDS.source}|\\b(need|needs|should|plan( for)?|prepare|identify|arrange|stock|store|seek|find|importance of|important|essential|critical|key)\\b`, "i");
 /** Safe warmth from rule outage-appropriate-heating, named right after the vague phrase. */
 const SAFE_EXAMPLES =
   /^[^.;]{0,30}?\b(such as|like|e\.g\.|including|namely)\s+(?:(?:and|or|a|an|extra|warm|wool|heavy|layered|dry|your)\s+|,\s*)*(layers|layered clothing|warm clothing|clothing|blankets?|sleeping bags?|hand warmers?|a warming center|warming centers?)\b/i;
@@ -339,7 +342,7 @@ export function checkDebrief(report: AfterActionReport, turns: TurnOutput[], con
   // Ranges ("Hours 48–66") name a span, so only single hours are checked.
   const checkHours = (located: Located[], shown: string, fix = "") => {
     for (const { field, text } of located) {
-      const cited = [...text.matchAll(/\bHour (\d+)\b(?!\s*[-–‑]\s*\d)/gi)].map((match) => Number(match[1]));
+      const cited = [...text.matchAll(/\bHour\s(\d+)\b(?!\s*[-–‑]\s*\d)/gi)].map((match) => Number(match[1]));
       const missing = [...new Set(cited)].filter((hour) => !hours.has(hour));
       if (missing.length) {
         add(

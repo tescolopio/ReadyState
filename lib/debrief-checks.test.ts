@@ -4,6 +4,7 @@ import { introducedEquipment } from "@/lib/continuity";
 import { checkDebrief, electricalConclusion, omitKitImprovement, repairInstructions, storyDefects, unsupportedInterval, vagueHeating } from "@/lib/debrief-checks";
 import saved from "@/lib/fixtures/alex-2026-10-31-0407-drafts.json";
 import saved1135 from "@/lib/fixtures/alex-2026-10-31-1135-drafts.json";
+import saved1142 from "@/lib/fixtures/alex-2026-10-31-1142-drafts.json";
 import type { AfterActionReport, TurnOutput } from "@/lib/ttx";
 
 const turnAt = (hours: number): TurnOutput => ({
@@ -711,5 +712,41 @@ describe("checkDebrief: electrical generalizations with can", () => {
     "The breaker tripped and the lights went out (Hour 72).",
   ])("allows other sentences with can: %s", (sentence) => {
     expect(electricalConclusion(sentence)).toBeUndefined();
+  });
+});
+
+describe("checkDebrief: Alex's 11:42 drafts", () => {
+  const repair = saved1142.repair as AfterActionReport;
+  const problems = checkDebrief(repair, alex31Turns, alex31Context);
+
+  it("accepts citations written with a no-break space after Hour", () => {
+    expect(repair.need_to_know[0]).toContain("Hour 0");
+    expect(problems.filter((p) => p.check === "uncited")).toEqual([]);
+    expect(checkDebrief(saved1142.first as AfterActionReport, alex31Turns, alex31Context).filter((p) => p.check === "uncited").map((p) => p.field)).toEqual([]);
+  });
+
+  it("rejects the repair on the whole-kit action and the vague warmth in its summary", () => {
+    expect(problems.map((p) => `${p.check} ${p.field} ${p.matched}`)).toEqual([
+      "vague-kit do_better[1].action kit",
+      "safety:vague-heating summary alternative warmth strategies",
+    ]);
+  });
+
+  it("isn't delivered by the fallback, because the vague warmth remains", () => {
+    expect(omitKitImprovement(repair, problems, alex31Turns, alex31Context)).toBeUndefined();
+  });
+
+  it("would be delivered with the kit improvement omitted if the summary named the warmth", () => {
+    const named = {
+      ...repair,
+      summary: repair.summary.replace("the importance of alternative warmth strategies", "the importance of layers and blankets"),
+    };
+    const result = omitKitImprovement(named, checkDebrief(named, alex31Turns, alex31Context), alex31Turns, alex31Context);
+    expect(result?.report.do_better).toEqual([repair.do_better[0]]);
+  });
+
+  it("still rejects a hour that never happened when written with a no-break space", () => {
+    const report = { ...repair, need_to_know: ["The water reached the outlets (Hour 31)."] };
+    expect(checkDebrief(report, alex31Turns, alex31Context).map((p) => p.check)).toContain("hour-not-in-log");
   });
 });
