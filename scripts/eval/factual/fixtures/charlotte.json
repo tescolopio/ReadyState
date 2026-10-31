@@ -1,0 +1,412 @@
+{
+  "note": "charlotte (synthetic eval household): turns and responses from 2026-10-30T22-39-01-019Z. responses[i] is the participant message after turns[i]. baseline is the household section the engine was given, without its guidance lines.",
+  "baseline": "People: 2 adults.\n- Person 2 (adult): [Hardware Power Dependent] (about 60 W).\nPets: 2 large dogs.\n- large dog: about 140 lb; Great Dane\n- large dog: about 120 lb; Great Dane, nervous in storms\nLocation: North Carolina, suburban.\nHome: house, 2 floors, no basement. Heating: heat pump. Cooking: gas. Water: municipal water. Backup power: portable power station (about 2000 W, 2048 Wh battery).\nHome notes: Tall oaks over the roof. The creek behind the yard flooded in 2024.\nStored: 10 gallons of stored water (about 5.0 days at 1 gallon per person per day, before pets), 7 days of food, 10 days of pet food.\nHas: flashlights or headlamps, spare batteries, battery or hand-crank weather radio, phone power banks, first aid kit, smoke detectors, battery carbon monoxide detector, cooler, manual can opener.\nEmergency to practice: hurricane.\nGaps found by the inventory check (test these in the exercise): No copies of important documents recorded, and this emergency may mean leaving quickly; Stored water covers about 2.5 days, below the 3-day minimum; Food covers about 7 days: enough for 3 days, short of the 2-week goal for staying home; Pet food covers about 10 days: enough for 3 days, short of the 2-week goal for staying home; Missing 6 of 12 basic kit items: a whistle, dust masks, plastic sheeting and duct tape, moist towelettes, garbage bags and ties, a wrench or pliers to turn off utilities, local maps; No hand sanitizer recorded for when soap and water run short; Person 2 (adult): medical device that needs power: the recorded battery runs it for about 29 hours; If toilets can't flush (sewer or water failure, flooding, an earthquake, or a well pump without power), you'll need an emergency toilet; none recorded.",
+  "turns": [
+    {
+      "feedback": null,
+      "narrative_response": "A tropical storm has intensified into a Category 1 hurricane as it moves inland toward your North Carolina suburb. The National Weather Service has issued a mandatory evacuation for low‑lying areas, and a flash flood warning is in effect for the creek behind your yard, which flooded during the 2024 event. By early evening, strong winds (45‑55 mph) are already shaking the tall oaks overhead, and the power grid is showing signs of strain. Your home’s heat pump will lose power if the outage lasts more than a few minutes, and the gas stove is the only other heat source, but using it for space heating indoors is unsafe. The portable power station is fully charged (≈2000 W, 2048 Wh).",
+      "time_elapsed": "Hour 0",
+      "hours_elapsed": 0,
+      "new_inject": "Rain is now pounding the roof at 2 inches per hour, and the creek water is rising quickly, reaching the edge of your property. The power flickers and goes out completely, leaving you without electric heat and lighting. Your portable power station shows 15 % charge remaining after powering essential lights and the phone charger. The gas stove is still functional, but the house is filling with a faint odor of gas after a brief leak in the kitchen line was detected earlier today and you shut the valve. The dogs are restless, and the older adult’s medical device is down because its battery is depleted.",
+      "critical_alerts": [],
+      "suggested_actions": [],
+      "response_options": [
+        "I move everyone, including the dogs, to the highest floor, close all interior doors, turn off the main gas valve, and use the portable power station to run a battery‑powered fan and charge the medical device with a spare battery if available.",
+        "I load the dogs, essential supplies, and the portable power station into the car and evacuate to the designated community shelter before the floodwaters reach the driveway.",
+        "I light the gas stove to provide heat for the house while the power is out, hoping the CO detector will warn me if carbon monoxide builds up, and keep the dogs inside the living room.",
+        "I step outside briefly to gauge how high the creek water is, then return inside to decide what to do next."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "Moved everyone to the highest floor to avoid rising floodwaters",
+          "Closed interior doors to slow water ingress and retain heat",
+          "Shut off the main gas valve, preventing a possible gas leak or fire hazard",
+          "Powered a fan with the portable station to improve airflow and used remaining charge to attempt charging the medical device"
+        ],
+        "consider": [
+          "No spare battery for the medical device was available; the portable power station’s remaining charge is insufficient for a full recharge, risking loss of therapy",
+          "Running the fan continuously will deplete the power station quickly; conserving power for essential communication and lighting is critical",
+          "Flood water is now at the foundation; staying on the first floor could become hazardous despite doors being closed",
+          "Evacuation orders are now active – you need a clear plan for rapid departure with pets and essential supplies",
+          "You have not prepared an emergency toilet or additional water for the next 24‑48 hours, which could become a health issue"
+        ],
+        "why": "The medical device’s power is a life‑support need; without a reliable source the user may suffer health complications. Conserving limited battery power preserves communication ability. Flood‑related structural risks increase quickly, so evacuation is usually safer than waiting inside a compromised home. Emergency sanitation and water are basic survival needs that become critical once utilities fail."
+      },
+      "narrative_response": "You and the dogs reach the upstairs bedroom, shut the interior doors, and turn off the main gas valve, eliminating the gas‑leak risk. The battery‑powered fan runs, but after six hours the portable power station is down to about 4 % charge and can no longer sustain the fan or charge the medical device. The device remains off, and Person 2 reports difficulty breathing without their CPAP. Outside, rain continues at 2 in/hr; water has risen to the foundation and a few inches of water are now seeping through a small gap on the first‑floor hallway. The mandatory evacuation order for your area has been activated, and the main road is beginning to show traffic congestion. Your emergency kit is short on water, you lack a bucket‑toilet setup, and you have no spare battery for the medical device.",
+      "time_elapsed": "Hour 6",
+      "hours_elapsed": 6,
+      "new_inject": "Flood water is now entering the first floor through a low opening, the portable power station is nearly empty, Person 2’s medical device is still off and they are having breathing difficulty, the dogs are increasingly anxious, and the local evacuation order is active with traffic starting to build on the main exit route. You must decide whether to stay and try to improvise, seek help, or evacuate.",
+      "critical_alerts": [
+        "Medical device battery depleted – Person 2 requires power within hours to maintain health."
+      ],
+      "suggested_actions": [
+        "Keep a spare, fully‑charged battery (or power bank) for any essential medical device and test it regularly.",
+        "Add an extra 5‑10 gal of water and a bucket‑toilet kit to your emergency supplies for at least 48 hours of self‑sufficiency."
+      ],
+      "response_options": [
+        "I grab the emergency supplies, secure the dogs in their carriers, and leave the house immediately via the main road to the nearest designated shelter.",
+        "I stay inside, set up a safe area on the highest floor, conserve the remaining battery for a phone and flashlight, and fashion a makeshift bucket toilet while waiting for rescue.",
+        "I step outside to assess the flooding, attempt to sandbag the entry point, and knock on a neighbor’s door to see if they have a generator I can use for the medical device.",
+        "I call emergency services to report Person 2’s medical device outage and request assistance, while remaining in the house until help arrives."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You correctly shut off the main gas valve, eliminating the leak risk.",
+          "You created a makeshift bucket toilet to address sanitation needs.",
+          "You conserved remaining battery power for essential phone and flashlight use."
+        ],
+        "consider": [
+          "You did not attempt to contact emergency services or a neighbor for assistance; calling 911 or a local non‑emergency line can trigger a rescue or provide evacuation guidance.",
+          "You left the portable power station unused for a brief charge of the medical device; even a few minutes of power could buy critical time for the CPAP.",
+          "You did not secure a plan for the dogs’ safety beyond keeping them upstairs; their anxiety could lead to injury or escape.",
+          "You did not prepare for the possibility that flood water could reach the second floor within the next few hours, which would make staying unsafe."
+        ],
+        "why": "Calling for help early gives responders time to locate you before flood waters rise, and even a short charge to the CPAP can prevent a medical emergency. Pets need a calm, secure area to avoid injuries, and anticipating rising water helps you decide when evacuation becomes mandatory."
+      },
+      "narrative_response": "You and the dogs stay on the highest floor, line a sturdy bucket with a heavy‑duty trash bag, add a handful of sawdust for odor control, and set it in the corner as a makeshift toilet. The fan is turned off to save the last 4 % of the power station, which you keep for occasional phone use and the flashlight. You dial 911; the line is busy but you manage to leave a brief voicemail describing your location, flood conditions, and that Person 2 needs power for a CPAP. A local neighbor later calls back, saying they are heading toward the evacuation route but traffic is backed up for several miles. Over the next six hours the rain continues at 2 in/hr and the water at the front of the house rises an additional 3 in, beginning to seep under the front door and threatening the stairwell. Your phone shows 12 % battery remaining. Person 2’s breathing worsens as the CPAP remains off. The dogs are restless, pacing and whining. The evacuation order remains in effect and the main exit road is still congested.",
+      "time_elapsed": "Hour 12",
+      "hours_elapsed": 12,
+      "new_inject": "Flood water is now pooling at the base of the front stairs, and the water level is projected to reach the second‑floor hallway within the next 2‑3 hours. Person 2’s breathing difficulty is increasing without CPAP power, and your phone battery is low. The neighbor you spoke with reports a possible pickup spot at the community shelter 5 miles away, but traffic is still heavy. You must decide whether to stay and wait for rescue, attempt to evacuate now with limited supplies, or try to find an alternative power source for the CPAP.",
+      "critical_alerts": [
+        "Person 2’s CPAP battery is depleted and they are experiencing breathing difficulty; without power within a few hours health could deteriorate."
+      ],
+      "suggested_actions": [
+        "Add a portable battery pack or power bank capable of running the CPAP for at least 24 hours to your emergency kit.",
+        "Store a second container of water and rotate your water supply every six months to maintain a three‑day minimum per person."
+      ],
+      "response_options": [
+        "I grab essential supplies (water, food, pet food, flashlight, first‑aid kit, medications, and any documents), secure the dogs on leashes, and head for the main road now, hoping to beat the worsening traffic.",
+        "I stay on the second floor, use the phone sparingly to call 911 again and request a rescue team, and wait for help while keeping the dogs calm and monitoring the water level.",
+        "I go downstairs quickly, knock on the neighbor’s door, ask if I can use their generator to power the CPAP and arrange a ride to the shelter later.",
+        "I set up a small solar charger on the roof with a spare USB cable, hoping to generate enough power to run the CPAP for a short period while I decide what to do next."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You recognized the immediate need for power for the CPAP and sought a neighbor’s generator.",
+          "You attempted to arrange later transportation to the shelter, acknowledging the evacuation order."
+        ],
+        "consider": [
+          "Entering the lower level while water is rising poses a slip/flood risk; using waterproof footwear and assessing water depth first is essential.",
+          "A generator must be operated outdoors and never inside the home to avoid carbon monoxide poisoning.",
+          "You should have confirmed the neighbor’s generator fuel level and whether the CPAP can run safely on it for the required time.",
+          "Consider a backup power solution (e.g., a high‑capacity power bank or spare CPAP battery) in case the generator cannot be used or runs out."
+        ],
+        "why": "Water‑related hazards can cause injury or trap occupants, and indoor generator use can produce lethal CO. Redundant power options ensure the medical device stays functional if the primary source fails."
+      },
+      "narrative_response": "You quickly put on rain‑proof boots and wade through the shallow water pooling at the base of the front stairs. The water is about 2–3 inches deep but moving, so you take care not to slip. You reach the neighbor’s front door, knock, and explain the emergency. The neighbor, seeing the rising flood, opens the door and invites you inside. He has a small gasoline‑powered generator set up outdoors behind his house, with a proper 20‑ft clearance from windows. He lets you run the CPAP on the generator using a heavy‑duty extension cord, keeping the device in a well‑ventilated area to avoid carbon monoxide buildup. The CPAP runs for about two hours, significantly improving Person 2’s breathing. The neighbor also agrees to give you a ride to the community shelter later, once traffic eases. You thank him, pack essential items (phone, flashlights, a few water bottles, and the dogs’ leashes), and return upstairs before the water reaches the stairwell. Your phone now shows 8 % battery remaining. The flood water continues to rise, and the front stairs are now fully submerged, making the lower level inaccessible. Person 2’s CPAP battery is low again, and the neighbor’s generator fuel is limited.",
+      "time_elapsed": "Hour 18",
+      "hours_elapsed": 18,
+      "new_inject": "Water has fully inundated the front stairs, cutting off the lower level, and the neighbor’s generator fuel is running low; traffic on the evacuation route remains heavy. You must decide whether to (1) take the neighbor’s car now and attempt to drive to the shelter despite the congestion, (2) stay with the neighbor overnight, keep the CPAP on the generator as long as possible, and leave in the morning, (3) try to create a makeshift sandbag barrier around your front door to keep water out while you finish packing and wait for traffic to clear, or (4) head to a higher‑ground interior room and conserve the remaining phone battery while you seek another power source for the CPAP.",
+      "critical_alerts": [
+        "Person 2’s CPAP remains off; breathing difficulty will worsen without power within a few hours."
+      ],
+      "suggested_actions": [
+        "Keep a spare high‑capacity power bank or a dedicated CPAP battery backup in an accessible, waterproof container.",
+        "Store additional water containers (e.g., 5‑gal buckets) in an upper‑floor location for emergency use."
+      ],
+      "response_options": [
+        "I take the neighbor’s car now and drive to the shelter, bringing the dogs and my essential supplies, even though traffic is still backed up.",
+        "I stay with the neighbor overnight, keep the CPAP running on his generator as long as fuel lasts, and plan to leave for the shelter in the morning when traffic may be lighter.",
+        "I gather trash bags, sand, and any heavy items to build a temporary sandbag barrier around my front door, hoping to keep the water out while I finish packing and wait for the traffic to improve.",
+        "I move to a higher‑ground interior room, turn off all non‑essential electronics, and try to find another way to power the CPAP, such as using a power bank or improvising an inverter, while conserving the phone battery."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You moved to a higher‑ground interior room and turned off non‑essential electronics, which helps conserve limited battery power.",
+          "You attempted to locate an alternative power source, demonstrating resourcefulness."
+        ],
+        "consider": [
+          "Relying on a standard phone power bank or improvised inverter is unlikely to supply the ~60 W needed for the CPAP; most power banks output only 5‑10 W.",
+          "The immediate health risk to Person 2 was not mitigated; a viable power source or evacuation plan should be prioritized over conserving phone battery.",
+          "Securing the interior room from rising water (e.g., sandbags, plastic sheeting) was not addressed, which could trap you as flood levels increase."
+        ],
+        "why": "Turning off devices reduces drain on your limited power, but without a capable power source the CPAP cannot run, placing Person 2 at serious health risk. Identifying realistic power options (generator, car battery, or evacuation) is critical in a flood emergency."
+      },
+      "narrative_response": "You climb to the upstairs bedroom that is furthest from the flood‑filled stairs and switch off the remaining lights, phone charger, and any other plug‑in devices. You rummage through the drawers and find a 10 000 mAh power bank, but its USB‑C output is only 5 V 2 A (10 W) – far below the CPAP’s ~60 W requirement. An improvised inverter using the power bank and a few cords also cannot reach the needed wattage, and the CPAP sputters and shuts down after a few minutes. Person 2’s breathing becomes noticeably more labored as the CPAP stops, and they report increasing shortness of breath. The flood water outside the front door has risen to cover the second‑floor hallway, and a thin sheet of water is now seeping under the bedroom door, dampening the floor. The neighbor’s generator has run out of fuel, and his car is still parked outside, but the main road remains clogged with traffic. With the CPAP off and water encroaching, you realize you must act quickly to protect Person 2’s health.",
+      "time_elapsed": "Hour 24",
+      "hours_elapsed": 24,
+      "new_inject": "Water is now leaking under the bedroom door, raising the floor level inside your high‑ground room, and Person 2’s breathing difficulty is worsening without CPAP power. The neighbor’s generator is out of fuel, and his car is available but the road remains congested with traffic. You must decide whether to (1) take the neighbor’s car now and attempt to drive to the community shelter despite the traffic, (2) stay in the bedroom, use the neighbor’s car battery with an inverter to power the CPAP for a short period, (3) quickly seal the bedroom door with plastic sheeting, sandbags, and towels to hold back water while you wait for traffic to clear and rescue assistance, or (4) call emergency services for medical help and evacuation guidance.",
+      "critical_alerts": [
+        "Person 2’s CPAP is off and breathing difficulty will worsen without power within a few hours."
+      ],
+      "suggested_actions": [
+        "Identify a reliable high‑wattage power source (e.g., car battery with inverter or generator) for medical devices before a flood hits.",
+        "Practice quick‑setup flood barriers using plastic sheeting and sandbags to protect critical indoor spaces."
+      ],
+      "response_options": [
+        "I grab the neighbor’s car keys, load Person 2, the dogs, and our essential supplies into the car, and drive toward the shelter now, hoping to beat the traffic.",
+        "I stay in the bedroom, connect the car battery to an inverter I find in the garage, and run the CPAP for as long as possible while we wait for the water to stop rising.",
+        "I use plastic sheeting from the kitchen, sandbags from the garage, and towels to seal the bedroom door and create a temporary barrier, then conserve our remaining phone battery and wait for the flood to recede or for help.",
+        "I use my phone to call emergency services, explain Person 2’s medical emergency and our flooded situation, and request an ambulance and evacuation assistance."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You acted quickly by gathering essential supplies, loading both adults and the dogs into the neighbor’s car, and attempting to evacuate toward the shelter."
+        ],
+        "consider": [
+          "You did not secure an alternative power source for the CPAP during the drive, leaving Person 2 without respiratory support.",
+          "You proceeded onto a road known to be congested and potentially flooded without first checking water depth or contacting emergency services for guidance.",
+          "Leaving the high‑ground bedroom before sealing the doorway allowed water to continue entering the home, further endangering supplies and increasing flood risk."
+        ],
+        "why": "A powered CPAP is critical for Person 2’s breathing; without it health can deteriorate rapidly. Driving into flood‑affected roads can trap a vehicle, cause loss of the car, and expose occupants to hazardous conditions. Sealing the interior room would have slowed water entry, buying time for evacuation or rescue."
+      },
+      "narrative_response": "You and the dogs climb into the neighbor’s car with your packed supplies and head for the community shelter. The road is already clogged with traffic, and in several places the water is waist‑deep, making it impossible for cars to move. After about 30 minutes you are forced to stop at a flooded intersection; the water is rising and the traffic jam shows no sign of clearing. You keep the car engine running to stay warm, but the CPAP battery is dead and there is no way to power it from the vehicle. Person 2’s breathing becomes increasingly labored, and you notice their lips turning slightly bluish. With the car stuck and flood water inching up the curb, you pull the doors shut, roll up the windows, and try to keep Person 2 upright while you call 911 for medical assistance. The operator advises you to stay in the car if you cannot safely exit, but to be prepared to evacuate on foot if the water reaches the doors. You remain in the vehicle, awaiting rescue, while the flood water continues to rise around you.",
+      "time_elapsed": "Hour 30",
+      "hours_elapsed": 30,
+      "new_inject": "The flood water outside the stalled car is now rising to the level of the passenger door, and the traffic jam shows no sign of moving for the next few hours. Person 2’s breathing difficulty is becoming severe, and the 911 dispatcher warns that emergency crews may take up to an hour to reach your location. You must decide whether to (1) stay in the car and wait for EMS while trying to keep Person 2 as comfortable as possible, (2) attempt to exit the vehicle now and wade to higher ground on foot with the dogs, (3) use the car’s 12 V outlet with a makeshift inverter (if you can find one) to power the CPAP for a short period, or (4) abandon the car, leave it where it is, and seek shelter in a nearby community building that appears to have power.",
+      "critical_alerts": [
+        "Person 2’s CPAP remains off and breathing difficulty will worsen without power within a few hours."
+      ],
+      "suggested_actions": [
+        "Add a high‑capacity, CPAP‑compatible portable power pack to your emergency kit and practice connecting it to the device.",
+        "Create a simple flood‑water safety plan that includes checking road conditions before driving and having a backup evacuation route on foot."
+      ],
+      "response_options": [
+        "I stay in the car, keep the windows closed, and try to keep Person 2 calm while waiting for EMS to arrive, using the blankets we have to keep them warm.",
+        "I quickly gather the dogs and our supplies, open the passenger door, and wade through the rising water to reach the higher‑ground side of the road, hoping to find a safe spot on foot.",
+        "I look for a 12 V car outlet, connect a makeshift inverter from the car battery, and attempt to power the CPAP for as long as possible before the water reaches the doors.",
+        "I leave the car where it is, grab our emergency kit, and head for the nearby grocery store that still has lights on, hoping to find a dry place and possibly a working generator."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You recognized the urgent need to get to higher ground and acted quickly to leave the stalled car."
+        ],
+        "consider": [
+          "Wading through flood water can be extremely hazardous—swift currents, hidden debris, and the risk of hypothermia, especially for large dogs and a person with breathing difficulty.",
+          "Staying in the vehicle, which offers some protection from water and wind, while calling 911 again or using the car’s 12 V outlet with an inverter (if available) could provide a temporary power source for the CPAP.",
+          "If you can reach a nearby powered building, it may be safer and allow you to power the CPAP or obtain medical assistance."
+        ],
+        "why": "Flood water can move faster than it appears and can knock a person down, leading to drowning or hypothermia; a person with a respiratory device should stay in the most protected environment possible while awaiting emergency help."
+      },
+      "narrative_response": "You open the passenger door and step into waist‑deep water, pulling the dogs along. The water is moving faster than expected, and the current pushes you toward the curb. After a few moments you reach the sidewalk, but the water is still rising and is now at knee level. The dogs become uneasy and struggle, and you are soaked through, losing body heat quickly. Person 2’s breathing worsens without CPAP power, and they begin to show signs of hypoxia (bluish lips, increasing fatigue). You manage to find a small raised area near a community school gym that appears to have power, but the path to it is still flooded and crowded with other evacuees. You are now on the higher‑ground side of the road, still without CPAP power, and must decide your next move while waiting for emergency responders.",
+      "time_elapsed": "Hour 36",
+      "hours_elapsed": 36,
+      "new_inject": "You have reached a community school gym that seems to have power and space for shelter, but the interior is crowded and the doors are partially blocked by flood debris. Inside, you spot a portable generator with a few outlets, but it is already being used by others. Person 2’s breathing is becoming critical, and the CPAP still lacks power. You must decide whether to (1) attempt to enter the gym and request assistance to power the CPAP from the generator, (2) stay outside on the raised sidewalk and continue waiting for EMS while keeping Person 2 upright, (3) return to the car to wait for rescue, or (4) try to locate a portable power bank or battery pack among the crowd to power the CPAP temporarily.",
+      "critical_alerts": [
+        "Person 2’s CPAP remains off and breathing difficulty is severe; without power within a few hours health could become life‑threatening."
+      ],
+      "suggested_actions": [
+        "Store a portable power bank capable of running essential medical devices for at least 24 hours.",
+        "Create a waterproof, sealed container for emergency medication and medical equipment."
+      ],
+      "response_options": [
+        "I push through the crowd, ask the gym staff if I can use the generator to power the CPAP, and set up a temporary shelter inside for Person 2 and the dogs.",
+        "I stay on the raised sidewalk, keep Person 2 upright, and call 911 again to update them on our location and worsening condition while waiting for EMS to arrive.",
+        "I decide to go back to the stalled car, close the doors, and wait for emergency crews to reach us, hoping the vehicle will keep us dry and protected.",
+        "I look around the crowd for anyone with a spare power bank or portable battery that could run the CPAP for a short time and try to borrow it."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You recognized the need to stay protected from the elements by returning to the car.",
+          "You kept the dogs and essential supplies together while moving."
+        ],
+        "consider": [
+          "You prioritized staying dry, but re‑entering a flooded, stalled vehicle does not provide power for the CPAP and may expose you to rising water and hypothermia.",
+          "You missed an immediate opportunity to seek medical assistance or a power source at the gym where a generator is present."
+        ],
+        "why": "Staying in a vehicle without power does not solve the critical breathing issue and can increase risk of cold stress; getting to a location with power or emergency medical help is the priority for a life‑threatening condition."
+      },
+      "narrative_response": "You scramble back through the waist‑deep water to the stalled car, pull the doors shut and wedge them against the rising flood. The interior is already water‑logged up to the seat backs, and the engine sputters as the water reaches the exhaust. You and the dogs are soaked, and the cold water quickly saps body heat. Person 2’s breathing becomes labored, lips turn bluish, and they show signs of hypoxia. The car’s 12 V battery is still alive, but you have no inverter and the CPAP requires 120 V AC, so no power can be supplied. After about 30 minutes the water rises to the floor of the vehicle, and the engine dies completely. Emergency responders are on the scene but cannot reach the car because the road is still flooded. You are left waiting in a cold, wet car with a critical medical emergency and no power for the CPAP.",
+      "time_elapsed": "Hour 42",
+      "hours_elapsed": 42,
+      "new_inject": "Flood water continues to rise around the car, soaking the interior and chilling everyone inside. The car’s battery is draining, and the engine will not restart. Emergency crews are still delayed by traffic and water. You spot a few dry blankets tossed near the car by another evacuee, and a volunteer at the nearby gym shouts that the generator is now free for a short period. Person 2’s condition is deteriorating rapidly. You must decide whether to (1) attempt to exit the car again and make a dash for the gym to use the generator for the CPAP, (2) try to rig a 12 V to 120 V inverter from the car’s battery to power the CPAP briefly, (3) stay in the car, wrap yourself and the dogs in the dry blankets to prevent hypothermia while you wait for EMS, or (4) call 911 (if the phone still has charge) and request immediate medical evacuation to a hospital.",
+      "critical_alerts": [
+        "Person 2’s CPAP remains off and breathing difficulty is severe; without power within a few hours health could become life‑threatening."
+      ],
+      "suggested_actions": [
+        "Keep a supply of dry blankets or emergency bivvy sacks to protect against hypothermia when wet.",
+        "Store a portable power bank or 12 V‑to‑120 V inverter capable of powering essential medical devices."
+      ],
+      "response_options": [
+        "I pull the dogs out, sprint back toward the gym, and ask the volunteer to let me plug the CPAP into the generator for as long as possible.",
+        "I search the car for any inverter or power‑conversion device, connect it to the battery, and try to run the CPAP on the car’s 12 V supply.",
+        "I stay inside the car, wrap the dogs and myself in the dry blankets, keep Person 2 upright, and wait for emergency services while conserving the remaining phone battery.",
+        "I use the phone’s remaining charge to call 911, explain the critical medical emergency, and request an ambulance or air rescue."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You correctly identified the need for emergency medical assistance and used the phone’s remaining charge to call 911."
+        ],
+        "consider": [
+          "Plan for the likely delay in rescue due to flood‑impacted roads and traffic.",
+          "Take immediate steps to reduce hypothermia risk (wrap everyone in dry blankets, keep heads covered).",
+          "If EMS cannot reach you quickly, consider alternative ways to power the CPAP (e.g., a 12 V‑to‑120 V inverter) as a backup."
+        ],
+        "why": "Calling 911 is the appropriate first step for a life‑threatening medical emergency, but flood conditions often delay responders, so you need a short‑term plan to keep Person 2 comfortable and to prevent hypothermia while you wait."
+      },
+      "narrative_response": "You place the 911 call using the phone’s remaining charge. The dispatcher confirms your location and the severity of Person 2’s breathing difficulty. They advise you to keep Person 2 upright, wrap yourself and the dogs in the dry blankets you found, and stay as warm and dry as possible. Because the road is still flooded, EMS says they will need to reach you by boat and expect a arrival time of roughly one hour, depending on water levels. They also note that air‑rescue is not feasible in the current conditions. While you wait, you continue to monitor Person 2’s breathing and try to keep the car’s battery from draining completely.",
+      "time_elapsed": "Hour 48",
+      "hours_elapsed": 48,
+      "new_inject": "A small rescue boat equipped with a winch arrives at the edge of the flooded street and the crew signals that they can pull you and the car out of the water. The water around the car is still rising, and the interior is nearly full. You must decide whether to (1) carefully exit the car, wade to the boat’s side, and board it, (2) stay inside the car and let the rescuers attach a rope to pull you out while you remain seated, (3) attempt to move the car toward shallower water using the dogs as a makeshift tow (highly risky and likely to fail), or (4) wait for an air‑rescue helicopter that may be dispatched later but could be delayed further by weather.",
+      "critical_alerts": [
+        "Person 2’s CPAP remains off; breathing difficulty is severe and could become life‑threatening.",
+        "Cold, wet conditions are increasing risk of hypothermia for everyone inside the car."
+      ],
+      "suggested_actions": [
+        "Keep a small, portable 12 V‑to‑120 V inverter in an accessible location for emergencies requiring AC power.",
+        "Store extra sealed water containers in a waterproof location to meet the 3‑day minimum."
+      ],
+      "response_options": [
+        "I carefully open the car door, help the dogs out, and make a quick dash to the rescue boat, then climb aboard and let the crew pull the car away.",
+        "I stay inside the car, keep the blankets on us, and signal the rescuers to attach a rope so they can pull the vehicle and us out together.",
+        "I tie a rope around the car and try to get the dogs to pull it toward the shallower part of the street while the water is still rising.",
+        "I wait for the air‑rescue helicopter that was mentioned, hoping it will arrive soon despite the worsening weather."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You recognized the imminent danger of the rising water and used the arriving rescue boat to get yourself, the dogs, and the car out of the flood.",
+          "You kept the dry blankets handy and stayed upright, which helps reduce hypothermia risk."
+        ],
+        "consider": [
+          "Securing an immediate power source for the CPAP (e.g., a portable power bank, the car’s 12 V system with an inverter, or asking rescuers for a battery) before the boat departs.",
+          "Communicating your medical urgency to the rescue crew so they can prioritize rapid transfer to EMS rather than towing the car.",
+          "Preserving any remaining phone battery for later updates or to call for additional help once on shore."
+        ],
+        "why": "Person 2’s respiratory support is time‑critical; without power the condition can quickly become life‑threatening. Establishing a temporary power source or fast medical transport is essential. Maintaining communication and conserving heat are also key to prevent hypothermia and to keep rescue teams informed of your status."
+      },
+      "narrative_response": "You open the car door cautiously, pull the dogs out, and wade through waist‑deep, fast‑moving water to reach the rescue boat. The crew helps you and the dogs aboard, then secures a winch line to the vehicle and begins pulling the car away as you stay on the boat. While the boat moves toward a higher‑ground staging area, you keep Person 2 upright, wrap the dry blankets around everyone, and monitor breathing. The CPAP remains off; the crew notes the medical urgency and says EMS will board the boat within the next hour to transport Person 2 to the nearest hospital. Your phone still has a few minutes of charge, which you conserve for later updates.",
+      "time_elapsed": "Hour 54",
+      "hours_elapsed": 54,
+      "new_inject": "The rescue boat reaches a temporary flood‑relief staging area on dry ground. EMS personnel board and begin assessing Person 2, but there is no portable power source available for the CPAP. You have a small 10,000 mAh power bank (still partially charged) in your bag, and the rescuers have a portable battery pack used for lighting, but it’s currently allocated to other patients. You must decide how to keep Person 2’s breathing support until they can be moved to a hospital: (1) Connect the power bank to the CPAP using a compatible 12 V adapter (if you can improvise one), (2) Ask the EMS crew to prioritize a portable generator or battery for the CPAP, (3) Continue without CPAP, monitoring closely while the ambulance transport proceeds, or (4) Request that the EMS crew take you to a nearby community shelter that has generator power, where a CPAP could be powered for a longer period before hospital transport.",
+      "critical_alerts": [
+        "Person 2’s CPAP remains off; breathing difficulty is severe and could become life‑threatening.",
+        "Cold, wet conditions increase risk of hypothermia for everyone."
+      ],
+      "suggested_actions": [
+        "Store a high‑capacity (10,000 mAh or larger) power bank and keep a compatible 12 V/120 V adapter ready for medical devices.",
+        "Create a waterproof, insulated space for pets and people during flood rescues, and keep dry blankets and extra warm clothing in an easily reachable location."
+      ],
+      "response_options": [
+        "I try to rig a 12 V to 120 V inverter using the power bank and any available adapters to keep the CPAP running while EMS prepares transport.",
+        "I ask the EMS crew if they can spare the portable battery they have for a few minutes to power the CPAP, explaining how critical it is.",
+        "I decide to forego the CPAP for now, keep Person 2 upright, and let the ambulance take us straight to the hospital, monitoring breathing closely.",
+        "I request that EMS take us to the community shelter with generator power first, so the CPAP can run longer before we head to the hospital."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You asked EMS for the portable battery, recognizing the urgency of keeping Person 2’s CPAP running."
+        ],
+        "consider": [
+          "Alternative power sources such as a car‑battery inverter or the 10,000 mAh power bank you already have.",
+          "Short‑term measures to reduce CPAP demand (e.g., lowering pressure settings) if a medical professional deems it safe."
+        ],
+        "why": "EMS crews prioritize limited power for devices that can be powered directly from the ambulance; requesting a battery is reasonable, but having a backup plan (car inverter, personal power bank) increases your chances of maintaining therapy when professional resources are scarce."
+      },
+      "narrative_response": "The EMS crew listens to your request and explains that the portable battery they are using for lighting other patients cannot be shared at the moment, as it’s tied to critical monitoring equipment. They acknowledge the seriousness of Person 2’s condition and prioritize rapid transport to the hospital. They keep Person 2 upright, wrap everyone in the dry blankets to limit hypothermia, and load you into the ambulance. On the way, the paramedic checks the 10,000 mAh power bank you have; it can supply about 5 V × 10 Ah = 50 Wh, which is insufficient for the 60 W CPAP, but they note it could be used with a proper 12 V inverter if one were available. The ambulance departs for the nearest hospital, aiming to arrive within the next hour.",
+      "time_elapsed": "Hour 60",
+      "hours_elapsed": 60,
+      "new_inject": "During the ambulance ride, the paramedic informs you that the hospital’s emergency department is currently dealing with multiple flood‑related injuries, and a bed may not be immediately available. They suggest three options: (1) Continue to the hospital, where Person 2 will receive full medical support but may face a short wait; (2) Request a diversion to a smaller community clinic that has a functional CPAP machine and power but limited other resources; (3) Stay with the EMS crew in the ambulance for a longer transport while they try to locate a portable power source for the CPAP en route. Critical alerts remain: Person 2’s breathing support is off and severe; cold, wet conditions increase hypothermia risk.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Store a dedicated 12 V car‑inverter and a high‑capacity power bank for future power‑outage medical devices.",
+        "Include a small, lightweight battery‑powered CPAP backup (or a manual bilevel device) in your emergency kit."
+      ],
+      "response_options": [
+        "I stay in the ambulance and ask the paramedic to keep trying to find a portable power source for the CPAP while we head to the hospital.",
+        "I request the ambulance divert to the nearby community clinic that already has a working CPAP and generator power.",
+        "I continue to the hospital despite possible delays, trusting that the emergency department will prioritize Person 2 once we arrive."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You recognized that a functional CPAP with reliable power is essential for Person 2 and proactively sought a diversion to a facility that can provide it."
+        ],
+        "consider": [
+          "The longer travel time to the community clinic could worsen hypothermia and fatigue; you should continue to wrap everyone in blankets and consider adding a warm drink if safe.",
+          "Even with a working CPAP, the clinic may lack other medical resources; you might want to confirm what additional care is available before committing.",
+          "If an improvised 12 V inverter were on hand, it could have allowed you to use your own power bank for a short boost—having such an inverter in your kit is a useful preparedness step."
+        ],
+        "why": "Keeping Person 2 on CPAP is critical, but extended transport increases exposure to cold and reduces overall medical support; balancing these factors helps avoid secondary complications like hypothermia or delayed treatment for other injuries."
+      },
+      "narrative_response": "The paramedic explains that the nearby community clinic is about 30 minutes farther than the hospital, but it does have a working CPAP hooked to a reliable generator. After a brief discussion of the trade‑offs, you agree to the diversion. The ambulance routes to the clinic while the crew continues to keep Person 2 upright, wraps everyone in the dry blankets, and monitors temperature. The extra travel time is offset by the immediate availability of the CPAP, so Person 2 is connected to the machine as soon as you arrive. The clinic’s generator runs, providing steady power for the CPAP, and the staff begin basic assessment. However, the clinic is dealing with a flood surge of patients, and its generator fuel supply is low, meaning power may only last a few more hours. The ambulance crew informs you that a hospital bed may still be delayed, and you will need to decide whether to stay at the clinic or arrange another transfer.",
+      "time_elapsed": "Hour 66",
+      "hours_elapsed": 66,
+      "new_inject": "At the community clinic, the CPAP works, but the staff warn that the generator fuel is running low and could run out within two hours, leaving the CPAP without power. The clinic also lacks a full‑service emergency department; it can provide basic monitoring and oxygen, but advanced care requires a hospital transfer. Meanwhile, the floodwaters are still rising around the building, and the power outage has caused the clinic’s heating system to fail, increasing the risk of hypothermia for everyone inside. You must decide how to proceed: (1) Stay at the clinic, use the CPAP while you wait for a hospital bed to open, and conserve heat with blankets and warm drinks; (2) Ask the EMS crew to return to the larger hospital despite the longer wait for CPAP, hoping for more comprehensive care; (3) Attempt to power the CPAP with your own 10,000 mAh power bank by improvising a 12 V inverter from the ambulance’s spare parts; or (4) Request an air‑rescue helicopter to evacuate Person 2 directly to a hospital, despite uncertain availability due to the storm.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Add a portable 12 V DC to 120 V AC inverter to your emergency kit for powering medical devices like CPAPs.",
+        "Store an extra high‑capacity power bank (e.g., 20,000 mAh) and keep it charged for emergencies requiring small‑device power."
+      ],
+      "response_options": [
+        "I stay at the clinic, keep Person 2 on the CPAP, bundle everyone in blankets, and wait for a hospital bed to become available.",
+        "I tell the EMS crew to turn the ambulance around and head back to the larger hospital, accepting the longer wait for CPAP but gaining access to full medical resources.",
+        "I try to rig a 12 V inverter from the ambulance’s spare parts to connect my 10,000 mAh power bank to the CPAP for a short boost while we stay at the clinic.",
+        "I call the local emergency management center to request an air‑rescue helicopter to fly Person 2 directly to a hospital, even though the storm may delay the flight."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You correctly contacted the emergency management center to request an air‑rescue, which is the appropriate step for a life‑threatening medical device failure."
+        ],
+        "consider": [
+          "Assessing the realistic availability of a helicopter in severe storm conditions and having an immediate backup plan (e.g., ground transport with a portable power source).",
+          "Continuing to protect against hypothermia while awaiting a response – using blankets, warm drinks, and limiting exposure.",
+          "Securing an alternative power source for the CPAP before the clinic’s generator fuel is exhausted."
+        ],
+        "why": "Helicopter rescues are often delayed or cancelled when winds, low visibility, or heavy rain are present; without a backup, Person 2 could lose CPAP support and become critically ill. Maintaining warmth prevents hypothermia, which can compound respiratory difficulty."
+      },
+      "narrative_response": "You place a call to the local emergency management center and request an air‑rescue helicopter for Person 2. The dispatcher confirms the request and checks available assets. Because the storm is still producing strong winds and low visibility, the nearest helicopter unit reports that it cannot safely launch at this time. They advise that a helicopter may become available later if conditions improve, but they cannot give a reliable ETA. Meanwhile, they arrange for an additional ground ambulance equipped with a portable generator to meet the clinic in about 45 minutes. You are told to keep the CPAP on the clinic’s generator for as long as fuel lasts and to continue wrapping everyone in blankets, providing warm drinks, and monitoring Person 2’s breathing. The clinic staff prepares to transition Person 2 to the incoming ambulance if the generator fails. You spend the next six hours managing heat loss, conserving the remaining power, and awaiting the ground‑transport backup.",
+      "time_elapsed": "Hour 72",
+      "hours_elapsed": 72,
+      "new_inject": "",
+      "critical_alerts": [
+        "Risk of hypothermia as clinic heating is offline and CPAP may lose power within ~2 hours."
+      ],
+      "suggested_actions": [
+        "Store a compact, battery‑powered heating pad or chemical hand warmers for future power‑outage scenarios.",
+        "Add a portable 12 V‑to‑120 V inverter and extra high‑capacity power banks to your emergency kit for medical device backup."
+      ],
+      "response_options": [],
+      "scenario_status": "complete"
+    }
+  ],
+  "responses": [
+    "I move everyone, including the dogs, to the highest floor, close all interior doors, turn off the main gas valve, and use the portable power station to run a battery‑powered fan and charge the medical device with a spare battery if available.",
+    "I stay inside, set up a safe area on the highest floor, conserve the remaining battery for a phone and flashlight, and fashion a makeshift bucket toilet while waiting for rescue.",
+    "I go downstairs quickly, knock on the neighbor’s door, ask if I can use their generator to power the CPAP and arrange a ride to the shelter later.",
+    "I move to a higher‑ground interior room, turn off all non‑essential electronics, and try to find another way to power the CPAP, such as using a power bank or improvising an inverter, while conserving the phone battery.",
+    "I grab the neighbor’s car keys, load Person 2, the dogs, and our essential supplies into the car, and drive toward the shelter now, hoping to beat the traffic.",
+    "I quickly gather the dogs and our supplies, open the passenger door, and wade through the rising water to reach the higher‑ground side of the road, hoping to find a safe spot on foot.",
+    "I decide to go back to the stalled car, close the doors, and wait for emergency crews to reach us, hoping the vehicle will keep us dry and protected.",
+    "I use the phone’s remaining charge to call 911, explain the critical medical emergency, and request an ambulance or air rescue.",
+    "I carefully open the car door, help the dogs out, and make a quick dash to the rescue boat, then climb aboard and let the crew pull the car away.",
+    "I ask the EMS crew if they can spare the portable battery they have for a few minutes to power the CPAP, explaining how critical it is.",
+    "I request the ambulance divert to the nearby community clinic that already has a working CPAP and generator power.",
+    "I call the local emergency management center to request an air‑rescue helicopter to fly Person 2 directly to a hospital, even though the storm may delay the flight.",
+    ""
+  ]
+}

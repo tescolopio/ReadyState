@@ -1,0 +1,489 @@
+{
+  "note": "priya (synthetic eval household): turns and responses from 2026-10-28T02-12-40-120Z. responses[i] is the participant message after turns[i]. baseline is the household section the engine was given, without its guidance lines.",
+  "baseline": "People: 2 adults, 1 older adult (65+).\n- Person 3 (older adult (65+)): [Hardware Power Dependent] (about 300 W); [Daily Maintenance Medication] (6 days of supply on hand); needs help with stairs and carrying; [Hearing Impaired].\nPets: 1 small bird.\nLocation: Texas, suburban.\nHome: townhouse or duplex, 2 floors, no basement. Heating: heat pump. Cooking: electric. Water: municipal water. Backup power: portable power station (about 1000 W).\nHome notes: The bedroom for [Person 5]'s mother is on the ground floor. West-facing windows; the upstairs gets very hot.\nStored: 10 gallons of stored water (about 3.3 days at 1 gallon per person per day, before pets), 4 days of food.\nHas: flashlights or headlamps, phone power banks, car phone charger, first aid kit, cooler, written list of contacts.\nOther supplies: Two spare oxygen tanks that last about 4 hours each\nEmergency to practice: heat wave.",
+  "turns": [
+    {
+      "feedback": null,
+      "narrative_response": "It is a sweltering summer day in Texas, with temperatures climbing to 108°F (42°C). The town’s electric grid experiences an unexpected failure, leaving your townhouse without power. Your heat pump stops running, and the electric lights go out. The portable power station is online, but its battery is at 45% charge after powering essential devices (phone chargers, a few lights, and the medical equipment for Person 3). The indoor temperature quickly rises, especially on the second floor, while the older adult (Person 3) is on the ground‑floor bedroom and has limited mobility and hearing impairment. The small bird’s cage is on the kitchen counter, exposed to the heat.",
+      "time_elapsed": "Hour 0",
+      "hours_elapsed": 0,
+      "new_inject": "The power station’s battery level drops to 30% within the next hour as you keep the phone chargers and a small fan running, and the indoor temperature on the second floor reaches 95°F (35°C). Person 3 begins to feel light‑headed and sweaty, and the bird becomes agitated.",
+      "critical_alerts": [],
+      "suggested_actions": [],
+      "response_options": [
+        "I move Person 3 and the bird to the coolest part of the house, turn off all non‑essential devices, and use a battery‑powered fan on low speed while I call a neighbor to ask if I can use their air‑conditioned space.",
+        "I turn on the portable power station’s high‑draw outlet to power a larger electric fan in the living room, keep the phone chargers running, and tell Person 3 to stay in place and drink water from the stored supply.",
+        "I decide the best option is to wait for the utility company to restore power, assuming the temperature will stay tolerable for a few more hours, and continue using the existing fan and chargers.",
+        "I open all windows and doors to create cross‑ventilation, place a bowl of ice in front of the small fan, and instruct Person 3 to rest in the bedroom while I monitor the power level."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "Moved the vulnerable adult and bird to a cooler area",
+          "Shut off non‑essential devices to preserve power",
+          "Used a battery‑powered fan on low speed",
+          "Attempted to secure an alternate cooled space by contacting a neighbor"
+        ],
+        "consider": [
+          "Providing regular hydration and cool compresses for Person 3",
+          "Opening windows or creating cross‑ventilation to enhance passive cooling",
+          "Using reflective curtains or shading to reduce solar gain",
+          "Monitoring the portable power station’s remaining charge and prioritizing medical equipment",
+          "Ensuring the bird’s cage stays in a cool, shaded spot (e.g., a cooler with ice) to prevent heat stress"
+        ],
+        "why": "Heat exhaustion can progress rapidly, especially for older adults with limited mobility; hydration and active cooling are the most effective first‑aid measures. Passive cooling (ventilation, shading) reduces indoor temperature without draining limited battery power, preserving it for essential medical devices."
+      },
+      "narrative_response": "You successfully moved Person 3 and the bird to the coolest room and turned off unnecessary electronics, extending the portable power station’s runtime. The low‑speed fan runs for another hour, dropping the power station to about 18% before it automatically shuts off to protect the medical equipment, which remains online. The neighbor calls back and explains their own home has lost AC, but they can lend you a large cooler and several bags of ice. With the fan off, the second‑floor temperature climbs to roughly 100 °F (38 °C). Person 3 feels dizzy and sweaty, indicating heat exhaustion, and the bird’s cage is becoming unbearably hot. You now have a cooler with ice, limited power left, and an urgent need to cool both the adult and the bird while conserving energy for the medication device.",
+      "time_elapsed": "Hour 6",
+      "hours_elapsed": 6,
+      "new_inject": "Your neighbor offers a large cooler and ice but cannot provide indoor air‑conditioning. The portable power station is at 18% and will not support the fan any longer. The indoor temperature on the second floor is now about 100 °F, and Person 3 is showing signs of heat exhaustion. The bird is agitated from the heat. You must decide how to keep both safe while preserving power for the medication device.",
+      "critical_alerts": [
+        "Person 3 is showing early signs of heat exhaustion (light‑headedness, sweating). Immediate cooling and hydration are needed to prevent worsening."
+      ],
+      "suggested_actions": [
+        "Store a second insulated cooler with frozen water bottles for future heat emergencies.",
+        "Create a simple cross‑ventilation plan: open windows on opposite walls and use a battery‑operated fan to pull cooler air through."
+      ],
+      "response_options": [
+        "I place the ice and bird inside the borrowed cooler, give Person 3 cold water and apply damp cloths to their skin, open windows on opposite sides of the house to create a cross‑draft, and keep the power station reserved for the medication device.",
+        "I drive the car to the nearest community cooling center, taking Person 3, the bird, and the essential medication, and leave the house unattended while I monitor the power station remotely via phone.",
+        "I set up a small portable evaporative cooler in the shaded porch, power it with the remaining battery, and keep Person 3 and the bird there, hoping the breeze and evaporation will lower the temperature.",
+        "I line the fan with ice cubes and aim the airflow toward the second‑floor bedroom, hoping the melting ice will cool the room without using more power."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You recognized the immediate need for cooling and hydration by taking Person 3 and the bird to a community cooling center.",
+          "You protected the essential medication by bringing it with you."
+        ],
+        "consider": [
+          "Ensuring the power‑dependent medical equipment remains powered or has a backup while you are away.",
+          "Securing the house (closing windows, shading, turning off any remaining heat‑generating appliances) to slow temperature rise and preserve any remaining ice.",
+          "Planning how to keep the bird cool during transport (e.g., using ice packs or a ventilated carrier).",
+          "Arranging a way to monitor or recharge the portable power station before it fully depletes."
+        ],
+        "why": "Power‑dependent medical devices can fail if the station shuts down, creating a health setback. Properly securing the house and protecting the bird reduce heat‑related risks, and a plan for the power station avoids a total loss of backup power."
+      },
+      "narrative_response": "You load Person 3, the small bird (in a ventilated carrier with a frozen gel pack), and the medication into your car and drive to the nearest community cooling center. The drive takes about 30 minutes, and you arrive within the hour. Inside, you find a shaded area with functional air‑conditioning. Person 3 sits in a chair, drinks water from a bottle you brought, and after about 20 minutes the dizziness lessens. You place the bird’s carrier near the AC vent and add a second gel pack to keep it cool. The medication is stored in a small insulated bag, safe from heat. While you monitor the house by phone, the portable power station’s battery drops from 18 % to 0 % and automatically shuts off, turning off the 300 W medical device. The house temperature on the second floor climbs toward 105 °F (40 °C). With the power gone, the fridge begins to warm, but the remaining water and food are still safe for the short term. You now have a safe, cooled environment for Person 3 and the bird, but you must plan for the loss of the medical device’s power and the rising indoor heat should you need to return home.",
+      "time_elapsed": "Hour 10",
+      "hours_elapsed": 10,
+      "new_inject": "The cooling center informs you that due to high demand, they can only keep you there for a maximum of 6 hours before needing to turn away new arrivals. Meanwhile, a text from your neighbor alerts you that the portable power station has fully depleted, leaving the medical device offline and the home without any power. You must decide how to manage the next steps: whether to stay longer at the cooling center, arrange alternative power for the medical device, or begin the return home while the house remains very hot.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Store a second insulated cooler and extra frozen gel packs in your vehicle for future heat emergencies.",
+        "Identify a local service that can provide a short‑term generator or battery backup for critical medical equipment."
+      ],
+      "response_options": [
+        "I stay at the cooling center for the full 6 hours, then head back home with Person 3 and the bird, bringing a cooler of ice to protect the medication and food while I look for a way to recharge the power station later.",
+        "I call a local utility company to request an emergency generator loan and arrange for a neighbor to watch the house while I return home quickly to retrieve Person 3 and the bird, keeping the medication in the insulated bag.",
+        "I ask the cooling center staff if they have a spare fan I can borrow and bring it back to the house, then return home immediately with Person 3, the bird, and the medication, planning to use the fan on a car battery inverter to keep the house cooler for a short period.",
+        "I decide the risk of the medical device being offline is too high, so I leave the cooling center early and drive straight home, hoping to get Person 3 inside the coolest room and use the car’s AC to cool the house temporarily, even though the power station is dead."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You identified the need for a fan and considered using a car‑battery inverter to power it."
+        ],
+        "consider": [
+          "Running a fan on a car inverter can quickly drain the vehicle’s battery, potentially leaving you unable to start the car.",
+          "A single fan will provide only modest cooling in a house that is already 105 °F; it may not prevent heat‑related illness.",
+          "The 300 W medical device remains without power; a car inverter typically cannot sustain that load for long, and the battery is already low.",
+          "Leaving Person 3 in the house while it remains extremely hot puts them at risk of worsening heat exhaustion.",
+          "Taking the fan may reduce available cooling for others at the center; consider the impact on community resources."
+        ],
+        "why": "A drained car battery can strand you and limit evacuation options, while insufficient cooling does not adequately protect a vulnerable older adult from heat illness. Maintaining power for essential medical equipment is critical for health and safety."
+      },
+      "narrative_response": "You ask the cooling center staff for a spare fan and are given a small portable USB‑powered fan. You return home with Person 3, the bird, the medication, and the fan. To power the fan you connect a car‑battery inverter to the vehicle’s battery and run the fan for about 30 minutes while the car engine is off. The inverter draws roughly 30 W, dropping the car’s battery state of charge from about 70% to 40%. The fan provides a slight breeze in the living room, but the house temperature remains near 105 °F. The medical device remains offline, and Person 3 begins to feel light‑headed again, sweating despite drinking water. The bird’s carrier stays near the fan but the heat is still oppressive. Your neighbor calls later, offering a small gasoline‑powered generator that must be operated outdoors because of carbon‑monoxide risk.",
+      "time_elapsed": "Hour 12",
+      "hours_elapsed": 12,
+      "new_inject": "Person 3 is now showing signs of worsening heat exhaustion (dizziness, rapid pulse) as the indoor temperature stays above 100 °F and the medical device is still without power. Your car battery is down to about 35% after running the inverter, risking you being unable to restart the vehicle. The neighbor’s generator could provide power for the medical device but must be placed outdoors, away from windows and doors. You must decide how to protect Person 3, restore power to the medical device, and avoid a dead car battery.",
+      "critical_alerts": [
+        "Person 3 is experiencing renewed heat‑exhaustion symptoms (light‑headedness, sweating) as indoor temperature exceeds 100 °F and the medical device remains offline."
+      ],
+      "suggested_actions": [
+        "Keep a fully charged car battery or portable jump‑starter for emergency power needs.",
+        "Develop a plan to safely operate a generator outdoors to power essential medical equipment during outages."
+      ],
+      "response_options": [
+        "I keep the fan running, monitor Person 3’s condition, and ask the neighbor to bring the generator outdoors so I can power the medical device while keeping the house ventilated.",
+        "I turn off the fan, place Person 3 back in the car with ice packs and water, and drive back to the cooling center to stay there until they are stable.",
+        "I call emergency services for assistance with Person 3’s heat‑exhaustion symptoms and request help transporting the medical device to a safe power source.",
+        "I use wet towels and ice packs on Person 3’s skin while waiting for the neighbor’s generator, and conserve the car battery by not using the inverter further."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You applied wet towels and ice packs to Person 3, providing immediate skin‑level cooling.",
+          "You conserved the car battery by stopping use of the inverter."
+        ],
+        "consider": [
+          "Ensure the neighbor’s generator is placed outdoors, at least 20 ft from any doors, windows, or vents to prevent carbon‑monoxide buildup.",
+          "Use a heavy‑duty, outdoor‑rated extension cord and keep it away from water to power the medical device safely.",
+          "Continue active cooling: encourage frequent sips of water, apply wet towels regularly, and consider moving Person 3 to the coolest location (e.g., a shaded room or neighbor’s cooler area).",
+          "Monitor Person 3 for worsening signs (confusion, loss of consciousness) and be prepared to call emergency services if symptoms progress.",
+          "Plan to recharge or jump‑start the car battery soon; a 35 % state of charge may not reliably start the engine."
+        ],
+        "why": "Wet towels and ice packs can lower core temperature by evaporative cooling, which is critical while waiting for power restoration. Conserving the car battery preserves your ability to drive for medical care or to recharge later. However, without a reliable power source for the medical device, Person 3 remains at risk, and CO safety with the generator is essential."
+      },
+      "narrative_response": "You quickly wrap wet towels and ice packs around Person 3’s neck, wrists, and forehead, and encourage them to sip water frequently. The skin feels cooler and Person 3’s dizziness eases slightly, but they remain light‑headed and the indoor temperature stays near 105 °F. You refrain from using the car‑battery inverter, preserving the vehicle’s battery at about 35 % charge. Your neighbor arrives with a small gasoline‑powered generator. Following safety guidelines, you place the generator on a concrete pad 20 ft away from the house, ensuring it is not under the eaves and that exhaust cannot re‑enter the home. Using a heavy‑duty outdoor‑rated extension cord, you connect the medical device, restoring power to the medication. You keep the door and windows closed, and periodically check the generator for fuel and CO levels. The bird remains agitated in its carrier but is sheltered from direct heat. You note the car’s low battery and plan to arrange a jump‑start later. Person 3’s condition stabilizes but requires continued monitoring.",
+      "time_elapsed": "Hour 14",
+      "hours_elapsed": 14,
+      "new_inject": "A sudden thunderstorm rolls in, bringing heavy rain and strong winds. The generator, now running outdoors, is at risk of water exposure if not sheltered, and the rain makes the outdoor area slippery. Meanwhile, the house’s humidity rises, making the indoor environment feel even hotter, and your water supply is limited to the remaining stored gallons.",
+      "critical_alerts": [
+        "Person 3 is still experiencing heat‑exhaustion symptoms (dizziness, rapid pulse) as indoor temperature remains >100 °F and the medical device is still offline."
+      ],
+      "suggested_actions": [
+        "Store additional ice or cold packs in a cooler for future heat emergencies.",
+        "Keep a solar charger or a second portable power bank to back up essential medical devices."
+      ],
+      "response_options": [
+        "I quickly move the generator to a covered, elevated spot (like under the carport) to keep it dry, continue running it to power the medical device, and place a wet towel on Person 3’s forehead while we wait for the rain to pass.",
+        "I decide the risk of the generator getting wet is too high, so I turn it off, grab a rain‑proof blanket, and bring Person 3 and the bird to my neighbor’s house where they have air‑conditioning, leaving the medical device unattended until the storm ends.",
+        "I call emergency services to request medical assistance for Person 3’s heat exhaustion, explaining that the medical device is now powered but the storm may affect the generator, and I stay with Person 3 while waiting for help.",
+        "I attempt to secure the generator with a tarp, use the car’s alternator to charge the battery while the car runs briefly in the driveway, and use the car’s AC to cool Person 3 in the vehicle until the storm subsides."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You protected the generator from rain by moving it to a covered spot.",
+          "You kept the medical device powered, preserving the medication supply.",
+          "You continued using wet towels to help cool Person 3."
+        ],
+        "consider": [
+          "Ensure the generator remains in an open, well‑ventilated area; a carport can trap exhaust and increase CO exposure risk.",
+          "Maintain a minimum 20‑ft clearance from doors, windows, and any air intakes even when under a roof.",
+          "Monitor the generator’s fuel level and have a plan for when it runs out, especially as the storm may limit refueling.",
+          "With limited stored water, prioritize hydration for Person 3 and consider alternative cooling methods such as creating a makeshift evaporative cooler (wet sheet in front of a fan)."
+        ],
+        "why": "Ventilated placement prevents dangerous carbon‑monoxide buildup, which is a leading cause of injury in generator use. Hydration and additional cooling are essential to stop heat‑exhaustion progression, especially when indoor heat remains extreme and water supplies are low."
+      },
+      "narrative_response": "You relocate the generator beneath the carport, positioning it on a dry, elevated surface and keeping the exhaust pipe pointed away from the house. The rain pours heavily, but the generator continues running, and the medical device stays powered. You double‑check that the carport’s open sides provide clear airflow, and you place a carbon‑monoxide detector near the door as a precaution. Inside, the humidity climbs, making the 105 °F interior feel even hotter. You keep a wet towel on Person 3’s forehead and encourage frequent sips of the remaining stored water. The bird remains agitated, squawking in its carrier. After about six hours, the storm begins to subside, but the generator’s fuel gauge shows only a quarter tank left, and the driveway is slick with water, making any immediate departure unsafe.",
+      "time_elapsed": "Hour 20",
+      "hours_elapsed": 20,
+      "new_inject": "The storm has passed, but the neighborhood power outage continues. Your neighbor’s generator fuel is nearly depleted, and the carport‑covered generator now shows low fuel warning. The indoor humidity remains high, and the indoor temperature is still around 103 °F. The driveway is flooded, preventing a safe drive home. You have about 1 gallon of water left in your stored supply. Person 3’s dizziness persists, and the bird is increasingly distressed. You must decide how to keep Person 3 safe, preserve the remaining fuel, and manage the limited water while awaiting external assistance.",
+      "critical_alerts": [
+        "Person 3 continues to show heat‑exhaustion symptoms (dizziness, rapid pulse) while indoor temperature stays above 100 °F.",
+        "Generator is now placed under a carport, which may restrict exhaust ventilation and create a carbon‑monoxide risk if not fully open to the outdoors."
+      ],
+      "suggested_actions": [
+        "Store a backup supply of generator fuel in a weather‑proof container and keep a spare outdoor‑rated extension cord.",
+        "Create a simple evaporative cooler: drape a wet sheet over a portable fan to add moisture to the air without using additional electricity."
+      ],
+      "response_options": [
+        "I move Person 3 to the coolest room on the ground floor, open a window at night to create cross‑ventilation, and set up a DIY evaporative cooler by hanging a wet sheet in front of the generator‑powered fan, while I conserve the remaining fuel for the medical device.",
+        "I decide to leave the house now, using the car despite its low battery, and drive to a neighbor’s house that has power, hoping to get more water and a working AC unit, even though the driveway is still wet.",
+        "I turn off the generator to save fuel, use only the remaining stored water to hydrate Person 3, and wait for the utility company to restore power, hoping the heat will drop enough on its own.",
+        "I call emergency services to request a wellness check and a delivery of water, and I stay inside with Person 3, using the wet towel and occasional fanning with the generator‑powered fan, while I monitor for carbon‑monoxide."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You correctly moved the generator to a covered, elevated spot and kept it running to power the medical device.",
+          "You continued to use wet towels and encourage hydration for Person 3."
+        ],
+        "consider": [
+          "You did not verify that the car’s battery had enough charge to start and safely drive; attempting to leave with a low battery risks being stranded.",
+          "Leaving Person 3 inside a 103 °F environment without a reliable cooling method or sufficient water could worsen heat‑exhaustion.",
+          "The generator’s exhaust may still be restricted by the carport; monitoring carbon‑monoxide levels is essential."
+        ],
+        "why": "Ensuring a reliable vehicle start prevents a dangerous situation where you become immobilized while the vulnerable adult continues to overheat. Maintaining a safe indoor environment (cooling, hydration, and CO monitoring) is critical to prevent medical complications."
+      },
+      "narrative_response": "You pull the car into the driveway and attempt to start it. The engine cranks slowly and then stalls; the battery is too depleted to turn the engine over. After a second attempt, the car does not start. You realize the battery, already low from previous inverter use, cannot power the vehicle. With the driveway still slick from rain, you decide it is unsafe to push the car across. Meanwhile, inside the house the humidity stays high, and the temperature remains around 103 °F. Person 3’s dizziness worsens, and they begin to sweat more heavily despite the wet towel. You have only about 1 gallon of water left, which you sip sparingly. The bird continues to squawk loudly, clearly distressed by the heat. The generator is still running, but its fuel gauge is at a quarter tank, and the carport’s partially enclosed space limits exhaust venting, so you keep a carbon‑monoxide detector active. With the car immobilized, you must choose a new course of action.",
+      "time_elapsed": "Hour 22",
+      "hours_elapsed": 22,
+      "new_inject": "Your car battery is dead, and the vehicle cannot be started safely on the wet driveway. Person 3’s heat‑exhaustion symptoms are escalating (increased sweating, rapid breathing). You have only 1 gallon of water left, and the generator fuel is low. The neighbor’s house with AC and water is a short walk away, but the rain‑slick ground makes travel hazardous, especially for Person 3 who is dizzy. Emergency medical services have not yet arrived. You need to decide how to protect Person 3, secure additional water, and preserve remaining fuel while you wait for help.",
+      "critical_alerts": [
+        "Person 3 continues to show heat‑exhaustion symptoms (dizziness, rapid pulse) with indoor temperature >100 °F.",
+        "Generator is under a carport, which may limit exhaust ventilation and increase carbon‑monoxide risk if airflow is insufficient."
+      ],
+      "suggested_actions": [
+        "Keep a working carbon‑monoxide detector near any indoor‑running generator and verify proper ventilation.",
+        "Store extra bottled water in a cool, shaded location and rotate supplies regularly to maintain freshness."
+      ],
+      "response_options": [
+        "I call 911 to request emergency medical assistance for Person 3 and ask if they can also bring water, then I stay inside with the generator running and continue cooling measures.",
+        "I ask the neighbor to bring a portable jump‑starter to my driveway so I can start the car, then I drive to their house to get water and use their AC while keeping the medical device on my power station.",
+        "I stay inside, set up a small battery‑powered fan using the car battery (while monitoring its charge), and continue to apply wet towels and sip water, hoping the generator can keep the medical device on until help arrives.",
+        "I carefully help Person 3 walk to the neighbor’s house despite the slick ground, carrying the bird and the remaining water, while I stay with the generator to monitor CO levels."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You continued applying wet towels and limited water to Person 3, which helps with evaporative cooling.",
+          "You attempted to power a small fan from the car battery, showing effort to improve airflow."
+        ],
+        "consider": [
+          "Using the car battery for a fan further drains it, reducing any chance of later vehicle use for evacuation.",
+          "The generator’s location under a carport creates a carbon‑monoxide hazard; proper ventilation is essential.",
+          "Water supplies are critically low; securing additional water is urgent.",
+          "Person 3’s heat‑exhaustion is worsening; calling emergency medical services is advisable.",
+          "Moving the generator to a fully open outdoor space can both improve ventilation and preserve fuel by allowing the medical device to stay powered."
+        ],
+        "why": "Heat‑exhaustion can progress rapidly to heat stroke; without adequate cooling, hydration, and medical device power, health deteriorates. Carbon‑monoxide from a partially enclosed generator can cause poisoning, especially in a hot, poorly ventilated house. Preserving the car battery ensures a viable evacuation option if conditions worsen."
+      },
+      "narrative_response": "You connect the car battery to the small fan using an inverter. The fan runs for about an hour before the battery voltage drops noticeably; you notice the car’s dash lights dim, confirming the battery is nearly depleted. You keep the fan running at low speed while continuing to dab wet towels on Person 3’s skin and sip the last gallon of water very sparingly. The indoor temperature stays around 103 °F, and Person 3’s dizziness intensifies, with faster breathing and a rapid pulse. The generator continues to run under the carport, and the carbon‑monoxide detector chirps faintly, prompting you to open the garage door slightly for ventilation. A neighbor, hearing the detector alarm, knocks and offers to move the generator to the open side of the driveway and brings a 1‑liter bottle of water. Emergency medical services have been alerted but are still en route, estimated arrival in 30‑45 minutes.",
+      "time_elapsed": "Hour 26",
+      "hours_elapsed": 26,
+      "new_inject": "A neighbor arrives with a spare generator cord and a small bottle of water, and offers to relocate your generator to an open area away from the house to improve exhaust ventilation. Person 3’s symptoms are now severe: confusion, rapid breathing, and a thready pulse. EMS is still minutes away but traffic is slow due to lingering floodwater. You must decide whether to (a) move the generator outdoors immediately and keep Person 3 inside with the fan and wet towels while waiting for EMS, (b) attempt to transport Person 3 to the neighbor’s house for air‑conditioning despite the slick ground, (c) shut off the generator to eliminate CO risk, rely on the fan until the car battery dies, and focus on rehydrating with the limited water, or (d) call the neighbor to bring a portable cooler/ice and more water while you monitor Person 3 closely.",
+      "critical_alerts": [
+        "Person 3 is experiencing escalating heat‑exhaustion symptoms (increased sweating, rapid breathing, dizziness) in >100 °F indoor temperature.",
+        "Generator is operating under a carport, which may restrict exhaust ventilation and increase carbon‑monoxide risk."
+      ],
+      "suggested_actions": [
+        "Move any fuel‑burning generator to a fully ventilated outdoor location, ensuring exhaust is directed away from doors and windows.",
+        "Contact emergency medical services promptly for severe heat‑exhaustion; time is critical."
+      ],
+      "response_options": [
+        "I quickly move the generator to a fully open spot, keep it running to power the medical device, continue using the fan and wet towels on Person 3, and call EMS to confirm their ETA.",
+        "I help Person 3, using a sturdy chair and my own support, and carefully walk both of us to the neighbor’s house for air‑conditioning, despite the wet ground, while I keep the fan on in the car battery as backup.",
+        "I shut off the generator to eliminate any CO risk, run the fan on the car battery until it dies, and use the remaining water to rehydrate Person 3, hoping EMS arrives soon.",
+        "I ask the neighbor to bring a small cooler with ice and an extra bottle of water, keep Person 3 in the shade with wet towels, and monitor the carbon‑monoxide detector while waiting for EMS."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You asked the neighbor for a cooler with ice and extra water, addressing hydration and cooling needs.",
+          "You continued using wet towels and shade to help Person 3.",
+          "You monitored the carbon‑monoxide detector while awaiting EMS."
+        ],
+        "consider": [
+          "The generator is still under the carport, which can trap exhaust and increase CO risk; relocating it to an open, well‑ventilated spot is essential.",
+          "Person 3 is now showing confusion, a sign of severe heat‑related illness; moving them to a cooler indoor environment (the neighbor’s AC‑equipped home) would provide faster, more effective cooling than fans and ice alone.",
+          "The car‑battery‑powered fan is about to die; conserving the remaining battery for essential lighting or communication, or turning it off to avoid further depletion, should be considered."
+        ],
+        "why": "Relocating the generator prevents carbon‑monoxide poisoning, which can be fatal in enclosed spaces. Severe heat‑exhaustion with confusion requires rapid core‑temperature reduction, best achieved with air‑conditioned air. Preserving the dwindling car battery avoids being stranded and ensures you can call for help if needed."
+      },
+      "narrative_response": "The neighbor arrives quickly, bringing a small cooler filled with ice and an additional 1‑liter bottle of water. You give Person 3 a sip of the water, then place ice packs wrapped in cloth on their neck, armpits, and groin while continuing to dab wet towels on their skin. You open the garage door fully and, using the spare generator cord the neighbor provided, move the generator to the open side of the driveway, away from the house and any walls, ensuring the exhaust vents freely to the outdoors. The carbon‑monoxide detector falls silent. The fan powered by the car battery runs out after a few more minutes, and the battery dies, leaving the house without fan airflow. With the cooler’s ice you can keep Person 3’s skin cool, and you now have about 0.4 L of water left after re‑hydrating them. The indoor temperature remains around 102 °F, but the direct cooling from ice and the open‑air generator reduce the risk of CO exposure. Emergency medical services are still on their way, now estimated to arrive in about 20 minutes.",
+      "time_elapsed": "Hour 28",
+      "hours_elapsed": 28,
+      "new_inject": "EMS finally reaches the house, navigating through the lingering floodwater. Paramedics set up a portable oxygen tank and begin applying cooling blankets to Person 3, but they note the generator is still running outdoors and ask you to keep it on until they finish their assessment. They request that you hand over one of your spare oxygen tanks to assist with Person 3’s breathing, and they need help moving Person 3 onto a stretcher for safe transport. Meanwhile, the generator fuel gauge shows only a small amount of fuel left, and the risk of carbon‑monoxide remains if the exhaust is blocked. You must decide how to prioritize the oxygen tank, the generator’s operation, and Person 3’s immediate care.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Always place fuel‑powered generators outdoors, at least 5 ft from doors, windows, and vents, and keep exhaust directed away from the house.",
+        "Maintain a larger stored water supply (e.g., 1 gal per person per day plus extra for pets) and consider having a dedicated emergency hydration pack for heat events."
+      ],
+      "response_options": [
+        "I hand the spare oxygen tank to the EMS crew, help them place Person 3 on the stretcher, keep the generator running outdoors as they direct, and stay nearby to monitor the CO detector.",
+        "I ask the EMS crew to wait while I quickly move Person 3 to the neighbor’s house with the AC, then return with them to hand over the oxygen tank and discuss the generator placement.",
+        "I turn off the generator immediately to eliminate any CO risk, give the EMS crew the oxygen tank, and let them focus on cooling Person 3 with their portable equipment.",
+        "I suggest the EMS crew bring additional water and ice from the neighbor, keep the generator off for now, and concentrate on using the ice from the cooler to lower Person 3’s core temperature while waiting for the oxygen tank."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You correctly handed the spare oxygen tank to EMS, which supports Person 3’s breathing.",
+          "You assisted EMS in moving Person 3 onto a stretcher, reducing risk of falls.",
+          "You kept the generator outdoors with proper exhaust ventilation and monitored the CO detector."
+        ],
+        "consider": [
+          "Verify the remaining generator fuel and plan to conserve it for essential medical equipment after EMS departs.",
+          "Account for the bird’s water needs and keep it hydrated, as only ~0.4 L of water remains.",
+          "Ensure the generator remains in a fully ventilated area and that the carbon‑monoxide detector continues to be monitored after the crew leaves."
+        ],
+        "why": "Providing the oxygen tank and safe transport directly addresses the acute medical emergency, while maintaining generator ventilation prevents carbon‑monoxide buildup. Planning for fuel, water, and CO monitoring after EMS leaves ensures continued safety and preparedness."
+      },
+      "narrative_response": "EMS arrived through the flood‑water and quickly set up a portable oxygen tank and cooling blankets for Person 3. They accepted the spare oxygen tank you offered and used it to assist Person 3’s breathing. With your help, they placed Person 3 onto a stretcher and began assessing vital signs. The generator stayed outdoors in a clear spot, and the carbon‑monoxide detector remained silent. After the assessment, EMS prepared to transport Person 3 to the hospital, estimating departure within the next few minutes. You now have about 0.4 L of water left, the bird is still agitated and needs water, and the generator fuel gauge shows only a small reserve. The indoor temperature stays around 102 °F, and the house remains without power for most devices.",
+      "time_elapsed": "Hour 30",
+      "hours_elapsed": 30,
+      "new_inject": "EMS is preparing to transport Person 3 to the hospital. They will need the generator to stay running until they finish their assessment, but the fuel remaining is minimal. You have only 0.4 L of water left for yourself and the bird, and the indoor temperature remains above 100 °F. You must decide how to manage the generator’s fuel, keep the bird hydrated, and maintain a safe environment after EMS departs.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Store extra water in a shaded container and rotate ice to keep it cold for future heat emergencies.",
+        "Always place generators in fully open, well‑ventilated areas and keep carbon‑monoxide detectors active when they are in use."
+      ],
+      "response_options": [
+        "I ask the EMS crew to keep the generator running until they leave, then I move it to a well‑ventilated spot away from the house, conserve the remaining fuel, and use the last water to hydrate the bird and myself while I wait for further help.",
+        "I turn off the generator to eliminate any CO risk, use the cooling blankets on Person 3’s body after EMS departs, and try to keep the house cooler by opening windows and hoping the dead car battery can still power a fan, while I call a neighbor for more water.",
+        "I request that EMS take the generator with them to the hospital so I have power for the medical device, and I stay at home with the bird, hoping the neighbor can bring additional water and a portable AC unit.",
+        "I leave the generator running, use the last bit of fuel to power a small portable fan and the medical device, give the remaining water to Person 3 and the bird, and wait inside the cooler with the bird until EMS leaves, then plan to call for a tow to repair the car."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You correctly turned off the generator to eliminate carbon‑monoxide risk.",
+          "You continued using the cooling blankets on Person 3 after EMS left, which helps reduce core temperature.",
+          "You opened windows to increase ventilation and called a neighbor for additional water."
+        ],
+        "consider": [
+          "The car battery is reported as dead, so it cannot reliably power a fan; an alternative cooling method is needed.",
+          "Turning off the generator also cut power to the medication‑related hardware (≈300 W) that may be required for daily medication storage or operation.",
+          "Opening windows when outside temperatures exceed 100 °F provides little cooling and may let hot, humid air inside, worsening heat stress.",
+          "Only 0.4 L of water remains for both you and the bird; the bird’s hydration needs should be addressed immediately."
+        ],
+        "why": "A functional medical device is essential for medication adherence, and without power it could compromise treatment. In extreme heat, ventilation with hot outdoor air does not lower indoor temperature, so supplemental cooling (e.g., evaporative methods, ice, battery‑powered fan) is needed. Adequate water for both people and pets is a basic survival requirement; neglecting the bird’s needs can lead to dehydration."
+      },
+      "narrative_response": "You switch off the neighbor’s generator, removing any lingering carbon‑monoxide risk. The cooling blankets remain on Person 3, whose temperature continues to drop as EMS prepares to transport them. You open the windows, but the outside air is similarly hot (≈100 °F) and humid, so the indoor temperature stays around 102 °F. The car battery, previously drained to 35 %, no longer provides enough voltage to run a fan, so the house receives no mechanical airflow. You call the neighbor; they promise to bring a small bottle of water within the hour but cannot supply ice or a fan. With only 0.4 L of water left, you ration it, giving a sip to yourself and a few drops to the bird, which remains agitated. The generator’s fuel gauge now reads a few ounces, insufficient for extended operation. EMS finishes their assessment, hands Person 3 to the stretcher, and departs for the hospital. You are left alone in the overheated house, with limited water, no power, and the bird needing hydration.",
+      "time_elapsed": "Hour 32",
+      "hours_elapsed": 32,
+      "new_inject": "With Person 3 now in transport, you are alone in the townhouse. Outside temperatures stay above 100 °F, humidity is high, and you have only 0.4 L of water for yourself and the small bird. The neighbor’s generator fuel is nearly exhausted, and the car battery cannot run a fan. You must decide how to keep yourself and the bird safe, preserve the remaining fuel for any future need, and obtain additional water or cooling. Options include seeking shelter at the neighbor’s house with AC, using the remaining generator fuel for a short‑term fan, or creating improvised evaporative cooling while awaiting further assistance.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Store extra water in insulated containers and rotate supplies regularly.",
+        "Keep a small, fully charged battery‑powered fan and a pack of ice packs in an easily accessible location for heat emergencies."
+      ],
+      "response_options": [
+        "I walk to the neighbor’s house, despite the slick ground, to use their AC and ask for more water for me and the bird.",
+        "I keep the generator on for a few minutes to power a small battery‑operated fan, then turn it off to save the last fuel while I place ice from the cooler on the floor to create evaporative cooling.",
+        "I stay inside, close the windows, use wet towels on my skin, ration the remaining water, and wait for the neighbor’s bottle of water to arrive, hoping the humidity will lessen as the evening cools.",
+        "I call emergency services again to request a water delivery and a portable fan, explaining the critical lack of water for both me and the pet."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You recognized the need to stay hydrated and used wet towels to help cool yourself, which are appropriate first‑aid measures for heat stress."
+        ],
+        "consider": [
+          "Staying in a closed, hot house without airflow can quickly lead to worsening dehydration and heat‑related illness, especially with only 0.4 L of water left.",
+          "Moving to the neighbor’s air‑conditioned home would provide immediate temperature relief and a safer environment for you and the bird.",
+          "Using the remaining generator fuel for a short‑term fan (placed outdoors with proper ventilation) could create needed airflow while you wait for more assistance.",
+          "Improvised evaporative cooling (e.g., hanging a damp sheet in a breezy doorway) can provide modest cooling without power."
+        ],
+        "why": "Heat exhaustion can progress to heat stroke very quickly when the ambient temperature stays above 100 °F and hydration is minimal; maintaining airflow and a cooler environment is critical to prevent that progression. Relocating to a cooler space or creating airflow are standard heat‑wave response actions."
+      },
+      "narrative_response": "You close the windows, drape wet towels over your skin, and sip the remaining water sparingly, giving the bird only a few drops. The humidity stays high and the indoor temperature remains around 102 °F. After about an hour the neighbor arrives with the promised bottle of water; you add the small amount to your supply, but the total water available is still far below what you need for both yourself and the bird. You begin to feel light‑headed and notice the bird fluttering restlessly, indicating rising stress. Without any mechanical airflow, the house stays stifling, and your own heat‑exhaustion symptoms start to return.",
+      "time_elapsed": "Hour 36",
+      "hours_elapsed": 36,
+      "new_inject": "Your heat‑related symptoms are worsening (light‑headedness, rapid heartbeat) and the bird appears increasingly distressed. You must decide how to obtain immediate cooling and additional water while preserving the tiny amount of generator fuel left. Options include moving to the neighbor’s air‑conditioned home, using the remaining fuel to run a fan outdoors with proper ventilation, creating an improvised evaporative cooler, or calling emergency services for assistance.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Store at least a three‑day water supply (about 9 L for two adults and a pet) in a cool, shaded location.",
+        "Keep a battery‑powered fan and extra rechargeable batteries in an accessible spot for heat‑wave emergencies."
+      ],
+      "response_options": [
+        "I quickly walk to the neighbor’s house, bring the bird with me, and stay there under the air‑conditioner while I drink the water and rest.",
+        "I set up the generator outdoors in an open area, attach the remaining fuel to power a small portable fan inside the house, and keep the windows slightly open for ventilation.",
+        "I hang a damp sheet over the front doorway and sit in the shade, hoping the airflow will create evaporative cooling, while I ration the water and monitor my condition.",
+        "I call 911 to request a wellness check and ask for additional assistance, explaining my worsening heat‑exhaustion symptoms and the lack of water."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You recognized the severity of your heat‑exhaustion symptoms and appropriately called 911 for a wellness check and assistance."
+        ],
+        "consider": [
+          "While waiting for EMS, you could have created a simple evaporative‑cooling setup (e.g., a shallow bucket of ice water with a towel draped over a fan, if any power remained) to lower your body temperature more effectively.",
+          "Securing additional water from a neighbor or a nearby store before your condition worsened would reduce the risk of dehydration."
+        ],
+        "why": "Calling emergency services is the safest step when heat‑exhaustion symptoms progress, but maintaining some immediate cooling and hydration can prevent the condition from deteriorating further while help is en route."
+      },
+      "narrative_response": "You dial 911, explain your worsening heat‑exhaustion symptoms and the critical shortage of water. The dispatcher confirms a medical unit is on the way and advises you to stay seated, keep wet towels on your skin, and sip water slowly. You continue to ration the newly arrived bottle, giving a few drops to the bird. The indoor temperature stays around 102 °F, and humidity remains high. After about 20 minutes, you hear an EMS vehicle pull up at the front of the house, but the flooded driveway makes it difficult for the crew to reach the front door safely. The paramedics knock and ask if you have a safe path to bring them inside; you inform them that the driveway is still wet and the interior is extremely hot.",
+      "time_elapsed": "Hour 38",
+      "hours_elapsed": 38,
+      "new_inject": "EMS personnel must decide how to access the interior: (a) they wait for the water to recede and attempt to enter through the front door, (b) they ask you to move to the neighbor’s air‑conditioned home for immediate cooling while they monitor you from outside, or (c) they set up a portable fan powered by the remaining generator fuel placed in an open, well‑ventilated spot to provide airflow inside while they treat you. Each option has trade‑offs regarding your heat‑exhaustion risk, the bird’s stress, and the limited fuel remaining.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Store additional water in sealed containers and rotate stock regularly to ensure an adequate supply during heat events.",
+        "Create a basic evaporative‑cooling system (bucket of ice water with a damp cloth and a battery‑powered fan) as part of your heat‑wave preparedness plan."
+      ],
+      "response_options": [
+        "I stay inside and let the EMS crew set up a portable fan outside, using the last of the generator fuel while I continue applying wet towels and sipping water.",
+        "I ask the EMS crew to bring me to the neighbor’s house with air‑conditioning, even though the driveway is still slick, so I can cool down more effectively while they monitor my condition.",
+        "I tell the EMS crew to wait for the water to recede and attempt to enter through the front door, keeping my wet towels on and drinking water slowly until they can get inside.",
+        "I suggest we move the generator to a fully open area away from the house, turn it off for a moment to eliminate CO risk, then quickly run a short‑burst fan powered by the car battery while the EMS crew assesses me."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You kept yourself inside where you can be monitored,",
+          "You allowed EMS to set up a fan using the remaining generator fuel in a well‑ventilated location,",
+          "You continued applying wet towels and sipping water, which are key first‑aid steps for heat‑exhaustion."
+        ],
+        "consider": [
+          "Monitor the carbon‑monoxide detector continuously while the generator runs; even outdoors, a blocked exhaust can create a hazard.",
+          "Plan for the moment the fuel is exhausted – the fan will stop, and indoor temperature will rise again.",
+          "Conserve the last drops of water for both yourself and the bird, and consider requesting additional water or a cooler from EMS or a neighbor before the fuel runs out."
+        ],
+        "why": "Continual CO monitoring prevents a hidden danger that can turn a heat‑exhaustion situation into a poisoning emergency. The fan’s cooling effect is temporary; without a backup plan, temperature will climb back to dangerous levels. Hydration is the cornerstone of heat‑exhaustion treatment, so securing more water early avoids worsening dehydration."
+      },
+      "narrative_response": "The EMS crew positions the portable fan a few feet from an open side of the house, pointing it toward the interior. With the generator now in an open, well‑ventilated spot, the fan runs on the last of the fuel, lowering the indoor temperature by about 5 °F. You stay seated, keep wet towels on your skin, and sip the small amount of water you have, giving a few drops to the bird. The carbon‑monoxide detector remains silent. After roughly 45 minutes the generator sputters and the fan stops as the fuel is exhausted. EMS confirms you are stable for the moment, hands you a small bottle of water, and advises you to seek a cooler location or arrange additional water as soon as possible.",
+      "time_elapsed": "Hour 44",
+      "hours_elapsed": 44,
+      "new_inject": "With the generator fuel depleted, the fan is now off and the house temperature is climbing back toward 100 °F. You have only 0.2 L of water left for yourself and the bird, and the neighbor’s generator fuel is nearly exhausted. EMS has left, but you can still contact them. Options include: (a) walk to the nearby neighbor’s air‑conditioned home for immediate cooling, (b) create an improvised evaporative cooler by hanging a wet sheet over an open window to draw in cooler night air, (c) call the neighbor to bring a small cooler with ice and another bottle of water, or (d) wait for the night to cool down while rationing your remaining water and using any remaining fan battery (if any) for brief periods.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Place a carbon‑monoxide detector near any operating generator and test it before use.",
+        "Store an extra gallon of water in a sealed container in the freezer for emergency cooling and hydration."
+      ],
+      "response_options": [
+        "I walk carefully to the neighbor’s house, asking them to let me use their AC while I hydrate and rest.",
+        "I drape a wet sheet over an open window, creating an evaporative cooler, and ration the remaining water while I stay inside.",
+        "I call the neighbor and request they bring a small cooler with ice and an extra bottle of water, then I keep the fan battery on standby for short bursts of airflow.",
+        "I stay inside, close the windows, and wait for the evening temperature to drop, using only the few drops of water I have."
+      ],
+      "scenario_status": "ongoing"
+    },
+    {
+      "feedback": {
+        "covered": [
+          "You correctly used an evaporative cooling method by hanging a wet sheet over an open window, which can lower indoor temperature when humidity permits.",
+          "You continued to ration the limited water supply and kept wet towels on your skin, both appropriate heat‑exhaustion mitigation steps."
+        ],
+        "consider": [
+          "Evaporative cooling is much less effective when indoor humidity is high; the temperature reduction may be only a few degrees, which might not be enough to prevent further heat‑related symptoms.",
+          "With only 0.2 L of water for both you and the bird, dehydration can progress quickly, especially as you continue to sweat and the bird needs water.",
+          "Staying inside the hot house for an extended period increases the risk of worsening heat exhaustion; relocating to a cooler environment would be safer."
+        ],
+        "why": "Even a modest temperature drop can help, but high humidity limits evaporative cooling, so you may still face dangerous core‑body temperatures. Adequate hydration is the most critical factor in heat‑exhaustion treatment; without enough water, symptoms can rapidly worsen. Moving to a cooler location removes the heat source entirely, reducing reliance on marginal cooling methods."
+      },
+      "narrative_response": "You hang the wet sheet over an open window. Because the night air is still humid, the sheet provides only a slight breeze and cools the interior by roughly 3‑4 °F. You continue to sip the 0.2 L of water, giving a few drops to the bird. After about an hour, you begin to feel a growing thirst and a mild light‑headedness as sweat evaporates faster than the limited water can replace. The bird becomes increasingly restless, flapping its wings and chirping loudly. The indoor temperature climbs back toward the high 90s°F. You realize that the evaporative method is insufficient to keep you safe for long without additional water or a cooler shelter.",
+      "time_elapsed": "Hour 46",
+      "hours_elapsed": 46,
+      "new_inject": "Heat‑exhaustion symptoms are returning: you feel dizzy, your pulse is rapid, and the bird is visibly distressed. You still have only 0.2 L of water, and the house remains near 100 °F. EMS is still on standby, but you have no fuel left for any fans. You must decide how to protect yourself and the bird while obtaining more water and a cooler environment.",
+      "critical_alerts": [],
+      "suggested_actions": [
+        "Store an additional gallon of water in a cool, sealed container for emergencies.",
+        "Keep a battery‑powered fan and extra ice packs in a waterproof bag for use when power is unavailable."
+      ],
+      "response_options": [
+        "I put on my shoes, grab the wet sheet, and walk to the nearby neighbor’s air‑conditioned home for immediate cooling, carrying the bird in a small carrier and hoping the short trek won’t worsen my dizziness.",
+        "I call the neighbor and ask them to bring a small cooler with ice and another bottle of water, then stay inside and continue the evaporative cooling while I wait for the delivery.",
+        "I call EMS again, explain that my symptoms are worsening and request a rapid medical assistance team to come to my house with additional cooling equipment and water.",
+        "I use the remaining wet sheet to create a makeshift tent over a shaded corner of the yard, sit under it with the bird, and try to stay out of direct sun while I ration the last water."
+      ],
+      "scenario_status": "ongoing"
+    }
+  ],
+  "responses": [
+    "I move Person 3 and the bird to the coolest part of the house, turn off all non‑essential devices, and use a battery‑powered fan on low speed while I call a neighbor to ask if I can use their air‑conditioned space.",
+    "I drive the car to the nearest community cooling center, taking Person 3, the bird, and the essential medication, and leave the house unattended while I monitor the power station remotely via phone.",
+    "I ask the cooling center staff if they have a spare fan I can borrow and bring it back to the house, then return home immediately with Person 3, the bird, and the medication, planning to use the fan on a car battery inverter to keep the house cooler for a short period.",
+    "I use wet towels and ice packs on Person 3’s skin while waiting for the neighbor’s generator, and conserve the car battery by not using the inverter further.",
+    "I quickly move the generator to a covered, elevated spot (like under the carport) to keep it dry, continue running it to power the medical device, and place a wet towel on Person 3’s forehead while we wait for the rain to pass.",
+    "I decide to leave the house now, using the car despite its low battery, and drive to a neighbor’s house that has power, hoping to get more water and a working AC unit, even though the driveway is still wet.",
+    "I stay inside, set up a small battery‑powered fan using the car battery (while monitoring its charge), and continue to apply wet towels and sip water, hoping the generator can keep the medical device on until help arrives.",
+    "I ask the neighbor to bring a small cooler with ice and an extra bottle of water, keep Person 3 in the shade with wet towels, and monitor the carbon‑monoxide detector while waiting for EMS.",
+    "I hand the spare oxygen tank to the EMS crew, help them place Person 3 on the stretcher, keep the generator running outdoors as they direct, and stay nearby to monitor the CO detector.",
+    "I turn off the generator to eliminate any CO risk, use the cooling blankets on Person 3’s body after EMS departs, and try to keep the house cooler by opening windows and hoping the dead car battery can still power a fan, while I call a neighbor for more water.",
+    "I stay inside, close the windows, use wet towels on my skin, ration the remaining water, and wait for the neighbor’s bottle of water to arrive, hoping the humidity will lessen as the evening cools.",
+    "I call 911 to request a wellness check and ask for additional assistance, explaining my worsening heat‑exhaustion symptoms and the lack of water.",
+    "I stay inside and let the EMS crew set up a portable fan outside, using the last of the generator fuel while I continue applying wet towels and sipping water.",
+    "I drape a wet sheet over an open window, creating an evaporative cooler, and ration the remaining water while I stay inside.",
+    ""
+  ]
+}

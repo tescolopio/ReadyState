@@ -1,80 +1,92 @@
 /**
- * Scores the judge's verdicts against the manual labels, keeping missed
- * defects and rejected accurate text apart, by type, so overall agreement
- * can't hide either.
+ * Scores validated judgments against the manual labels. Missed defects,
+ * rejected accurate text, unclear verdicts and invalid results are kept apart,
+ * by type, so overall agreement can't hide any of them. Detection (was a
+ * defect flagged at all) is reported apart from classification (contradicted
+ * versus unsupported).
  */
 import { ALL_CASES } from "./cases";
-import type { Judgment } from "./judge";
+import type { ValidatedClaim } from "./judge";
 import { LABELS, type Verdict } from "./labels";
 
-const CAUGHT: Verdict[] = ["contradicted", "unsupported"];
-
-export type Outcome = "caught" | "missed" | "accepted" | "false positive" | "unclear" | "no verdict" | "ambiguous";
+export type Outcome = "detected" | "missed" | "accepted" | "false positive" | "unclear" | "invalid" | "ambiguous";
 
 export interface ScoredCase {
   id: string;
-  split: string;
+  set: string;
+  household: string;
   kind: string;
   type: string;
-  basis: string;
   expected?: Verdict;
   verdict?: Verdict;
-  exact: boolean;
   outcome: Outcome;
-  basisMatches?: boolean;
-  forecastFlagged?: boolean;
+  /** For a detected defect: whether contradicted versus unsupported matches the label. */
+  classifiedCorrectly?: boolean;
+  /** For a mixed claim the judge didn't support: whether an assertion it didn't support carries the false detail. */
+  falseDetailFlagged?: boolean;
+  invalid: string[];
+  boundaryViolations: string[];
   explanation?: string;
-  evidence?: string[];
 }
 
-export function score(judgments: Judgment[]): ScoredCase[] {
-  const verdicts = new Map(judgments.flatMap((judgment) => judgment.verdicts).map((verdict) => [verdict.id, verdict]));
-  return ALL_CASES.map(({ id, split }) => {
+const words = (text: string) => text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+
+export function score(validated: ValidatedClaim[]): ScoredCase[] {
+  const byId = new Map(validated.map((claim) => [claim.id, claim]));
+  return ALL_CASES.map(({ id, set, household }) => {
     const label = LABELS[id];
-    const given = verdicts.get(id);
-    const verdict = given?.verdict;
+    const result = byId.get(id);
+    const verdict = result?.verdict;
     let outcome: Outcome;
     if (label.kind === "ambiguous") outcome = "ambiguous";
-    else if (!verdict) outcome = "no verdict";
+    else if (!result || result.invalid.length || !verdict) outcome = "invalid";
     else if (verdict === "unclear") outcome = "unclear";
-    else if (label.kind === "defect") outcome = CAUGHT.includes(verdict) ? "caught" : "missed";
+    else if (label.kind === "defect") outcome = verdict === "supported" ? "missed" : "detected";
     else outcome = verdict === "supported" ? "accepted" : "false positive";
+
+    let falseDetailFlagged: boolean | undefined;
+    if (label.falseDetail && result?.judged && verdict && verdict !== "supported") {
+      const detail = words(label.falseDetail);
+      falseDetailFlagged = result.judged.assertions.some((assertion) => {
+        if (assertion.verdict === "supported") return false;
+        const text = new Set(words(assertion.text));
+        return detail.filter((word) => text.has(word)).length >= Math.ceil(detail.length / 2);
+      });
+    }
     return {
       id,
-      split,
+      set,
+      household,
       kind: label.kind,
       type: label.type,
-      basis: label.basis,
       expected: label.label,
       verdict,
-      exact: Boolean(verdict && verdict === label.label),
       outcome,
-      basisMatches: given ? given.basis === label.basis : undefined,
-      forecastFlagged: label.forecast ? given?.involves_forecast : undefined,
-      explanation: given?.explanation,
-      evidence: given?.evidence,
+      classifiedCorrectly: outcome === "detected" ? verdict === label.label : undefined,
+      falseDetailFlagged,
+      invalid: result?.invalid ?? ["no result"],
+      boundaryViolations: result?.boundaryViolations ?? [],
+      explanation: result?.judged?.explanation,
     };
   });
 }
 
-export function summarize(scored: ScoredCase[]) {
-  const count = (outcome: Outcome, split?: string) => scored.filter((c) => c.outcome === outcome && (!split || c.split === split)).length;
+export function summarize(scored: ScoredCase[], set?: string) {
+  const cases = set ? scored.filter((c) => c.set === set) : scored;
+  const of = (outcome: Outcome) => cases.filter((c) => c.outcome === outcome);
   return {
-    defects: scored.filter((c) => c.kind === "defect").length,
-    caught: count("caught"),
-    missed: scored.filter((c) => c.outcome === "missed"),
-    accurate: scored.filter((c) => c.kind === "accurate").length,
-    accepted: count("accepted"),
-    falsePositives: scored.filter((c) => c.outcome === "false positive"),
-    unclear: scored.filter((c) => c.outcome === "unclear"),
-    noVerdict: scored.filter((c) => c.outcome === "no verdict"),
-    ambiguous: scored.filter((c) => c.outcome === "ambiguous"),
-    exact: scored.filter((c) => c.exact).length,
-    bySplit: Object.fromEntries(
-      ["tuning", "reserved"].map((split) => [
-        split,
-        { caught: count("caught", split), missed: count("missed", split), accepted: count("accepted", split), falsePositives: count("false positive", split), unclear: count("unclear", split) },
-      ]),
-    ),
+    cases: cases.length,
+    defects: cases.filter((c) => c.kind === "defect").length,
+    detected: of("detected"),
+    misclassified: of("detected").filter((c) => !c.classifiedCorrectly),
+    missed: of("missed"),
+    accurate: cases.filter((c) => c.kind === "accurate").length,
+    accepted: of("accepted"),
+    falsePositives: of("false positive"),
+    unclear: of("unclear"),
+    invalid: of("invalid"),
+    ambiguous: of("ambiguous"),
+    mixed: cases.filter((c) => c.type.startsWith("mixed")),
+    boundaryViolations: cases.filter((c) => c.boundaryViolations.length),
   };
 }

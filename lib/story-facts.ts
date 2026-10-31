@@ -7,8 +7,10 @@
  * 2026-10-31).
  *
  * It supports accuracy but doesn't verify it: the model can still contradict
- * the note, and the checks don't compare a debrief against it. Manual review
- * stays the accuracy gate until the model judge (G11).
+ * the note, and the checks don't compare a debrief against it. Factual
+ * accuracy is judged by manual review in the eval; in the running app, nothing
+ * beyond the implemented checks protects it, since publication doesn't wait
+ * for a reviewer (G11).
  */
 import type { IntroducedItem } from "@/lib/continuity";
 import type { TurnOutput } from "@/lib/ttx";

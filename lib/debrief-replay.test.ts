@@ -3,8 +3,9 @@
  * server's fallback with the real baseline and turns. Each expected failure
  * was confirmed in the manual reviews in docs/testing/eval-2026-10-28.md, so
  * a new failure here is a false positive until a reading shows otherwise.
- * `knownMisses` are defects the reviews found that no check covers; they are
- * the reason manual review stays the accuracy gate (G11).
+ * `knownMisses` are defects the reviews found that no check covers. In the
+ * eval only manual review catches them; in the running app nothing does,
+ * since publication doesn't wait for a reviewer (G11).
  *
  * The variations reword each defect without changing its meaning, so the
  * checks are shown to cover the defect and not only the captured phrase.
