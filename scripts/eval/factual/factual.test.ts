@@ -32,6 +32,12 @@ describe("the G11 case set", () => {
     for (const kind of ["defect", "accurate", "ambiguous"]) expect(kinds).toContain(kind);
   });
 
+  it("names a false detail for every development defect, found in its claim (reserved labels stay as fixed)", () => {
+    for (const { id, claim } of ALL_CASES.filter((c) => c.set === "development" && LABELS[c.id].kind === "defect")) {
+      expect(claim.toLowerCase(), id).toContain(LABELS[id].falseDetail!.toLowerCase());
+    }
+  });
+
   it("includes mixed reserved claims, each naming its one false detail, which appears in the claim", () => {
     const mixed = ALL_CASES.filter((c) => c.set === "reserved" && LABELS[c.id].type.startsWith("mixed"));
     expect(mixed.length).toBeGreaterThanOrEqual(5);

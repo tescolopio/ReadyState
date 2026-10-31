@@ -13,6 +13,7 @@
  * it; a failed call counts at its full allowance, since its usage isn't
  * reported.
  */
+import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -68,6 +69,7 @@ describe.skipIf(!ENABLED)("G11 factual-consistency judge, eval only", () => {
     const model = typeof resolved.model === "string" ? resolved.model : wrapLanguageModel({ model: resolved.model, middleware: counting });
     const modelId = typeof resolved.model === "string" ? resolved.model : resolved.model.modelId;
 
+    const started = Date.now();
     const runs: BatchRun[] = [];
     const skipped: string[] = [];
     let spent = 0;
@@ -96,7 +98,7 @@ describe.skipIf(!ENABLED)("G11 factual-consistency judge, eval only", () => {
     const usage = runs.reduce((total, run) => ({ input: total.input + run.usage.inputTokens, output: total.output + run.usage.outputTokens }), { input: 0, output: 0 });
 
     mkdirSync(outDir, { recursive: true });
-    const meta = { model: `${resolved.provider}/${modelId}`, set: SET, budget: BUDGET, spent, usage, providerCalls, skipped };
+    const meta = { model: `${resolved.provider}/${modelId}`, set: SET, budget: BUDGET, spent, usage, providerCalls, skipped, elapsedMs: Date.now() - started, revision: revision() };
     writeFileSync(path.join(outDir, "factual-judge.json"), JSON.stringify({ ...meta, runs, validated, notes, scored }, null, 2));
     writeFileSync(path.join(outDir, "factual-judge.md"), report(meta, runs, scored, notes as { batch: string; result: NoteCheckResult }[], batches));
     console.log(`Factual judge report written to ${path.resolve(outDir)}`);
@@ -104,11 +106,21 @@ describe.skipIf(!ENABLED)("G11 factual-consistency judge, eval only", () => {
   });
 });
 
+function revision() {
+  try {
+    const commit = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+    const dirty = execSync("git status --porcelain", { encoding: "utf8" }).trim() !== "";
+    return `${commit}${dirty ? " (uncommitted changes)" : ""}`;
+  } catch {
+    return "unknown";
+  }
+}
+
 const cell = (text = "") => text.replace(/\|/g, "\\|").replace(/\s+/g, " ");
 const ids = (cases: ScoredCase[]) => (cases.length ? cases.map((c) => `${c.id} (${c.type})`).join("; ") : "none");
 
 function report(
-  meta: { model: string; set: string; spent: number; usage: { input: number; output: number }; providerCalls: number; skipped: string[] },
+  meta: { model: string; set: string; spent: number; usage: { input: number; output: number }; providerCalls: number; skipped: string[]; elapsedMs: number; revision: string },
   runs: BatchRun[],
   scored: ScoredCase[],
   notes: { batch: string; result: NoteCheckResult }[],
@@ -118,7 +130,7 @@ function report(
   return [
     "# G11 factual-consistency judge (eval only)",
     "",
-    `Model ${meta.model}, set ${meta.set}. ${runs.length} judge call(s), ${meta.providerCalls} provider call(s) including SDK retries; ${meta.usage.input} input / ${meta.usage.output} output tokens (${meta.spent} counted against the budget).`,
+    `Model ${meta.model}, set ${meta.set}, code ${meta.revision}. ${runs.length} judge call(s), ${meta.providerCalls} provider call(s) including SDK retries; ${meta.usage.input} input / ${meta.usage.output} output tokens (${meta.spent} counted against the budget); ${Math.round(meta.elapsedMs / 1000)} s elapsed.`,
     ...(meta.skipped.length ? ["", "**Skipped for the budget:**", ...meta.skipped.map((s) => `- ${s}`)] : []),
     "",
     "| Call | Attempt | Result | Input | Output | ms | Provider calls |",
@@ -130,9 +142,13 @@ function report(
       return [
         `## ${set}`,
         "",
+        `**Overall, with invalid results counted as failures:** defects detected on the correct detail ${s.completion.defectsOnDetail}; accurate texts accepted ${s.completion.accurateAccepted}; valid results ${s.completion.validResults}.`,
+        "",
         "| Result | Count | Cases |",
         "| --- | --- | --- |",
         `| Defects detected | ${s.detected.length} of ${s.defects} | ${ids(s.detected)} |`,
+        `| …on the correct detail | ${s.detectedOnDetail.length} | ${ids(s.detectedOnDetail)} |`,
+        `| …on a different detail | ${s.detectedOnOtherDetail.length} | ${ids(s.detectedOnOtherDetail)} |`,
         `| …of which misclassified (contradicted vs unsupported) | ${s.misclassified.length} | ${ids(s.misclassified)} |`,
         `| Missed defects (judged supported) | ${s.missed.length} | ${ids(s.missed)} |`,
         `| Accurate text accepted | ${s.accepted.length} of ${s.accurate} | ${ids(s.accepted)} |`,
@@ -141,6 +157,7 @@ function report(
         `| Invalid results (contract broken) | ${s.invalid.length} | ${ids(s.invalid)} |`,
         `| Boundary violations (counted as unsupported) | ${s.boundaryViolations.length} | ${ids(s.boundaryViolations)} |`,
         `| Mixed claims: false detail flagged | ${s.mixed.filter((c) => c.falseDetailFlagged).length} of ${s.mixed.length} | ${s.mixed.map((c) => `${c.id}: ${c.falseDetailFlagged ?? c.outcome}`).join("; ")} |`,
+        `| Invalid reasons | ${s.invalid.reduce((n, c) => n + c.invalid.length, 0)} | ${s.invalid.map((c) => `${c.id}: ${c.invalid.join("; ")}`).join(" / ") || "none"} |`,
         `| Ambiguous (not scored) | ${s.ambiguous.length} | ${s.ambiguous.map((c) => `${c.id}: ${c.verdict ?? "invalid"}`).join("; ")} |`,
         "",
       ];

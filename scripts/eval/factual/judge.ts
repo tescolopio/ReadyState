@@ -90,6 +90,7 @@ Rules:
 - A forecast ("will be restored in about six hours", "could run out within two hours") is not an event. Never treat a forecast as having happened.
 - The participant's actions are only what their responses say. Story events and other people's actions are not the participant's.
 - For story claims, judge by the log, not the note.
+- Missing evidence is unknown. Some hours' outcomes are omitted, and the log doesn't record everything: the absence of a line never shows that something didn't happen, so it can't make an assertion contradicted.
 - Quote each claim exactly.`;
 
 interface HouseholdEvidence {

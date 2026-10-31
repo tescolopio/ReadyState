@@ -87,6 +87,15 @@ export function summarize(scored: ScoredCase[], set?: string) {
     invalid: of("invalid"),
     ambiguous: of("ambiguous"),
     mixed: cases.filter((c) => c.type.startsWith("mixed")),
+    /** Detected with the false detail among the assertions the judge didn't support (every defect names one). */
+    detectedOnDetail: of("detected").filter((c) => c.falseDetailFlagged !== false),
+    detectedOnOtherDetail: of("detected").filter((c) => c.falseDetailFlagged === false),
+    /** Invalid results count as failures in these, so leaving them out can't inflate accuracy. */
+    completion: {
+      defectsOnDetail: `${of("detected").filter((c) => c.falseDetailFlagged !== false).length} of ${cases.filter((c) => c.kind === "defect").length}`,
+      accurateAccepted: `${of("accepted").length} of ${cases.filter((c) => c.kind === "accurate").length}`,
+      validResults: `${cases.filter((c) => c.outcome !== "invalid" && c.kind !== "ambiguous").length} of ${cases.filter((c) => c.kind !== "ambiguous").length} labeled`,
+    },
     boundaryViolations: cases.filter((c) => c.boundaryViolations.length),
   };
 }
