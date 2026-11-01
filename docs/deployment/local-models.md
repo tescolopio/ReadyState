@@ -319,6 +319,116 @@ Synthetic artifacts are in the gitignored
 the installed CLI and downloaded model remain available for a separately
 authorized follow-up. No paid/cloud model calls were made.
 
-This hardware/model configuration did **not** pass the short ReadyState test.
+Installation succeeded, but the cold-start exercise failed.
+`gpt-oss:20b` on this machine is **not yet validated for ReadyState's
+55-second request budget**. Zero delivered turns provide no evidence about
+response quality or debrief behavior.
 Warm-call performance, structured output, exercise quality, debrief delivery,
 network-restricted operation and Linux inference remain unverified.
+
+## Proposed bounded warm-start test (not authorized or executed)
+
+Investigate the installed model before downloading another one. This proposal
+does not authorize loading or inference. Keep it separate from PR #25; the
+cold-start result does not block the private Vercel trial, and neither path is
+fully validated.
+
+### Scope and deadlines
+
+Use the same local model ID, runtime, 16,384 context and synthetic Alex
+baseline. Do not change ReadyState's 55-second model-work budget, prompts,
+reasoning settings or tool schema. Record the exact ReadyState revision.
+Build preparation is separate and involves no model calls.
+
+Proposed maximum automated runtime: **300 seconds**, measured from starting
+the isolated helpers through cleanup. Every phase has a hard wall-clock cap:
+
+| Phase | Maximum | Stop condition |
+| --- | --- | --- |
+| Start helpers and verify configuration | 20 s | Wrong provider/model, cloud enabled, unexpected keys, occupied test port or unhealthy helper |
+| Load the model separately | 180 s | Timeout, error, unexpected generated output, or unavailable model |
+| Submit one opening turn and consume its complete stream | 60 s | Client deadline; ReadyState still stops model work at 55 s |
+| Unload, verify and stop helpers | 20 s | Record unload failure and terminate only test-owned processes |
+| Scheduling/teardown reserve | 20 s | Global watchdog enforces the 300 s cap |
+
+Unused phase time is not transferred to extend another phase. If loading
+fails, do not submit the opening turn. Manual reading of already captured
+synthetic output can occur afterward, with all model processes stopped.
+
+### Load measurement, separate from the exercise
+
+Start only the test-owned Ollama service on its isolated loopback port, with
+cloud disabled and one parallel request. Confirm the model is initially
+absent from that service's `/api/ps`; leave other Ollama instances untouched.
+
+Make exactly one empty-prompt preload request to Ollama's `/api/generate`,
+with `model: "gpt-oss:20b"`, `stream: false`, `keep_alive: "5m"` and
+`options: { num_ctx: 16384 }`. Omit conversation text. Empty-prompt preload
+is documented in the [Ollama FAQ](https://docs.ollama.com/faq).
+It still consumes local compute and requires explicit authorization.
+
+Measure wall time using a monotonic clock. Record returned `load_duration`
+and `total_duration` separately, converting nanoseconds to milliseconds;
+missing fields are unknown, not zero. Verify completion, empty generated
+text and the loaded model/context using `/api/ps`. Record CPU/GPU placement
+and available memory. Do not equate HTTP readiness with a loaded model.
+
+The opening request may still reload/reconfigure the model. Check its
+runtime logs and any available metrics for that; if it does, label the run
+as containing additional load work, not a pure warm-generation measurement.
+
+### One opening turn; no automatic resubmission
+
+Do **not** use `npm run eval` or `sendWithRetries` for this test. That harness
+can resubmit after limits or incomplete turns. Do not use the browser's
+retry button, send a second opening turn, or request a debrief.
+
+Use a one-shot client to POST a single masked Alex baseline to ReadyState's
+`/api/ttx`, consuming the full UI-message stream with a 60-second deadline.
+HTTP 200 alone is not success: the stream may contain an error.
+
+ReadyState also has server-side schema retries and AI SDK retry behavior.
+One HTTP submission therefore does **not** guarantee one model attempt.
+Before execution, prepare a test-only loopback forwarding guard between
+ReadyState and Ollama that:
+
+- Allows exactly one `/v1/chat/completions` request to reach Ollama, with
+  identical request content and streaming semantics.
+- Rejects every subsequent inference request immediately, without forwarding
+  it, and counts blocked attempts without logging prompts or credentials.
+- Applies bounded upstream cancellation when the client disconnects or the
+  deadline expires.
+
+The guard requires no production retry changes. Its forwarding, second-call
+rejection and cancellation must be tested using a synthetic upstream before
+any model loading. The preload and unload requests go directly to the
+isolated Ollama service and are distinct from the one inference allowance.
+If the guard cannot enforce these limits, do not run the test.
+Any attempted internal retry is recorded as a retry-blocked failure, not
+silently permitted or reported as retry-free success.
+
+### Evidence and cleanup
+
+Record preload wall time, opening-request wall time through stream completion,
+forwarded/blocked inference counts, errors/timeouts and available token/load
+metrics. Validate the final `generate_turn` output against ReadyState's actual
+schema: baseline feedback, Hour 0, ongoing status, narrative, inject and
+response options. Retain the complete synthetic output for manual review.
+
+Review the opening narrative, options and alerts for usefulness, household
+fit, invented equipment, factual contradictions and unsafe advice. If no
+valid output arrives, record quality as **not assessed**. No debrief is in
+scope, so its behavior remains unverified regardless of the opening result.
+
+In a `finally` cleanup, cancel any outstanding inference, make one empty
+request with `keep_alive: 0` to unload the model, and verify absence from
+the isolated `/api/ps`. Stop the test-owned ReadyState, guard and Ollama
+process trees. If graceful unloading fails, record it and terminate only
+those test-owned processes before the global deadline. Leave the installed
+model files and unrelated services untouched.
+
+Even a valid, useful opening within 55 seconds establishes only a warm-start
+opening on this configuration. Before recommending it, document and verify
+the repeatable preload/startup procedure, memory requirements, readiness
+checks and failure messaging. Multi-turn behavior, cold startup handling,
+debrief quality, Linux and remaining browser coverage stay unverified.
