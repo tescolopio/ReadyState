@@ -87,6 +87,13 @@ sh ./start.sh                       # portable
 sh ./install.sh                     # ~/.local/share/ReadyState
 ```
 
+For first-time household setup, use **Set up my household** or open
+`/household?setup=1` on your local server, then choose a scenario. Directly
+opening an empty `/household` can currently leave the wizard after the first
+saved answer; use explicit setup or **Edit household** to finish it.
+See the [merged-main walkthrough](packaging-review.md) for exact tested archives,
+no-call verification and remaining platform/runtime-notice limitations.
+
 Installed shortcuts open a terminal with the server and your normal browser.
 Closing/stopping that terminal stops the server; it is not an always-on service.
 Browser-opening failures print the URL to open manually.
@@ -114,6 +121,9 @@ Windows: run `.\uninstall.ps1` to remove its shortcut, or
 `.\uninstall.ps1 -RemoveInstallation` to remove the known package files too.
 Linux: `sh ./uninstall.sh` removes its own shortcut and prints the specific
 installation directory to remove manually after stopping the server.
+Before manual Linux removal, inspect the directory and preserve configuration or
+unrelated files you added. Remove only the package's named files if the directory
+contains anything else; do not blindly delete its parent or a shared directory.
 Uninstalling does **not** clear your browser household/settings/plan storage.
 
 Do not install into a subdirectory of the extracted package itself. The

@@ -1,8 +1,10 @@
 # Native/WASM redistribution component record
 
 Assessment date: 2026-11-01. This is an engineering evidence record, **not binary
-redistribution clearance**. PR #26 remains draft. Archive validation continues,
-but CI uploads only source manifests/checksums while these questions are open.
+redistribution clearance**. PR #26 is merged as infrastructure with publication
+disabled. New merged-main builds exclude this image stack; CI uploads only source
+manifests/checksums. The unresolved record applies to older Sharp-containing
+copies, which remain excluded from distribution.
 
 ## Current scope: unused image stack excluded at build time
 
@@ -24,8 +26,9 @@ Local Windows, Ubuntu 24.04 under WSL, and Docker Desktop Linux builds have been
 inspected without Sharp, libvips or their WASM platform packages. The no-call
 smoke checks that static SVG still serves and `/_next/image` returns 404 instead
 of invoking a missing processor, in addition to pages/assets and shutdown.
-The package/Docker inspector fails if the excluded stack reappears. Remote
-archive validation must pass at the new source revision too.
+The package/Docker inspector fails if the excluded stack reappears. Merged-main
+Windows/Ubuntu archive and Docker CI passed; see the exact artifact walkthrough
+and remaining runtime notices in [packaging review](packaging-review.md).
 
 **The record below is historical for prior Sharp-containing candidates.**
 Their source/relinking/attribution questions are not declared solved; those
