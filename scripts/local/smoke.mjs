@@ -4,7 +4,8 @@ import { createServer } from "node:net";
 import path from "node:path";
 import { checkPort } from "./launch.mjs";
 import { inspectPackage } from "./inspect.mjs";
-import { existsSync, readFileSync } from "node:fs";
+import { verifyNotices } from "./notices.mjs";
+import { existsSync } from "node:fs";
 
 const source = process.argv[2] === "--source";
 const directory = path.resolve(process.argv[source ? 3 : 2] ?? "");
@@ -15,12 +16,7 @@ if (!source) {
   inspectPackage(directory);
   assert.ok(existsSync(path.join(directory, "LICENSE")));
   assert.ok(existsSync(path.join(directory, "runtime", "LICENSE")));
-  const notices = JSON.parse(readFileSync(path.join(directory, "app", "THIRD-PARTY.json"), "utf8"));
-  assert.ok(notices.length > 0, "Missing dependency notice inventory");
-  for (const item of notices) {
-    assert.ok(item.notices.length > 0, `Missing reviewed notice for ${item.name}`);
-    for (const file of item.notices) assert.ok(existsSync(path.join(directory, "app", "node_modules", item.path, file)), file);
-  }
+  verifyNotices(path.join(directory, "app"));
   for (const file of ["inter-OFL.txt", "source-sans-3-OFL.txt", "source-serif-4-OFL.txt"]) {
     assert.ok(existsSync(path.join(directory, "app", "public", "licenses", file)), file);
   }

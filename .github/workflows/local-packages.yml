@@ -31,7 +31,7 @@ jobs:
           node-version: 24.13.0
           cache: npm
       - run: npm ci
-      - run: npm test -- scripts/local/launch.test.ts scripts/local/inspect.test.ts scripts/local/install.test.ts
+      - run: npm test -- scripts/local/launch.test.ts scripts/local/inspect.test.ts scripts/local/install.test.ts scripts/local/notices.test.ts
       - run: npm run build
       - name: Verify native source startup
         shell: pwsh
