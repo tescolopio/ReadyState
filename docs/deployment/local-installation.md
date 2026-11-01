@@ -87,10 +87,13 @@ sh ./start.sh                       # portable
 sh ./install.sh                     # ~/.local/share/ReadyState
 ```
 
-For first-time household setup, use **Set up my household** or open
-`/household?setup=1` on your local server, then choose a scenario. Directly
-opening an empty `/household` can currently leave the wizard after the first
-saved answer; use explicit setup or **Edit household** to finish it.
+For first-time household setup, open `/household` directly or use **Set up my
+household**, then choose a scenario. Setup remains open while answers are saved,
+until completion or **Close household setup**. Existing households open in
+details; **Edit household** or `/household?setup=1` starts editing.
+Older `b4f1289` builds needed explicit setup to avoid leaving the wizard after
+the first saved answer; #28 fixed this. The historical walkthrough below is
+still an explicit-setup pass, not a retroactive direct-entry pass.
 See the [merged-main walkthrough](packaging-review.md) for exact tested archives,
 no-call verification and remaining platform/runtime-notice limitations.
 

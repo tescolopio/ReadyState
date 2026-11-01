@@ -13,6 +13,64 @@ only. Binary publishing stays disabled. Historical Sharp-containing artifacts
 remain excluded from distribution. The record below identifies the merged-main
 builds and separates current obligations from those historical findings.
 
+## Historical candidates and specific release requirements (after #27 / #28)
+
+PR #28 and the documentation corrections in #27 were merged after final direct
+review found no actionable issues. Final merged source is
+`9a9b70977e4cdeda3b5b5357298eb8a2b63497a1`.
+[Main application/Docker CI](https://github.com/tescolopio/ReadyState/actions/runs/41337427020),
+[Windows/Ubuntu archive CI](https://github.com/tescolopio/ReadyState/actions/runs/41337427080)
+and [CodeQL](https://github.com/tescolopio/ReadyState/actions/runs/41337426762)
+passed at that revision. Only manifest/checksum metadata was uploaded (558/552
+bytes), not candidate binaries.
+
+Windows and Ubuntu 24.04 under WSL candidates were rebuilt from clean isolated
+checkouts with Node 24.13.0, extracted and inspected. Each passed the six-page,
+72-asset, static SVG, disabled optimizer, key-free configuration, port-conflict
+and shutdown/port-release smoke. Their manifests identify this exact source,
+`uncommittedChanges: false` and `developmentPreview: true`.
+Local candidate SHA-256 values (distinct from independently rebuilt CI archives):
+
+```text
+99e39224a887f469c43d47ec404026d8be09aba5178e5398c56fc03a320b6c5a  ReadyState-0.1.0-windows-x64.zip
+bc97ea427e088bc8c75537912ec8a5caf88b717d950f477a54c9768a3a43e6e2  ReadyState-0.1.0-linux-x64.tar.gz
+```
+
+The lockfile-only follow-up did not repeat the earlier 16 guarded browser
+checks. Keep the Windows junction test's one 20-second PowerShell timeout and
+successful failed-job retry in the #28 evidence. No budgets were changed;
+investigate runner/test reliability separately if the timeout recurs.
+No model calls, model downloads or Vercel changes were made for these post-merge steps.
+
+### Short notice assessment
+
+| Classification | Specific requirement and evidence | Closure |
+| --- | --- | --- |
+| **Confirmed native release blocker: missing bundled-app attribution** | Zustand 5.0.16 is used by household/settings/privacy stores and its persist middleware appears in both extracted candidates' `app/.next/static/chunks/2-96u7egm68h3.js`. Its upstream MIT license requires retention of its copyright/permission notice. Neither candidate contains `Copyright (c) 2019 Paul Henschel`; Zustand is absent from their `app/THIRD-PARTY.json`. Generic MIT text for other packages does not substitute for this copyright attribution. | Include Zustand's exact upstream license/copyright in the distributed application notices. Correct the notice collector's scope for dependencies compiled into client/server application bundles, not only traced `node_modules`; verify emitted application dependencies' applicable license/NOTICE materials in rebuilt archives. Do not treat the existing 61-record inventory as complete coverage of bundled app code. |
+| **Release-time source delivery condition, not a demonstrated missing-license defect** | The candidate manifests identify the exact public source revision; source, lockfile and build/install instructions are available. No release has been published, so no violated source-delivery obligation is asserted. | When a release is separately authorized, make matching source and build instructions available with that release and record the source/archive identifiers. A different source revision or generic `main` link must not replace the candidate's exact source. |
+| **Conditional Docker publication prerequisite, not a native-archive blocker** | These rebuilt candidates are native ZIP/tar.gz files. Existing Docker runtime CI does not record a published image's immutable digest and base-OS notice/source delivery record. | Only if distributing a container, identify the exact image/base digest and preserve the applicable Node/Alpine notices and any required source delivery. Do not block native archives merely because that separate container record is not prepared. |
+
+The confirmed omission arose because the collector at `9a9b709`
+walked only the traced
+`node_modules` tree; [package assembly](../../scripts/local/package.mjs) then
+copies the compiled static files without collecting their dependency notices.
+This is a specific packaging-scope gap, not a request to reopen the removed
+Sharp/libvips assessment.
+
+**Informational, not release prohibitions by themselves:** both candidates still
+have 61 traced-package notice records, all recorded notice files present,
+49 Next-vendored records without constituent version metadata, and busboy with
+missing license/version metadata but an included MIT license text. Unknown
+versions are provenance limitations; missing metadata is not missing license
+materials. Next.js 16.4.3 is known. The bundled exact Node license and three font
+OFL texts are present. No missing Node/font license file was identified.
+These observations do not establish that every bundled-app notice is present:
+the concrete Zustand omission above disproves that broader claim.
+
+Binary publication remains disabled until the confirmed attribution gap is
+closed and release-time conditions/authorization are met. Old Sharp-containing
+archives remain excluded. Platform/model/desktop limits below remain qualified.
+
 ## Bundled application attribution follow-up
 
 The original collector inventoried traced server packages only. The separate
@@ -30,7 +88,11 @@ covered by server traces reuse their existing notice directory. The inventory
 records both scopes, installed versions, relative notice directories and SHA-256
 hashes. Build and extracted-archive checks independently resolve the installed
 application closure and reject missing records, altered license bytes or omitted
-NOTICE files. Docker applies the same checks to its assembled app payload.
+NOTICE files. Expected installed and supplemental materials are derived from
+their version-matched sources, independently of inventory hashes, including
+the Next env/root fallback and additional supplemental notices. Ten regression
+tests cover this behavior. Docker applies the same checks to its assembled app
+payload.
 
 This closes the collector's omission of Zustand's installed-version MIT license
 and `Copyright (c) 2019 Paul Henschel` in new builds only. Other direct application
@@ -41,13 +103,13 @@ commits supply the checked-in Vercel Apache attribution supplements. Sources are
 recorded in `scripts/local/license-supplements.json`; whitespace-only line-ending
 normalization in the checked-in supplements does not change their license text.
 
-The historical artifacts and findings below are not retroactively corrected.
+The historical artifacts and findings in this document are not retroactively corrected.
 Publication remains disabled pending review, merge and verification of final
 merged-main artifacts, followed by an explicit release decision. Metadata-only
 CI uploads remain unchanged. No browser walkthrough, model calls, downloads or
 Vercel changes are needed for this notice-only fix.
 
-## Merged-main installation walkthrough (2026-11-01)
+## Historical merged-main installation walkthrough (2026-11-01, before #28)
 
 PR #26 merged as `b4f12899a52a76c66f40e84197424649bbe66af4`.
 The final PR head `69a53ad45a73344a8db5f77b43cecb889c35723b` had passing
