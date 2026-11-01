@@ -177,6 +177,12 @@ Masking ledgers and the active exercise are memory-only.
 
 ## Building and validating packages
 
+The app serves static images as-is; Next's image optimizer is intentionally
+disabled. Supported build-trace exclusions omit its unused Sharp/native/WASM
+dependencies. Package inspection rejects their return, and smokes require
+static SVG to serve while `/_next/image` returns 404. Do not introduce optimizer
+consumers without revisiting configuration, tests and redistribution review.
+
 Build on each target OS with Node 24, using its native dependency installation.
 Set `READYSTATE_NODE_LICENSE` to the `LICENSE` from the **exact Node release**
 whose executable is running the packaging command. The package copies that

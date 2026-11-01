@@ -57,6 +57,10 @@ try {
   assert.equal(config.mode, "self-hosted");
   assert.ok(config.providers.length > 0);
   assert.ok(config.providers.filter(provider => provider.requiresKey).every(provider => !provider.serverConfigured));
+  const image = await request(`${base}/file.svg`);
+  assert.equal(image.status, 200, "Static images must still be served");
+  assert.match(image.headers.get("content-type") ?? "", /image\/svg\+xml/);
+  assert.equal((await request(`${base}/_next/image?url=%2Ffile.svg&w=640&q=75`)).status, 404, "Disabled optimizer must not load Sharp");
   let assets = 0;
   for (const route of ["/", "/journal", "/household", "/settings", "/exercises", "/plan"]) {
     const response = await request(`${base}${route}`);
@@ -83,7 +87,7 @@ try {
   assert.equal(status, 1, "Second instance must fail visibly");
   assert.match(errors, /Cannot use localhost/);
   passed = true;
-  console.log(`PASS: ${process.platform} ${source ? "source standalone" : "relocated package"}; 6 pages, ${assets} asset GETs, key-free config, port conflict. No /api/ttx requests.`);
+  console.log(`PASS: ${process.platform} ${source ? "source standalone" : "relocated package"}; 6 pages, ${assets} asset GETs, static SVG, disabled optimizer, key-free config, port conflict. No /api/ttx requests.`);
 } finally {
   if (!exited && child.connected) child.send("stop");
   const status = await ending;

@@ -12,6 +12,9 @@ export function inspectPackage(directory, forbiddenValues = []) {
       const relative = path.relative(directory, full);
       const info = lstatSync(full);
       if (info.isSymbolicLink()) throw new Error(`Package link: ${relative}`);
+      if (/^(?:sharp(?:-|$)|libvips)/i.test(entry)) {
+        throw new Error(`Unused image-processing dependency returned: ${relative}. Review image configuration and redistribution before packaging.`);
+      }
       if (forbiddenNames.test(entry) || /\.(?:pem|key|log|test\.[cm]?[jt]sx?)$/i.test(entry)) {
         throw new Error(`Forbidden package path: ${relative}`);
       }

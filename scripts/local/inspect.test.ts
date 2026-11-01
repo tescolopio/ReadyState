@@ -26,6 +26,15 @@ describe("extracted package inspection", () => {
       }
     } finally { rmSync(root, { recursive: true }); }
   });
+  it("fails when the disabled native or WASM image stack returns", () => {
+    for (const name of ["sharp", "sharp-win32-x64", "sharp-libvips-linux-x64", "sharp-wasm32", "libvips-cpp.so"]) {
+      const root = mkdtempSync(path.join(tmpdir(), "readystate-content-"));
+      try {
+        mkdirSync(path.join(root, name));
+        expect(() => inspectPackage(root)).toThrow("Unused image-processing dependency returned");
+      } finally { rmSync(root, { recursive: true }); }
+    }
+  });
   it("rejects credential signatures but permits empty configuration examples", () => {
     const root = mkdtempSync(path.join(tmpdir(), "readystate-content-"));
     try {

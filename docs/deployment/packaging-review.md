@@ -1,5 +1,17 @@
 # Local packaging review
 
+## Current image-processing scope
+
+The app has no Sharp or `next/image` consumer. A supported configuration now
+disables image optimization and uses documented, narrow build trace exclusions
+for the unused Sharp/platform dependency stack. Local Windows, WSL Ubuntu and
+Docker builds exclude native/WASM image processors; static SVG and disabled
+optimizer checks validate the intended behavior without deleting traced files.
+See [scope and historical component record](binary-components.md).
+Remote new-head archive CI and config review remain required; binary publishing
+stays disabled. Historical Sharp-containing artifacts are not cleared by this
+change.
+
 ## Source and S2
 
 The packaging branch starts at `979b58f1f00ba775b0da93fc32b2c302c6896433`,

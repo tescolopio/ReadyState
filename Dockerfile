@@ -11,7 +11,8 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build && node scripts/local/notices.mjs .next/standalone/node_modules
+RUN npm run build && node scripts/local/notices.mjs .next/standalone/node_modules \
+    && node scripts/local/inspect.mjs .next/standalone
 
 FROM node:24-alpine AS runtime
 WORKDIR /app

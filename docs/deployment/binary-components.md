@@ -4,6 +4,38 @@ Assessment date: 2026-11-01. This is an engineering evidence record, **not binar
 redistribution clearance**. PR #26 remains draft. Archive validation continues,
 but CI uploads only source manifests/checksums while these questions are open.
 
+## Current scope: unused image stack excluded at build time
+
+ReadyState does not import `next/image`, call Sharp or implement image-processing
+routes. Its existing static assets do not need the image optimizer. The installed
+Next.js guides document both `images.unoptimized: true` (serve images as-is) and
+`outputFileTracingExcludes` (exclude unused files from build traces).
+`next.config.ts` now uses both: disabling optimization alone still traced Sharp;
+the narrow Sharp/`@img/sharp*` exclusions remove its unused native/WASM stack from
+the standalone build. No dependency is deleted after tracing or archive assembly.
+
+The global trace key also covers Next's base-server trace; the installed
+`collect-build-traces.js` matches exclusion keys against `next-server` as well as
+route traces. This is necessary because only excluding page routes leaves the
+base-server optimizer dependencies. Glob patterns use `/` as required by the
+Next guide, including on Windows.
+
+Local Windows, Ubuntu 24.04 under WSL, and Docker Desktop Linux builds have been
+inspected without Sharp, libvips or their WASM platform packages. The no-call
+smoke checks that static SVG still serves and `/_next/image` returns 404 instead
+of invoking a missing processor, in addition to pages/assets and shutdown.
+The package/Docker inspector fails if the excluded stack reappears. Remote
+archive validation must pass at the new source revision too.
+
+**The record below is historical for prior Sharp-containing candidates.**
+Their source/relinking/attribution questions are not declared solved; those
+copies remain uncleared. For image-stack-free new candidates the requirement is
+verified absence, not expanded review of components that are not redistributed.
+Binary uploads remain disabled. No general license clearance for Node, fonts,
+other dependencies or Docker base OS is implied.
+If future features need image processing, remove exclusions only after reviewing
+the consumer, restoring required dependencies, and resolving redistribution.
+
 ## Evidence and interpretation
 
 The component versions below are observed in the published packages'
