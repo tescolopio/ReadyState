@@ -55,6 +55,17 @@ retained separately.
 | Uninstall | `-RemoveInstallation` removed named package files and retained unrelated sentinel file | Uninstaller removed only its owned shortcut; manual removal of specifically named package files retained unrelated sentinel |
 | Browser data after removal | Exact saved household/settings still readable at the same origin, using intercepted offline HTML, not a running app | Same storage-only check |
 
+Linux removal was two separate actions:
+
+1. `uninstall.sh` verified its installation marker, removed the desktop entry
+   only when its `Exec` line matched this installation, and printed the path
+   for manual removal. It did **not** delete any application files.
+2. After stopping the server, the tester manually removed only `app`, `runtime`,
+   `launch.mjs`, `start.sh`, `install.sh`, `uninstall.sh`, `LICENSE`,
+   `configuration.example`, `INSTALL.md`, `packaging-review.md`,
+   `binary-components.md` and `release.json`. The installation directory and
+   unrelated sentinel file remained. No automatic full Linux removal is claimed.
+
 The browser pane could not connect (CDP timeout); the walkthrough therefore
 used a separate headless installed Microsoft Edge with isolated persistent
 profiles. It drove the real installed application's UI, not injected household
@@ -91,7 +102,15 @@ included; its package metadata does not provide a version or license field.
 Forty-nine Next-vendored records lack version metadata. Their containing
 Next.js 16.4.3 release is known; independent constituent revision mapping is
 not established by this inventory. Do not invent versions or describe that
-provenance gap as fully cleared.
+provenance gap as fully cleared. Unknown constituent versions are metadata/
+provenance gaps, **not by themselves evidence that distribution is prohibited**.
+
+All 61 recorded packages have their recorded license materials in these
+artifacts; no missing recorded notice file was found. Busboy's absent license
+field is an inventory-metadata issue, not an absent license text. These checks
+do not establish whether every embedded constituent is covered. Distinguish
+that scope limitation from a demonstrated missing notice or unmet obligation:
+none is asserted solely from an unknown version.
 
 The exact Node 24.13.0 license, including third-party notices, is bundled at
 `runtime/LICENSE`. ReadyState's AGPL-3.0-only text is at `LICENSE`; corresponding
@@ -108,6 +127,13 @@ with qualified help where needed. File presence and passing CI are engineering
 evidence, not blanket legal clearance. Docker has additional Node/Alpine base-OS
 notice and provenance obligations; merged-main Docker CI is runtime evidence,
 not a published, pinned-digest container redistribution assessment.
+
+The specific release work still needed is to confirm the required attribution
+set for the actual bundled constituents, arrange any applicable matching-source
+delivery and build instructions, and record a pinned container/base-OS notice
+assessment if a Docker image will be published. Version mapping supports that
+review; it is not an automatic legal veto. Binary publication remains disabled
+pending resolution of these requirements and separate release authorization.
 
 Do not reopen the removed image-stack assessment unless the absence guard
 fails or a new consumer needs those components. Old Sharp-containing copies
