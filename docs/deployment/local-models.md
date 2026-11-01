@@ -287,7 +287,38 @@ a release gate or a runtime safety guarantee.
 - [ReadyState deployment modes](../architecture/deployment-modes.md)
 - [ReadyState live evals](../../scripts/eval/README.md)
 
-Status: documentation checked against provider resolution and eval settings;
-no Ollama download, installation, inference or local-model certification has
-been performed for this guide. Windows/Linux model quality and performance
-remain unverified.
+## First Windows test: 2026-11-01
+
+An explicitly authorized, bounded Alex test was attempted on Windows 11 with
+64 GB RAM and an RTX A3000 Laptop GPU (6 GB VRAM). The official standalone
+Ollama 0.40.13 binary had a valid Authenticode signature. It ran on a separate
+loopback port, with cloud disabled, 16,384 context and one parallel request.
+An existing Ollama 0.17.7 service on the usual port was left unchanged.
+
+Model: `gpt-oss:20b`, ID `f38aa0c53da5`, 20.9B parameters, MXFP4; approximately
+13 GB as reported by `ollama list`. `ollama ps` reported approximately 14 GB
+loaded and 73%/27% CPU/GPU placement. The model's advertised 131,072 context is
+distinct from the configured 16,384 runtime context.
+
+ReadyState revision: `bc04e1e` (documentation branch based on main, not PR #25).
+An isolated production server was checked for Ollama selection and unset
+cloud-provider keys before running only Alex with `EVAL_TURNS=3`.
+
+**Result: failed on the first, cold-start request after 55,075 ms.** ReadyState
+reported its model-budget timeout. Zero turns were delivered; there was no
+debrief. The run stopped without additional inference or a larger budget.
+CPU offloading was observed, but this run does not isolate loading time from
+generation time or establish which was responsible for the timeout.
+
+Token counts and provider-call counters were unavailable. The harness's
+summary zeroes and green content categories are not evidence of throughput,
+safety, structure or quality when no turn was delivered.
+
+Synthetic artifacts are in the gitignored
+`eval-results/2026-11-01T13-23-18-026Z/` directory. Test servers were stopped;
+the installed CLI and downloaded model remain available for a separately
+authorized follow-up. No paid/cloud model calls were made.
+
+This hardware/model configuration did **not** pass the short ReadyState test.
+Warm-call performance, structured output, exercise quality, debrief delivery,
+network-restricted operation and Linux inference remain unverified.
