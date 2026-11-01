@@ -48,11 +48,11 @@ type Step = (typeof STEPS)[number];
 
 const WHY: Record<Step, string> = {
   People:
- "Ages shape what can go wrong and who can help. Names are optional and never leave this device; the scenario sees “older adult”, not a name.",
+ "Ages shape what can go wrong and who can help. Names are optional and are replaced before anything is sent; the scenario sees “older adult”, not a name.",
   Pets: "Pets need food, water and a plan: many shelters don't accept them, and stressed animals bolt.",
   Home: "Heating, water and power decide how a storm or outage plays out. A general region (like a state) is enough: never enter an address.",
  "Health needs":
- "Describe what a need demands, not a diagnosis. Medication and device names stay on this device; the scenario sees only the constraint, such as “refrigerated medication, 14 days on hand”.",
+ "Describe what a need demands, not a diagnosis. Medication and device names aren't sent with your household; the scenario sees only the constraint, such as “refrigerated medication, 14 days on hand”.",
   Supplies: "What you already have changes which problems you face. Skip anything you're unsure of: it stays unknown, not assumed.",
   Review:
  "The inventory check compares what you have with Ready.gov and CDC guidance. Its gaps go into the exercise, so you can practice handling them. Below that is exactly what the scenario engine receives.",

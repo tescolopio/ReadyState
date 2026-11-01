@@ -340,7 +340,10 @@ export default function ExercisePage() {
             Privacy: what stays on this device
           </summary>
           <div className="space-y-3 px-4 pb-4">
-            <p className="text-sm text-ink-2">Only these tags are sent; the real values never leave your browser.</p>
+            <p className="text-sm text-ink-2">
+              These values were sent as their tags. Masking catches your household&apos;s names and common patterns such as
+              addresses and phone numbers; it can miss other details you type.
+            </p>
             {Object.keys(entityMap).length === 0 ? (
               <p className="text-sm text-ink-3">Nothing masked yet.</p>
             ) : (

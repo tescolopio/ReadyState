@@ -66,7 +66,16 @@ Further reading:
 3. **Exercise complete** – after `TARGET_DURATION_HOURS` (72) in-game hours. There's no win or lose: setbacks are things to respond to, and feedback on each response says what you covered, what to consider and why it matters.
 4. **Debrief** – what you need to know about your situation, what you can do better, and what went well. No grade.
 
-Real names and places never leave the browser: only the masked text is sent to `/api/ttx`, and tags are restored client-side before rendering.
+### Privacy: masking, not anonymization
+
+Before anything is sent to `/api/ttx`, the browser replaces the names in your household profile, names you add in Settings, and detected addresses, phone numbers, email addresses, ZIP codes and URLs with tags such as `[Person 1]`. Tags are restored in the browser before rendering. Your profile stays in this browser's storage; its real values aren't sent.
+
+What masking doesn't do:
+
+- **Your circumstances are sent.** The model provider receives the household's ages, functional needs (such as "refrigerated medication"), pets, home, supplies and region, and your responses with identifiers masked.
+- **Detection in free text can miss things.** A name that isn't in your profile or Settings, or an identifier in an unusual format, can get through. Leave out anything you wouldn't want a provider to see.
+- **Running ReadyState locally doesn't make the AI local.** Your masked text goes to the provider you choose. Only a local model (Ollama) keeps it on your machine.
+- **Server logs** record only a failed call's status, error kind and code, and which debrief checks failed, never prompts, responses or keys. A host such as Vercel keeps its own request logs.
 
 ## License
 

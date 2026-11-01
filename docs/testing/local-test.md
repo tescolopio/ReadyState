@@ -78,6 +78,47 @@ Use Chrome, Firefox and Safari (or Edge) at least once each before a release (wo
 
 - A reload loses the exercise in progress (F3); the household, action plan and settings are kept.
 
-## 3. Report what you find
+## 3. Scenarios to run
+
+### Available now
+
+**Exercises** lists nine emergencies, plus **Surprise me**, which picks one that fits your region and season. Each runs 72 in-game hours and ends with a debrief.
+
+To run one:
+1. Open **My household → Set up my household**, choose **Load a test household (fictional)**, and save. Or enter your own made-up household.
+2. Open **Exercises** and start a scenario. Its household is whichever one you saved.
+
+Every response is a model call. A full exercise is usually a dozen or more responses, plus the debrief. Late turns use about 6,000 tokens each, so Groq's free 200,000-token daily limit covers roughly two full exercises a day.
+
+**Coverage differs by scenario:**
+- **Checklists:** power outage, winter storm and heat wave have a checklist of what good responses cover, which grounds the feedback. Hurricane uses parts of it. The other scenarios rely on the general rules and official guidance only.
+- **Test households:** they cover six of the nine. Flood, tornado and boil-water notice have none and weren't part of earlier evaluations.
+
+| Scenario | Suggested test household | Watch for |
+| --- | --- | --- |
+| Extended power outage | Alex (beginner, apartment) | Basic, encouraging advice; safe light (no candles left alone); fridge kept closed; no indoor generator or grill. |
+| Winter storm | Sam (family, gas furnace that needs power, large dog) | Never heating with a gas stove, grill or generator indoors; one warm room; pipes; the child with asthma; the dog. |
+| Heat wave | Priya (caregiver; oxygen concentrator; older adult on stairs) | Power for the concentrator; heat risk for the older adult; cooling options if the power fails; medication storage. |
+| Hurricane | Morgan (generator neighbours rely on) or Charlotte (inland, two Great Danes, CPAP) | Generator outdoors and away from windows; leaving early versus staying; helping others without overextending; battery runtime for the CPAP. |
+| Wildfire and smoke | Jordan (well prepared, two horses) | Leaving early with the horses; indoor air; being challenged rather than congratulated. |
+| Earthquake | The privacy test household (personal details in free-text notes) | No re-entry after a gas leak; first minutes, then utilities and aftershocks. Also check masking: none of its names, phone number or address appear in the request payload. |
+| Flood | Sam or Alex | Not driving or walking through floodwater; when to leave; utilities. Not evaluated before: note anything wrong. |
+| Tornado | Sam or Charlotte | Where to shelter with minutes to act; what comes after. Not evaluated before. |
+| Water contamination (boil-water notice) | Priya or Sam | Water for drinking, cooking, hygiene and pets; boiling or alternatives. Not evaluated before. |
+| Surprise me | The minimal household (one adult, everything else skipped) | The engine treats skipped details as unknown and finds out through the story, rather than assuming. |
+
+For every scenario, also run the **Exercise loop** checks above, and report any unsafe advice as a release blocker.
+
+### Planned, not built
+
+These are designed in [Scenario sets and severity](../product/scenario-sets.md) and the [Scenario catalog](../product/scenario-catalog.md) but aren't in the app:
+
+- scenario sets (everyday, regional, rare but real, fictional) and severity levels 1–4;
+- variants, such as the type of water advisory or flood;
+- a starting situation shown before the first decision;
+- the "When the systems turn" pilot storyline;
+- exercises longer than 72 hours.
+
+## 4. Report what you find
 
 Open a GitHub issue with the browser, the steps, what you expected and what happened. Include the masked text, never real details.

@@ -85,14 +85,10 @@ export function providerErrorDetails(error: unknown): { code?: string; failedGen
   }
 }
 
-/**
- * A provider failure's status and kind, without any of its text, for eval
- * logs: the raw text can carry account or organization details.
- */
-export function failureSummary(error: unknown): string {
-  const failure = providerFailure(error);
-  if (!failure) return error instanceof Error ? error.name : "unknown error";
-  const kind = isSchemaSlip(error)
+type FailureKind = "malformed tool call" | "rate limit" | "request too large" | "context too long" | "other";
+
+const failureKind = (error: unknown, failure: ProviderFailure): FailureKind =>
+  isSchemaSlip(error)
     ? "malformed tool call"
     : failure.status === 429
       ? "rate limit"
@@ -101,7 +97,39 @@ export function failureSummary(error: unknown): string {
         : /context length|maximum context/i.test(failure.text)
           ? "context too long"
           : "other";
-  return `status ${failure.status ?? "unknown"}, ${kind}`;
+
+/**
+ * A provider failure's status and kind, without any of its text, for eval
+ * logs: the raw text can carry account or organization details.
+ */
+export function failureSummary(error: unknown): string {
+  const failure = providerFailure(error);
+  if (!failure) return error instanceof Error ? error.name : "unknown error";
+  return `status ${failure.status ?? "unknown"}, ${failureKind(error, failure)}`;
+}
+
+/** A provider's error code, such as "rate_limit_exceeded", only when it looks like one. */
+const ERROR_CODE = /^[A-Za-z0-9_.-]{1,64}$/;
+
+/**
+ * What the server logs about a failed model call: allowlisted fields only.
+ * The error object itself must never be logged. The SDK's errors carry the
+ * request body (the masked briefing and the participant's responses), the
+ * provider's raw response (account and organization details) and, for some
+ * providers, the request URL and headers.
+ */
+export function errorDiagnostics(error: unknown): { error: string; status?: number; kind?: FailureKind; code?: string; timedOut?: true } {
+  const name = error instanceof Error || error instanceof DOMException ? error.name : typeof error;
+  if (timedOut(error)) return { error: name, timedOut: true };
+  const failure = providerFailure(error);
+  if (!failure) return { error: name };
+  const code = providerErrorDetails(error).code ?? (StreamProviderError.isInstance(error) && error.code !== undefined ? String(error.code) : undefined);
+  return {
+    error: name,
+    status: failure.status,
+    kind: failureKind(error, failure),
+    ...(code && ERROR_CODE.test(code) ? { code } : {}),
+  };
 }
 
 /**

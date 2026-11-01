@@ -3,7 +3,8 @@ import { create } from "zustand";
 /**
  * Client-side privacy ledger. Maps obfuscation tags (e.g. `[Person 1]`) to the
  * real values they replace. Intentionally kept in memory only (no `persist`
- * middleware) so real identities never leave the browser tab.
+ * middleware). Only the tags are sent, never the real values they stand for.
+ * Masking can still miss identifiers it doesn't recognize.
  */
 interface PrivacyState {
   /** tag -> real value, e.g. `{ "[Person 1]": "Jane Doe" }` */
