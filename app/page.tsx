@@ -115,8 +115,9 @@ export default function HomePage() {
               </p>
               <p className="flex gap-2 text-ink-2">
                 <ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-success" aria-hidden />
-                Names, medication names and addresses stay on your device. The scenario engine sees only what the exercise
-                needs, and you can read exactly what it receives before you start.
+                Names, medication names and addresses from your setup are replaced before anything is sent. The scenario
+                engine sees your household&apos;s circumstances, and you can read exactly what it receives before you start.
+                Masking can miss details you type, so leave out anything you wouldn&apos;t share.
               </p>
             </div>
             <figure className="rounded-panel border border-line bg-canvas p-5">

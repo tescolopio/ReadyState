@@ -22,7 +22,7 @@ import { getHostedServices, type HostedAccount } from "@/lib/hosted";
 import { reportBudgetTimeout } from "@/lib/budget-timeout";
 import { exerciseHours } from "@/lib/exercise-clock";
 import { EvalBudgetExhausted, evalBudgetEnabled, evalCallBudget, inputBound, type EvalCallBudget } from "@/lib/eval-call-budget";
-import { describeProviderError, isSchemaSlip, providerStatus } from "@/lib/provider-errors";
+import { describeProviderError, errorDiagnostics, isSchemaSlip, providerStatus } from "@/lib/provider-errors";
 import { providerSettingsSchema, resolveModel, type ResolvedModel } from "@/lib/providers";
 import { safetyPrompt } from "@/lib/rules";
 import {
@@ -197,6 +197,9 @@ const DEBRIEF_STILL_FAILING =
 const DEBRIEF_NO_TIME =
   "The debrief needed a repair, but there wasn't time before the server's limit, so it isn't shown. Request the debrief again in a minute.";
 
+/** Which checks failed and where, for server logs. A problem's text quotes the debrief, so it isn't logged. */
+const checkNames = (problems: DebriefProblem[]) => problems.map(({ category, check, field }) => ({ category, check, field }));
+
 type DebriefOutcome = (
   | { report: AfterActionReport; failedFirst: DebriefProblem[]; omitted?: OmittedImprovement }
   | { error: string; failedFirst: DebriefProblem[]; stillFailing?: DebriefProblem[] }
@@ -285,7 +288,7 @@ async function generateCheckedDebrief({
   const failedFirst = first.failedChecks;
   if (!failedFirst.length) return { report: first.report, failedFirst, capture };
 
-  console.warn("[ttx] debrief failed checks", failedFirst.map((p) => p.problem));
+  console.warn("[ttx] debrief failed checks", checkNames(failedFirst));
   if (budget.remainingMs() < MIN_REPAIR_BUDGET_MS) return { error: DEBRIEF_NO_TIME, failedFirst, capture };
 
   counts.debriefRepairs++;
@@ -301,7 +304,7 @@ async function generateCheckedDebrief({
     return { report: fallback.report, failedFirst, omitted, capture: { ...capture, omitted: { ...omitted, stillFailing, report: fallback.report } } };
   }
   if (stillFailing.length) {
-    console.warn("[ttx] repaired debrief still failed checks", stillFailing.map((p) => p.problem));
+    console.warn("[ttx] repaired debrief still failed checks", checkNames(stillFailing));
     return { error: DEBRIEF_STILL_FAILING, failedFirst, stillFailing, capture };
   }
   return { report: repaired.report, failedFirst, capture };
@@ -413,7 +416,7 @@ export async function POST(req: Request) {
   const onModelError = (error: unknown) => {
     // The SDK may wrap the refusal in a RetryError, so the stop recorded before it is what counts.
     if (counts.budgetStop) return new EvalBudgetExhausted(counts.budgetStop.needed, counts.budgetStop.remaining).message;
-    console.error("[ttx] model call failed", error);
+    console.error("[ttx] model call failed", errorDiagnostics(error));
     return describeProviderError(error, mode);
   };
   /** A failed response still reports its provider calls, so a budgeted eval charges what was spent. */
