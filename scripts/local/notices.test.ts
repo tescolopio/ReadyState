@@ -1,5 +1,6 @@
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { copyNotices, verifyNotices } from "./notices.mjs";
@@ -32,6 +33,32 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true }));
 
 describe("bundled application notices", () => {
+  it.each([
+    { name: "@ai-sdk/provider-utils", version: "5.0.59", license: "Apache-2.0", file: "LICENSE.upstream.txt" },
+    { name: "@next/env", version: "16.4.3", license: "MIT", file: "LICENSE.upstream.txt" },
+    { name: "@img/sharp-libvips-linux-x64", version: "1.3.4", license: "LGPL-3.0-or-later", file: "sharp-libvips-NOTICES.md" },
+  ])("checks $name supplemental attribution against its source, not just its inventory hash", ({ name, version, license, file }) => {
+    const directory = dependency(name);
+    writeFileSync(path.join(directory, "package.json"), JSON.stringify({ name, version, license }));
+    rmSync(path.join(directory, "LICENSE"));
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ dependencies: { [name]: version } }));
+    if (name === "@next/env") {
+      const next = dependency("next");
+      writeFileSync(path.join(next, "package.json"), JSON.stringify({ name: "next", version, license }));
+      writeFileSync(path.join(next, "license.md"), "Exact Next root attribution");
+    }
+    const records = copyNotices(path.join(app, "node_modules"), root);
+    const record = records.find(item => item.name === name)!;
+    const shipped = path.join(app, record.noticeDirectory, file);
+    writeFileSync(shipped, "Unrelated replacement text");
+    record.noticeHashes[file] = createHash("sha256").update(readFileSync(shipped)).digest("hex");
+    writeFileSync(path.join(app, "THIRD-PARTY.json"), JSON.stringify(records));
+    expect(() => verifyNotices(app, root)).toThrow(`Installed-version attribution mismatch: ${name}/${file}`);
+    record.notices = record.notices.filter((notice: string) => notice !== file);
+    delete record.noticeHashes[file];
+    writeFileSync(path.join(app, "THIRD-PARTY.json"), JSON.stringify(records));
+    expect(() => verifyNotices(app, root)).toThrow();
+  });
   it("includes installed-version client and transitive licenses without copying dependency code or dev dependencies", () => {
     const records = copyNotices(path.join(app, "node_modules"), root);
     const client = records.find(record => record.name === "zustand");

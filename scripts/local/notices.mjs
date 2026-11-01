@@ -6,6 +6,36 @@ import { fileURLToPath } from "node:url";
 const readJson = file => JSON.parse(readFileSync(file, "utf8"));
 const portable = value => value.split(path.sep).join("/");
 const digest = file => createHash("sha256").update(readFileSync(file)).digest("hex");
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const supplements = readJson(path.join(scriptDirectory, "license-supplements.json"));
+
+function noticeMaterials(original, source, metadata) {
+  const materials = readdirSync(original, { withFileTypes: true }).filter(entry =>
+    entry.isFile() && /^(licen[cs]e|notice|copying|copyright)([.-].*)?$/i.test(entry.name))
+    .map(entry => ({ name: entry.name, source: path.join(original, entry.name) }));
+  const supplement = supplements.find(item => item.name === metadata.name &&
+    item.version === (metadata.version ?? null) && item.license === metadata.license);
+  let noticeSource = "installed dependency";
+  if (!materials.length) {
+    let upstream;
+    if (metadata.name === "@next/env") {
+      const next = readJson(path.join(source, "next", "package.json"));
+      if (next.version !== metadata.version || next.license !== metadata.license) throw new Error("Next env/root license version mismatch.");
+      upstream = path.join(source, "next", "license.md");
+      noticeSource = `https://github.com/vercel/next.js/blob/v${next.version}/license.md`;
+    } else if (supplement) {
+      upstream = path.join(scriptDirectory, "licenses", supplement.file);
+      noticeSource = supplement.source;
+    } else {
+      throw new Error(`Unreviewed missing license notice: ${metadata.name ?? original}@${metadata.version ?? "unknown"}`);
+    }
+    materials.push({ name: "LICENSE.upstream.txt", source: upstream });
+  }
+  for (const file of supplement?.additionalFiles ?? []) {
+    materials.push({ name: file, source: path.join(scriptDirectory, "licenses", file) });
+  }
+  return { materials, noticeSource, supplement };
+}
 
 function applicationDependencies(projectRoot) {
   const found = new Map();
@@ -42,8 +72,6 @@ export function copyNotices(destination, projectRoot = process.cwd()) {
   projectRoot = realpathSync(projectRoot);
   const source = path.join(projectRoot, "node_modules");
   const app = path.dirname(destination);
-  const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
-  const supplements = readJson(path.join(scriptDirectory, "license-supplements.json"));
   const notices = [];
   const originals = new Map();
   const collect = (original, directory, relative, scope) => {
@@ -54,34 +82,11 @@ export function copyNotices(destination, projectRoot = process.cwd()) {
       }
       const metadata = readJson(path.join(original, "package.json"));
       mkdirSync(directory, { recursive: true });
-      const files = readdirSync(original, { withFileTypes: true }).filter(entry =>
-        entry.isFile() && /^(licen[cs]e|notice|copying|copyright)([.-].*)?$/i.test(entry.name));
-      for (const entry of files) cpSync(path.join(original, entry.name), path.join(directory, entry.name));
-      let noticeSource = "installed dependency";
-      let redistributionReview = null;
-      const noticeFiles = files.map(entry => entry.name);
-      const supplement = supplements.find(item => item.name === metadata.name &&
-        item.version === (metadata.version ?? null) && item.license === metadata.license);
-      if (!noticeFiles.length) {
-        if (metadata.name === "@next/env") {
-          const next = readJson(path.join(source, "next", "package.json"));
-          if (next.version !== metadata.version || next.license !== metadata.license) throw new Error("Next env/root license version mismatch.");
-          cpSync(path.join(source, "next", "license.md"), path.join(directory, "LICENSE.upstream.txt"));
-          noticeSource = `https://github.com/vercel/next.js/blob/v${next.version}/license.md`;
-        } else if (supplement) {
-          cpSync(path.join(scriptDirectory, "licenses", supplement.file), path.join(directory, "LICENSE.upstream.txt"));
-          noticeSource = supplement.source;
-        } else {
-          throw new Error(`Unreviewed missing license notice: ${metadata.name ?? relative}@${metadata.version ?? "unknown"}`);
-        }
-        noticeFiles.push("LICENSE.upstream.txt");
-      }
+      const { materials, noticeSource, supplement } = noticeMaterials(original, source, metadata);
+      for (const material of materials) cpSync(material.source, path.join(directory, material.name));
+      const noticeFiles = [...new Set(materials.map(material => material.name))];
+      const redistributionReview = supplement?.redistributionReview ?? null;
       if (supplement?.additionalFiles) {
-        for (const file of supplement.additionalFiles) {
-          cpSync(path.join(scriptDirectory, "licenses", file), path.join(directory, file));
-          noticeFiles.push(file);
-        }
-        redistributionReview = supplement.redistributionReview ?? null;
         if (existsSync(path.join(original, "versions.json"))) cpSync(path.join(original, "versions.json"), path.join(directory, "versions.json"));
       }
       const record = { name: metadata.name ?? relative, version: metadata.version ?? null, license: metadata.license ?? null,
@@ -114,6 +119,7 @@ export function copyNotices(destination, projectRoot = process.cwd()) {
 }
 
 export function verifyNotices(app, projectRoot = process.cwd()) {
+  const source = path.join(realpathSync(projectRoot), "node_modules");
   const inventory = readJson(path.join(app, "THIRD-PARTY.json"));
   if (!inventory.length) throw new Error("Missing dependency notice inventory");
   for (const record of inventory) {
@@ -126,16 +132,23 @@ export function verifyNotices(app, projectRoot = process.cwd()) {
       const full = path.join(directory, file);
       if (!existsSync(full) || digest(full) !== record.noticeHashes?.[file]) throw new Error(`Missing or changed notice: ${record.name}/${file}`);
     }
+    const original = path.resolve(source, record.path);
+    const sourceRelative = path.relative(source, original);
+    if (sourceRelative.startsWith("..") || path.isAbsolute(sourceRelative)) throw new Error(`Notice source escapes node_modules: ${record.name}`);
+    const metadata = readJson(path.join(original, "package.json"));
+    if (record.version !== (metadata.version ?? null) || record.license !== (metadata.license ?? null) ||
+      record.name !== (metadata.name ?? record.path)) throw new Error(`Notice metadata mismatch: ${record.name}`);
+    const { materials } = noticeMaterials(original, source, metadata);
+    for (const material of materials) {
+      if (!record.notices.includes(material.name) || record.noticeHashes[material.name] !== digest(material.source)) {
+        throw new Error(`Installed-version attribution mismatch: ${record.name}/${material.name}`);
+      }
+    }
   }
-  const source = path.join(realpathSync(projectRoot), "node_modules");
   for (const [original, metadata] of applicationDependencies(realpathSync(projectRoot))) {
     const record = inventory.find(item => item.path === portable(path.relative(source, original)) &&
       item.name === metadata.name && item.version === (metadata.version ?? null) && item.scopes?.includes("application-dependency"));
     if (!record) throw new Error(`Missing application dependency attribution: ${metadata.name}@${metadata.version}`);
-    for (const entry of readdirSync(original, { withFileTypes: true }).filter(entry =>
-      entry.isFile() && /^(licen[cs]e|notice|copying|copyright)([.-].*)?$/i.test(entry.name))) {
-      if (!record.notices.includes(entry.name) || record.noticeHashes[entry.name] !== digest(path.join(original, entry.name))) throw new Error(`Installed-version attribution mismatch: ${metadata.name}/${entry.name}`);
-    }
   }
   return inventory;
 }
