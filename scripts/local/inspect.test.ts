@@ -35,4 +35,13 @@ describe("extracted package inspection", () => {
       expect(() => inspectPackage(root)).toThrow("Credential-shaped content");
     } finally { rmSync(root, { recursive: true }); }
   });
+  it("does not confuse embedded SVG mask-size property names with key tokens", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "readystate-content-"));
+    try {
+      writeFileSync(path.join(root, "image.wasm"), `\0mask-size${"unicode".repeat(20)}-bidizfont-variant\0`);
+      expect(inspectPackage(root)).toBe(1);
+      writeFileSync(path.join(root, "image.wasm"), `\0sk-${"a".repeat(48)}\0`);
+      expect(() => inspectPackage(root)).toThrow("Credential-shaped content");
+    } finally { rmSync(root, { recursive: true }); }
+  });
 });

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 export function inspectPackage(directory, forbiddenValues = []) {
   let files = 0;
   const forbiddenNames = /^(?:\.env.*|\.git|\.vercel|eval-results|coverage|\.npmrc|\.netrc|id_rsa|id_ed25519)$/i;
-  const credential = /(?:gsk_[A-Za-z0-9]{40,}|sk-(?:proj-|or-v1-)?[A-Za-z0-9_-]{40,}|AIza[A-Za-z0-9_-]{35}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/;
+  const credential = /(?<![A-Za-z0-9_-])(?:gsk_[A-Za-z0-9]{40,128}|sk-proj-[A-Za-z0-9_-]{40,256}|sk-or-v1-[A-Za-z0-9]{64}|sk-[A-Za-z0-9]{40,128}|AIza[A-Za-z0-9_-]{35})(?![A-Za-z0-9_-])|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/;
   const walk = current => {
     for (const entry of readdirSync(current)) {
       const full = path.join(current, entry);

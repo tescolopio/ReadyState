@@ -33,5 +33,45 @@
     "license": "CC0-1.0",
     "file": "string-hash-README.txt",
     "source": "https://raw.githubusercontent.com/darkskyapp/string-hash/cb38ab492aba198b9658b286bb2391278bb6992b/README.md"
+  },
+  {
+    "name": "@img/sharp-libvips-linux-x64",
+    "version": "1.3.4",
+    "license": "LGPL-3.0-or-later",
+    "file": "LGPL-3.0.txt",
+    "source": "https://www.gnu.org/licenses/lgpl-3.0.txt",
+    "additionalFiles": ["GPL-3.0.txt", "sharp-libvips-NOTICES.md"],
+    "noticeSource": "https://github.com/lovell/sharp-libvips/blob/ebb95f8add54eee8bed840e3fb587e4cbec857d7/THIRD-PARTY-NOTICES.md",
+    "redistributionReview": "Pending binary dependency attribution and corresponding-source/relinking assessment"
+  },
+  {
+    "name": "@img/sharp-libvips-linuxmusl-x64",
+    "version": "1.3.4",
+    "license": "LGPL-3.0-or-later",
+    "file": "LGPL-3.0.txt",
+    "source": "https://www.gnu.org/licenses/lgpl-3.0.txt",
+    "additionalFiles": ["GPL-3.0.txt", "sharp-libvips-NOTICES.md"],
+    "noticeSource": "https://github.com/lovell/sharp-libvips/blob/ebb95f8add54eee8bed840e3fb587e4cbec857d7/THIRD-PARTY-NOTICES.md",
+    "redistributionReview": "Pending binary dependency attribution and corresponding-source/relinking assessment"
+  },
+  {
+    "name": "@img/sharp-win32-x64",
+    "version": "0.35.5",
+    "license": "Apache-2.0 AND LGPL-3.0-or-later",
+    "file": "LGPL-3.0.txt",
+    "source": "https://www.gnu.org/licenses/lgpl-3.0.txt",
+    "additionalFiles": ["LGPL-3.0.txt", "GPL-3.0.txt", "sharp-libvips-NOTICES.md"],
+    "noticeSource": "https://github.com/lovell/sharp-libvips/blob/ebb95f8add54eee8bed840e3fb587e4cbec857d7/THIRD-PARTY-NOTICES.md",
+    "redistributionReview": "Pending binary dependency attribution and corresponding-source/relinking assessment"
+  },
+  {
+    "name": "@img/sharp-wasm32",
+    "version": "0.35.5",
+    "license": "Apache-2.0 AND LGPL-3.0-or-later AND MIT",
+    "file": "LGPL-3.0.txt",
+    "source": "https://www.gnu.org/licenses/lgpl-3.0.txt",
+    "additionalFiles": ["LGPL-3.0.txt", "GPL-3.0.txt", "sharp-libvips-NOTICES.md"],
+    "noticeSource": "https://github.com/lovell/sharp-libvips/blob/ebb95f8add54eee8bed840e3fb587e4cbec857d7/THIRD-PARTY-NOTICES.md",
+    "redistributionReview": "Pending WASM-specific dependency attribution (including resvg/emscripten) and corresponding-source/relinking assessment"
   }
 ]

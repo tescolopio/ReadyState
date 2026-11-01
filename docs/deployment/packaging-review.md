@@ -113,14 +113,39 @@ ReadyState is AGPL-3.0-only; publish corresponding source for the final artifact
 including modifications. License collection and review here are engineering
 checks, not legal advice or a complete binary/SBOM audit.
 
+### Additional findings from remote package CI
+
+The first remote run failed before archive validation. It correctly identified
+two libvips platform packages omitted from the original Windows-only notice
+assessment: `@img/sharp-libvips-linux-x64` and
+`@img/sharp-libvips-linuxmusl-x64` 1.3.4 declare LGPL-3.0-or-later but publish no
+license file. The corresponding native Windows and WASM sharp binaries also
+declare LGPL terms while their shipped root license contains Apache terms only.
+Supplement the full LGPLv3/GPLv3 texts and the exact libvips build release's
+third-party table; retain each binary's `versions.json` and mark its
+`redistributionReview` as pending in the artifact inventory.
+
+**Binary redistribution is not cleared.** The upstream table is not a complete
+set of every constituent copyright notice. Matching binary source, attribution
+for all embedded libraries (including WASM-specific resvg/emscripten), and
+applicable LGPL source/relinking obligations still require assessment before
+release. A passing notice-file/CI check is not legal clearance.
+
+The Windows remote runner also installed sharp's optional WASM artifact.
+An unbounded `sk-` regex falsely matched a substring of its embedded SVG
+`mask-size` property table. The scanner now requires token boundaries and
+provider-shaped lengths; regression tests still reject actual-shaped tokens
+inside binary data and captured secret canaries anywhere in a file.
+
 ## Gates still open
 
 1. Draft PR code review and final Windows/Linux archive CI.
-2. Rebuild from the reviewed clean source revision; publish source and hashes
+2. Binary dependency redistribution/source/attribution review described above.
+3. Rebuild from the reviewed clean source revision; publish source and hashes
    together only with separate release approval.
-3. Independent Linux Engine / clean-machine desktop validation, signing and
+4. Independent Linux Engine / clean-machine desktop validation, signing and
    actual shortcut/browser-opening UX.
-4. Complete exercise/provider behavior, multi-turn/debrief quality and remaining
+5. Complete exercise/provider behavior, multi-turn/debrief quality and remaining
    real-phone/Safari/Firefox coverage.
 
 Vercel remains paused. Ollama remains experimental: **ReadyState runs locally**

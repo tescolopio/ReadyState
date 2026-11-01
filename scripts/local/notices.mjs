@@ -17,10 +17,11 @@ export function copyNotices(destination) {
         entry.isFile() && /^(licen[cs]e|notice|copying|copyright)([.-].*)?$/i.test(entry.name));
       for (const entry of files) cpSync(path.join(original, entry.name), path.join(directory, entry.name));
       let noticeSource = "installed dependency";
+      let redistributionReview = null;
       const noticeFiles = files.map(entry => entry.name);
+      const supplement = supplements.find(item => item.name === metadata.name &&
+        item.version === (metadata.version ?? null) && item.license === metadata.license);
       if (!noticeFiles.length) {
-        const supplement = supplements.find(item => item.name === metadata.name &&
-          item.version === (metadata.version ?? null) && item.license === metadata.license);
         if (metadata.name === "@next/env") {
           const next = JSON.parse(readFileSync(path.join(source, "next", "package.json"), "utf8"));
           if (next.version !== metadata.version || next.license !== metadata.license) throw new Error("Next env/root license version mismatch.");
@@ -34,7 +35,15 @@ export function copyNotices(destination) {
         }
         noticeFiles.push("LICENSE.upstream.txt");
       }
-      notices.push({ name: metadata.name ?? relative, version: metadata.version ?? null, license: metadata.license ?? null, path: relative.split(path.sep).join("/"), notices: noticeFiles, noticeSource });
+      if (supplement?.additionalFiles) {
+        for (const file of supplement.additionalFiles) {
+          cpSync(path.join(scriptDirectory, "licenses", file), path.join(directory, file));
+          noticeFiles.push(file);
+        }
+        redistributionReview = supplement.redistributionReview ?? null;
+        if (existsSync(path.join(original, "versions.json"))) cpSync(path.join(original, "versions.json"), path.join(directory, "versions.json"));
+      }
+      notices.push({ name: metadata.name ?? relative, version: metadata.version ?? null, license: metadata.license ?? null, path: relative.split(path.sep).join("/"), notices: noticeFiles, noticeSource, supplementalNoticeSource: supplement?.noticeSource ?? null, redistributionReview });
     }
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (entry.isDirectory()) walk(path.join(directory, entry.name));
