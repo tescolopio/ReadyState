@@ -1,0 +1,37 @@
+[
+  {
+    "name": "client-only",
+    "version": "0.0.1",
+    "license": "MIT",
+    "file": "react-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/react/react/1d34f91dfde6bba84d08b683aaba164c7194dacb/LICENSE"
+  },
+  {
+    "name": "@edge-runtime/cookies",
+    "version": "6.0.0",
+    "license": "MIT",
+    "file": "edge-cookies-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/vercel/edge-runtime/440c123a37284d6a852ce453af810ad484ecfc01/LICENSE.md"
+  },
+  {
+    "name": "@edge-runtime/primitives",
+    "version": "6.0.0",
+    "license": "MIT",
+    "file": "edge-primitives-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/vercel/edge-runtime/440c123a37284d6a852ce453af810ad484ecfc01/LICENSE.md"
+  },
+  {
+    "name": "@edge-runtime/ponyfill",
+    "version": "4.0.0",
+    "license": "MIT",
+    "file": "edge-ponyfill-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/vercel/edge-runtime/440c123a37284d6a852ce453af810ad484ecfc01/LICENSE.md"
+  },
+  {
+    "name": "string-hash",
+    "version": null,
+    "license": "CC0-1.0",
+    "file": "string-hash-README.txt",
+    "source": "https://raw.githubusercontent.com/darkskyapp/string-hash/cb38ab492aba198b9658b286bb2391278bb6992b/README.md"
+  }
+]

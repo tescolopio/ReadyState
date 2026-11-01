@@ -11,7 +11,7 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+RUN npm run build && node scripts/local/notices.mjs .next/standalone/node_modules
 
 FROM node:24-alpine AS runtime
 WORKDIR /app
@@ -23,6 +23,9 @@ RUN addgroup -S readystate && adduser -S readystate -G readystate
 COPY --from=build --chown=readystate:readystate /app/.next/standalone ./
 COPY --from=build --chown=readystate:readystate /app/.next/static ./.next/static
 COPY --from=build --chown=readystate:readystate /app/public ./public
+COPY --from=build --chown=readystate:readystate /app/LICENSE ./LICENSE
+LABEL org.opencontainers.image.source="https://github.com/tescolopio/ReadyState" \
+    org.opencontainers.image.licenses="AGPL-3.0-only"
 USER readystate
 EXPOSE 3000
 CMD ["node", "server.js"]

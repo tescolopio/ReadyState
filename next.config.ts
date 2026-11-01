@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Self-contained server in .next/standalone for the Docker image (and later
-  // a desktop wrapper). `npm start` is unaffected.
+  // local desktop bundles). The local launcher uses this server directly.
   output: "standalone",
   cacheComponents: true,
   partialPrefetching: true,

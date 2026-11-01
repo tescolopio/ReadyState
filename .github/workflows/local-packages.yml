@@ -1,0 +1,107 @@
+name: Local packages
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Native ${{ matrix.os }} x64 bundle
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      GROQ_API_KEY: synthetic-package-credential-canary-not-a-provider-key
+      READYSTATE_PACKAGE_CANARY: synthetic-development-environment-canary
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.13.0
+          cache: npm
+      - run: npm ci
+      - run: npm test -- scripts/local/launch.test.ts scripts/local/inspect.test.ts
+      - run: npm run build
+      - name: Verify native source startup
+        shell: pwsh
+        run: |
+          node scripts/local/prepare.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/local/smoke.mjs --source .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Assemble native bundle
+        shell: pwsh
+        run: |
+          $license = Join-Path $env:RUNNER_TEMP 'NODE-LICENSE'
+          Invoke-WebRequest https://raw.githubusercontent.com/nodejs/node/v24.13.0/LICENSE -OutFile $license
+          $env:READYSTATE_NODE_LICENSE = $license
+          npm run package:local
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $manifest = Get-Content (Join-Path (Get-ChildItem dist -Directory).FullName 'release.json') -Raw | ConvertFrom-Json
+          if ($manifest.uncommittedChanges) { throw 'CI package must use a clean source tree' }
+          $manifest | ConvertTo-Json | Set-Content dist\BUILD-MANIFEST.json
+      - name: Archive and relocate Windows package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $folder = (Get-ChildItem dist -Directory).Name
+          tar --format zip -cf "dist\$folder.zip" -C dist $folder
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $extract = Join-Path $env:RUNNER_TEMP 'ReadyState extracted'
+          New-Item -ItemType Directory -Path $extract | Out-Null
+          tar -xf "dist\$folder.zip" -C $extract
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $package = Join-Path $extract $folder
+          node scripts\local\inspect.mjs $package
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts\local\smoke.mjs $package
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installed = Join-Path $env:RUNNER_TEMP 'ReadyState installed'
+          & "$package\install.ps1" -Destination $installed
+          node scripts\local\smoke.mjs $installed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$installed\uninstall.ps1" -RemoveInstallation
+          if (Test-Path "$installed\app") { throw 'Uninstall left app files behind' }
+          if (Test-Path (Join-Path ([Environment]::GetFolderPath('Programs')) 'ReadyState.lnk')) { throw 'Uninstall left test shortcut behind' }
+          $hash = (Get-FileHash "dist\$folder.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $folder.zip" | Set-Content dist\SHA256SUMS.txt
+      - name: Archive and relocate Linux package
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -eu
+          folder=$(basename dist/ReadyState-*)
+          tar -czf "dist/$folder.tar.gz" -C dist "$folder"
+          extract="$RUNNER_TEMP/ReadyState extracted"
+          mkdir -p "$extract"
+          tar -xzf "dist/$folder.tar.gz" -C "$extract"
+          node scripts/local/inspect.mjs "$extract/$folder"
+          node scripts/local/smoke.mjs "$extract/$folder"
+          export HOME="$RUNNER_TEMP/ReadyState user"
+          mkdir -p "$HOME"
+          sh "$extract/$folder/install.sh" "$HOME/ReadyState installed"
+          test -f "$HOME/.local/share/applications/readystate.desktop"
+          node scripts/local/smoke.mjs "$HOME/ReadyState installed"
+          sh "$HOME/ReadyState installed/uninstall.sh"
+          test ! -f "$HOME/.local/share/applications/readystate.desktop"
+          (cd dist && sha256sum "$folder.tar.gz" > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReadyState-${{ runner.os }}-x64
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/SHA256SUMS.txt
+            dist/BUILD-MANIFEST.json
+          if-no-files-found: error
