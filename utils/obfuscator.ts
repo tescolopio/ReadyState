@@ -425,6 +425,14 @@ export interface MaskOptions {
   alwaysMask?: MaskTerm[];
   /** Return the masked text without recording anything in the ledger (for previews). */
   dryRun?: boolean;
+  /**
+   * A staged ledger to mask against instead of the privacy store. New tags are
+   * added to it, not to the store, so a reviewed message records its tags only
+   * once it's sent (work item S2).
+   */
+  ledger?: Record<string, string>;
+  /** Apply only explicit masking terms and ledger values, without automatic detection. */
+  explicitOnly?: boolean;
 }
 
 /**
@@ -437,26 +445,28 @@ export interface MaskOptions {
  * messages are masked too, and existing `[...]` tags are preserved.
  */
 export function maskInput(text: string, options: MaskOptions = {}): string {
-  const { entityMap: initialMap, alwaysMask: storedAlwaysMask } = usePrivacyStore.getState();
+  const { entityMap: storedMap, alwaysMask: storedAlwaysMask } = usePrivacyStore.getState();
+  const initialMap = options.ledger ?? storedMap;
   const alwaysMask = options.alwaysMask ?? storedAlwaysMask;
 
   const detected: Detection[] = [
-    ...contactDetectors(text),
-    ...contextDetectors(text),
+    ...(options.explicitOnly ? [] : contactDetectors(text)),
+    ...(options.explicitOnly ? [] : contextDetectors(text)),
     ...alwaysMask.map((term): Detection => (typeof term === "string" ? { value: term, kind: "Person" } : term)),
-    ...nlpDetectors(text),
+    ...(options.explicitOnly ? [] : nlpDetectors(text)),
   ];
   const people = detected.filter((d) => d.kind === "Person").map((d) => cleanEntity(d.value));
-  detected.push(...surnameDetectors(text, people));
+  if (!options.explicitOnly) detected.push(...surnameDetectors(text, people));
   const places = detected.filter((d) => d.kind === "Location").map((d) => cleanEntity(d.value));
-  detected.push(...placeExtensions(text, places));
+  if (!options.explicitOnly) detected.push(...placeExtensions(text, places));
   // Earlier messages' values, so "Priya" stays masked even without context.
   detected.push(
     ...Object.values(initialMap).map((value) => ({ value, kind: "Person" as const })),
   );
 
   // Work on a copy so a dry run (a preview) leaves the real ledger untouched.
-  const ledger = { ...initialMap };
+  const ledger = options.ledger ?? { ...initialMap };
+  const record = !options.dryRun && !options.ledger;
   // Keyed by lowercase value; `exact` is set for a case-sensitive value, which only its own capitalization matches.
   const replacements = new Map<string, { tag: string; exact?: string }>();
   // Case-sensitive values, so the same word from the ledger doesn't come back as a case-insensitive match.
@@ -476,7 +486,7 @@ export function maskInput(text: string, options: MaskOptions = {}): string {
     if (!tag) {
       tag = nextTag(kind, ledger);
       ledger[tag] = realValue;
-      if (!options.dryRun) usePrivacyStore.getState().addMapping(realValue, tag);
+      if (record) usePrivacyStore.getState().addMapping(realValue, tag);
     }
     replacements.set(key, { tag, exact: caseSensitive ? realValue : undefined });
   }

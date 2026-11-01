@@ -64,6 +64,24 @@ Use Chrome, Firefox and Safari (or Edge) at least once each before a release (wo
 - [ ] A household name that is also a common word (for example a person named "Will") hides the name but not the ordinary word ("we will leave").
 - [ ] Add a name under **Settings → Privacy**, use it in a response, and check that it's masked.
 
+### Reviewing what's sent (S2)
+
+- [ ] Starting an exercise opens **Review what leaves this browser** with the complete masked briefing; DevTools → Network shows no `ttx` request yet.
+- [ ] **Back, don't send** returns to the start with nothing sent; for a response, the typed text is still in the box.
+- [ ] **Review before sending** (or Ctrl+Enter) on a response opens its review; the request payload's last message matches the review's text exactly after **Send this**.
+- [ ] Select a word the masker missed, choose **Mask selected text**, and confirm: the review is rebuilt with it tagged. With edits, it warns first.
+- [ ] Delete one bracket of a tag: Send is disabled with an explanation. Deleting a whole tag is fine.
+- [ ] Type a phone number into the review's copy and send: it's masked and shown again before anything goes.
+- [ ] With mocked transport, split an edited phone number across lines: it is masked and shown again. A saved Always Mask change during review also requires another approval; explicitly masking a word in public guidance actually tags it. Unknown placeholder tags are rejected, including tags typed before opening the review.
+- [ ] Double-click **Send this**: one request.
+- [ ] After a failed request, **Send the same message again** resends it unchanged, even after changing Settings.
+- [ ] With an open response review, retry is disabled; cancelling the review enables retry again. Masking a partial word is rejected with an explanation, and a rebuilt review receives keyboard focus without interrupting ordinary textarea edits.
+- [ ] Review and Settings explain that keys go to ReadyState's server for provider authentication, not into conversation text. With a synthetic key and mocked transport, confirm retry credentials are separate from message history.
+- [ ] Before requesting a debrief, the button's description explains that the existing history includes model-generated events and is sent for another model call; no separate editable preview is promised.
+- [ ] On a phone (or a narrow window), the review fits without sideways scrolling and its buttons are easy to tap; with only the keyboard, Tab reaches the copy, Mask, Back and Send.
+
+Mocked browser checks establish transmission behavior only, not real provider responses or debrief quality. Real-phone, Safari and Firefox checks remain outstanding until performed. No-call checks must not use **Send this**, retry or debrief on a provider-connected server; use an isolated mocked transport for transmission assertions.
+
 ### Exercise loop (G8, D8)
 
 - [ ] The first turn shows the situation, with no feedback block.
