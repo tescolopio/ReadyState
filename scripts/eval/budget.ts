@@ -1,9 +1,15 @@
 /**
- * Conservative token accounting for a bounded household eval (work item G6),
- * from each provider call's own usage (TtxMetadata.calls).
+ * Token accounting for a budgeted household eval (work item G6), from each
+ * provider call's own usage (TtxMetadata.calls).
  *
- * One request to /api/ttx can make up to MAX_PROVIDER_CALLS_PER_REQUEST
- * provider calls, every one of which may use tokens:
+ * The server enforces the budget before every provider call
+ * (lib/eval-call-budget.ts): the eval sends what remains of the run's budget
+ * with each request, and the route caps each call's output and refuses any
+ * call whose reserve (a conservative input bound plus that cap) doesn't fit.
+ * So the eval needn't reserve a request's worst case; it charges what each
+ * request spent. Retries are production behavior and unchanged: one request
+ * can still make up to MAX_PROVIDER_CALLS_PER_REQUEST provider calls, each of
+ * which must fit what remains:
  * - 2 attempts: the first, and streamText's one `onError` retry after a
  *   malformed turn mid-stream (for a debrief: the first draft and its repair);
  * - × 3 SDK tries per attempt: the AI SDK's default 2 retries after a rate
@@ -22,23 +28,22 @@ export const reportedTokens = (call: ProviderCallUsage) =>
   call.inputTokens !== undefined && call.outputTokens !== undefined ? call.inputTokens + call.outputTokens : undefined;
 
 /**
- * What a request is charged against the budget: each call's reported usage, or its full allowance when it has none.
- * A request with no per-call metadata (it failed before the server reported any) is charged its worst case.
+ * What a request is charged: each call's reported usage, or, when it has none, the reserve the server enforced for it
+ * (`reserved`), else `unknownCall`. A request without per-call metadata (it failed before the server reported any) is
+ * charged `unknownRequest`: in a budgeted run, everything that was left for it.
  */
-export function chargeRequest(calls: ProviderCallUsage[] | undefined, allowance: number): number {
-  if (!calls) return allowance * MAX_PROVIDER_CALLS_PER_REQUEST;
-  return calls.reduce((sum, call) => sum + (reportedTokens(call) ?? allowance), 0);
+export function chargeRequest(calls: ProviderCallUsage[] | undefined, unknownCall: number, unknownRequest: number): number {
+  if (!calls) return unknownRequest;
+  return calls.reduce((sum, call) => sum + (reportedTokens(call) ?? call.reserved ?? unknownCall), 0);
 }
 
-/** Calls whose reported usage exceeded the allowance: the worst-case bound no longer holds, so the run stops. */
-export const overAllowance = (calls: ProviderCallUsage[] | undefined, allowance: number) =>
-  (calls ?? []).filter((call) => (reportedTokens(call) ?? 0) > allowance);
-
-/** Whether the next request's worst case still fits: checked before every request. */
-export const canStart = (charged: number, budget: number, allowance: number) => charged + allowance * MAX_PROVIDER_CALLS_PER_REQUEST <= budget;
-
 /**
- * The smallest cap that lets all `requests` start when each earlier one used a single call within its allowance:
- * the stop rule needs the last request's full worst case still free.
+ * Calls that reported more than the server enforced: input over its bound, or output over its limit. The budget's
+ * guarantee then no longer holds, so the run stops.
  */
-export const capFor = (requests: number, allowance: number) => (requests - 1) * allowance + allowance * MAX_PROVIDER_CALLS_PER_REQUEST;
+export const overBound = (calls: ProviderCallUsage[] | undefined) =>
+  (calls ?? []).filter(
+    (call) =>
+      (call.inputBound !== undefined && (call.inputTokens ?? 0) > call.inputBound) ||
+      (call.maxOutputTokens !== undefined && (call.outputTokens ?? 0) > call.maxOutputTokens),
+  );

@@ -149,6 +149,12 @@ export interface ProviderCallUsage {
   outputTokens?: number;
   rejected?: boolean;
   status?: number;
+  /** A budgeted eval's conservative bound on this call's input (lib/eval-call-budget.ts). */
+  inputBound?: number;
+  /** The output limit enforced on this call in a budgeted eval. */
+  maxOutputTokens?: number;
+  /** What a budgeted eval reserved before this call: inputBound plus maxOutputTokens. A call without usage is charged all of it. */
+  reserved?: number;
 }
 
 /**
@@ -166,6 +172,8 @@ export interface TtxMetadata {
   providerCalls?: number;
   /** Each provider call's own usage, in order, retries and repairs included. */
   calls?: ProviderCallUsage[];
+  /** A budgeted eval's provider call that wasn't sent because its reserve didn't fit what remained. */
+  budgetStop?: { needed: number; remaining: number };
   /** Retries after a malformed tool call (work item G4). */
   schemaRetries?: number;
   /** Debrief repairs after failed content checks (0 or 1). */

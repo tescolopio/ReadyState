@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AfterActionReport, TtxUIMessage } from "@/lib/ttx";
 
 import { CAPTURE_HEADER } from "@/lib/debrief-capture";
+import { EVAL_BUDGET_HEADER, EVAL_MAX_OUTPUT_HEADER } from "@/lib/eval-call-budget";
 import type { HostedServices } from "@/lib/hosted";
 import { SAFETY_RULES } from "@/lib/rules";
 
@@ -111,6 +112,13 @@ async function lastMessage(res: Response) {
   }
   return last;
 }
+
+/** A budgeted eval's request (lib/eval-call-budget.ts): the run's remaining tokens and the output limit. */
+const budgeted = (remaining: number, maxOutput = 2_000) => ({
+  "content-type": "application/json",
+  [EVAL_BUDGET_HEADER]: String(remaining),
+  [EVAL_MAX_OUTPUT_HEADER]: String(maxOutput),
+});
 
 /** Groq's rejection of a tool call that doesn't match the schema (eval finding 8). */
 const schemaSlipMessage =
@@ -337,6 +345,141 @@ describe("POST /api/ttx", () => {
     expect(body).toContain("The model returned an incomplete turn.");
   });
 
+});
+
+describe("POST /api/ttx in a budgeted eval", () => {
+  beforeEach(() => {
+    env.model = null;
+    env.mode = "self-hosted";
+    env.hosted = null;
+    vi.stubEnv("READYSTATE_EVAL_BUDGET", "1");
+    vi.stubEnv("VERCEL", "");
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  /** What one turn call reserves: its input bound plus the output limit. */
+  const turnReserve = async () => {
+    env.model = mockToolCallModel("generate_turn", turnInput);
+    const last = await lastMessage(await post([userMessage], undefined, budgeted(1_000_000)));
+    return last!.metadata!.calls![0].reserved!;
+  };
+
+  const rateLimited = () =>
+    new APICallError({
+      message: "Rate limit reached on tokens per minute (TPM). Please try again in 1ms.",
+      url: "https://api.groq.com/openai/v1/chat/completions",
+      requestBodyValues: {},
+      statusCode: 429,
+      responseHeaders: { "retry-after-ms": "1" },
+      isRetryable: true,
+    });
+
+  it("caps each call's output and reserves a conservative bound on its input first", async () => {
+    const model = mockToolCallModel("generate_turn", turnInput);
+    env.model = model;
+    const last = await lastMessage(await post([userMessage], undefined, budgeted(1_000_000, 2_500)));
+    expect(model.doStreamCalls[0].maxOutputTokens).toBe(2_500);
+    const [call] = last!.metadata!.calls!;
+    const promptBytes = Buffer.byteLength(JSON.stringify(model.doStreamCalls[0].prompt));
+    expect(call).toMatchObject({ inputTokens: 1, outputTokens: 1, maxOutputTokens: 2_500 });
+    expect(call.inputBound).toBeGreaterThan(promptBytes);
+    expect(call.reserved).toBe(call.inputBound! + 2_500);
+  });
+
+  it("tells the eval's preflight that the server enforces the budget", async () => {
+    expect(await (await GET(new Request("http://localhost/api/ttx"))).json()).toMatchObject({ evalBudget: true });
+    vi.stubEnv("READYSTATE_EVAL_BUDGET", "");
+    expect(await (await GET(new Request("http://localhost/api/ttx"))).json()).toMatchObject({ evalBudget: false });
+  });
+
+  it("leaves calls unchanged without the server's flag", async () => {
+    vi.stubEnv("READYSTATE_EVAL_BUDGET", "");
+    const model = mockToolCallModel("generate_turn", turnInput);
+    env.model = model;
+    const last = await lastMessage(await post([userMessage], undefined, budgeted(1)));
+    expect(model.doStreamCalls[0].maxOutputTokens).toBeUndefined();
+    expect(last?.metadata?.calls).toEqual([{ inputTokens: 1, outputTokens: 1 }]);
+  });
+
+  it("refuses a call whose reserve doesn't fit, without contacting the provider", async () => {
+    const reserve = await turnReserve();
+    const model = mockToolCallModel("generate_turn", turnInput);
+    env.model = model;
+    const last = await lastMessage(await post([userMessage], undefined, budgeted(reserve - 1)));
+    expect(model.doStreamCalls).toHaveLength(0);
+    expect(last?.metadata).toMatchObject({ providerCalls: 0, calls: [], budgetStop: { needed: reserve, remaining: reserve - 1 } });
+  });
+
+  it("stops before the schema retry when the rejected call's reserve leaves too little", async () => {
+    const reserve = await turnReserve();
+    const slipOnce = () =>
+      failingOnce(mockToolCallModel("generate_turn", turnInput), async () => {
+        throw schemaSlipError();
+      });
+    let model = slipOnce();
+    env.model = model;
+    const body = await (await post([userMessage], undefined, budgeted(reserve + 100))).text();
+    expect(model.doStreamCalls).toHaveLength(1);
+    expect(body).toContain("token budget is spent");
+    expect(body).not.toContain("tool_use_failed");
+
+    model = slipOnce();
+    env.model = model;
+    const last = await lastMessage(await post([userMessage], undefined, budgeted(reserve + 100)));
+    expect(model.doStreamCalls).toHaveLength(1);
+    // The rejected call reported no usage, so it keeps its whole reserve.
+    expect(last?.metadata?.calls).toEqual([
+      { rejected: true, status: 400, inputBound: expect.any(Number), maxOutputTokens: 2_000, reserved: reserve },
+    ]);
+    expect(last?.metadata?.budgetStop).toEqual({ needed: reserve, remaining: 100 });
+  });
+
+  it("stops before the SDK's rate-limit retry when the budget runs out", async () => {
+    const reserve = await turnReserve();
+    const model = failingOnce(mockToolCallModel("generate_turn", turnInput), async () => {
+      throw rateLimited();
+    });
+    env.model = model;
+    const body = await (await post([userMessage], undefined, budgeted(reserve + 100))).text();
+    expect(model.doStreamCalls).toHaveLength(1);
+    expect(body).toContain("token budget is spent");
+    expect(body).not.toContain("Rate limit reached");
+  });
+
+  it("stops before the mid-stream retry, charging the cut-off attempt its whole reserve", async () => {
+    const reserve = await turnReserve();
+    const model = failingOnce(mockToolCallModel("generate_turn", turnInput), async () => ({
+      stream: simulateReadableStream<LanguageModelV4StreamPart>({
+        chunks: [
+          { type: "reasoning-start", id: "r1" },
+          { type: "reasoning-delta", id: "r1", delta: "Thinking about the storm." },
+          { type: "reasoning-end", id: "r1" },
+          {
+            type: "error",
+            error: new StreamProviderError({ message: schemaSlipMessage, code: "tool_use_failed", statusCode: 400 }),
+          },
+        ],
+      }),
+    }));
+    env.model = model;
+    const last = await lastMessage(await post([userMessage], undefined, budgeted(reserve + 100)));
+    expect(model.doStreamCalls).toHaveLength(1);
+    expect(last?.metadata?.calls).toEqual([{ inputBound: expect.any(Number), maxOutputTokens: 2_000, reserved: reserve }]);
+    expect(last?.metadata?.budgetStop).toEqual({ needed: reserve, remaining: 100 });
+    expect(last?.parts.some((p) => p.type === "tool-generate_turn")).toBe(false);
+  });
+
+  it("keeps production retries when the budget has room", async () => {
+    const reserve = await turnReserve();
+    const model = failingOnce(mockToolCallModel("generate_turn", turnInput), async () => {
+      throw rateLimited();
+    });
+    env.model = model;
+    const last = await lastMessage(await post([userMessage], undefined, budgeted(2 * reserve)));
+    expect(model.doStreamCalls).toHaveLength(2);
+    expect(last?.metadata).toMatchObject({ providerCalls: 2 });
+    expect(last?.metadata?.budgetStop).toBeUndefined();
+  });
 });
 
 describe("POST /api/ttx: the debrief", () => {
@@ -575,12 +718,12 @@ describe("POST /api/ttx: the debrief", () => {
 
     it("answers the eval's preflight without a model call, and never in hosted mode", async () => {
       const preflight = async () => (await GET(new Request("http://localhost/api/ttx", { headers: { [CAPTURE_HEADER]: "1" } }))).json();
-      expect(await preflight()).toEqual({ captureDebriefDrafts: false, exerciseHours: 72 });
+      expect(await preflight()).toEqual({ captureDebriefDrafts: false, exerciseHours: 72, evalBudget: false });
       vi.stubEnv("READYSTATE_CAPTURE_DEBRIEF_DRAFTS", "1");
-      expect(await preflight()).toEqual({ captureDebriefDrafts: true, exerciseHours: 72 });
-      expect(await (await GET(new Request("http://localhost/api/ttx"))).json()).toEqual({ captureDebriefDrafts: false, exerciseHours: 72 });
+      expect(await preflight()).toEqual({ captureDebriefDrafts: true, exerciseHours: 72, evalBudget: false });
+      expect(await (await GET(new Request("http://localhost/api/ttx"))).json()).toEqual({ captureDebriefDrafts: false, exerciseHours: 72, evalBudget: false });
       env.mode = "hosted";
-      expect(await preflight()).toEqual({ captureDebriefDrafts: false, exerciseHours: 72 });
+      expect(await preflight()).toEqual({ captureDebriefDrafts: false, exerciseHours: 72, evalBudget: false });
       env.mode = "self-hosted";
     });
 
@@ -614,6 +757,47 @@ describe("POST /api/ttx: the debrief", () => {
     });
     const body = await (await post(endedExercise)).text();
     expect(body).toContain("took too long");
+  });
+
+  describe("in a budgeted eval", () => {
+    beforeEach(() => {
+      vi.stubEnv("READYSTATE_EVAL_BUDGET", "1");
+      vi.stubEnv("VERCEL", "");
+    });
+    afterEach(() => vi.unstubAllEnvs());
+
+    /** The first draft's and the repair's reserves, from a run with room for both. */
+    const reserves = async () => {
+      env.model = debriefModel([kitList, passing]);
+      const last = await lastMessage(await post(endedExercise, undefined, budgeted(1_000_000)));
+      return last!.metadata!.calls!.map((call) => call.reserved!);
+    };
+
+    it("releases a finished call's reserve to its reported usage, so the repair fits", async () => {
+      const [first, repair] = await reserves();
+      expect(repair).toBeGreaterThan(first);
+      const model = debriefModel([kitList, passing]);
+      env.model = model;
+      // Room for the repair only once the draft's 15 reported tokens replace its reserve.
+      const last = await lastMessage(await post(endedExercise, undefined, budgeted(repair + 15)));
+      expect(model.doGenerateCalls).toHaveLength(2);
+      expect(model.doGenerateCalls[1].maxOutputTokens).toBe(2_000);
+      expect(last?.parts.find((p) => p.type === "tool-after_action_report")).toMatchObject({ output: passing });
+    });
+
+    it("stops before the repair when the budget can't cover it, with the draft's usage reported", async () => {
+      const [, repair] = await reserves();
+      const model = debriefModel([kitList, passing]);
+      env.model = model;
+      const last = await lastMessage(await post(endedExercise, undefined, budgeted(repair + 14)));
+      expect(model.doGenerateCalls).toHaveLength(1);
+      expect(last?.metadata).toMatchObject({
+        providerCalls: 1,
+        calls: [{ inputTokens: 10, outputTokens: 5 }],
+        budgetStop: { needed: repair, remaining: repair - 1 },
+      });
+      expect(last?.parts.some((p) => p.type === "tool-after_action_report")).toBe(false);
+    });
   });
 });
 

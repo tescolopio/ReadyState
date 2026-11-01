@@ -13,6 +13,7 @@ import { readUIMessageStream, type UIMessageChunk } from "ai";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { CAPTURE_HEADER, type DebriefCapture } from "@/lib/debrief-capture";
+import { EVAL_BUDGET_HEADER, EVAL_MAX_OUTPUT_HEADER } from "@/lib/eval-call-budget";
 import { leakedTerms, privateTerms } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { PRIVACY_LEAKS, TEST_HOUSEHOLDS, type TestHousehold } from "@/lib/test-households";
@@ -32,7 +33,7 @@ import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { maskInput } from "@/utils/obfuscator";
 
 import { CHECK_CATEGORIES, contentFindings, type CheckCategory, type Finding } from "./checks";
-import { MAX_PROVIDER_CALLS_PER_REQUEST, canStart, chargeRequest, overAllowance, reportedTokens } from "./budget";
+import { MAX_PROVIDER_CALLS_PER_REQUEST, chargeRequest, overBound, reportedTokens } from "./budget";
 import { sendWithRetries, type SendOutcome } from "./retry";
 
 const BASE_URL = process.env.EVAL_BASE_URL ?? "http://localhost:3000";
@@ -63,12 +64,14 @@ const REPLAY_TURNS = process.env.EVAL_REPLAY_TURNS ? Number(process.env.EVAL_REP
  */
 const EXERCISE_HOURS = Number(process.env.EVAL_EXERCISE_HOURS ?? TARGET_DURATION_HOURS);
 /**
- * A hard token cap for the run (scripts/eval/budget.ts): no request starts unless its worst case fits. Setting it also
- * turns off the eval's own resends, so each turn is one request.
+ * A hard token cap for the run, enforced by the server before every provider call (lib/eval-call-budget.ts; start it
+ * with READYSTATE_EVAL_BUDGET=1). Setting it also turns off the eval's own resends, so each turn is one request.
  */
 const BUDGET = process.env.EVAL_BUDGET ? Number(process.env.EVAL_BUDGET) : undefined;
-/** The most one provider call may use, input plus output. A call that reports more stops a budgeted run. */
-const CALL_ALLOWANCE = Number(process.env.EVAL_CALL_ALLOWANCE ?? 8000);
+/** The output limit the server enforces on each provider call in a budgeted run. */
+const MAX_OUTPUT = Number(process.env.EVAL_MAX_OUTPUT ?? 2500);
+/** Without a budget, what a call without reported usage is charged: the old per-call allowance. */
+const UNBUDGETED_CALL_CHARGE = 8000;
 /** G6's target for a single provider call's input on a turn. */
 const G6_INPUT_TARGET = 5000;
 /** The run's tokens: reported by the provider, and charged against the budget. */
@@ -148,10 +151,18 @@ const SETTINGS =
     ? { provider: process.env.EVAL_PROVIDER ?? "groq", model: process.env.EVAL_MODEL }
     : undefined;
 
+/** What's left of the run's budget: sent with each request, for the server to enforce. */
+const remainingBudget = () => (BUDGET === undefined ? undefined : Math.max(0, BUDGET - spend.charged));
+
 async function send(messages: TtxUIMessage[]): Promise<SendOutcome<TtxUIMessage>> {
+  const remaining = remainingBudget();
   const res = await fetch(`${BASE_URL}/api/ttx`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(CAPTURE ? { [CAPTURE_HEADER]: "1" } : {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(CAPTURE ? { [CAPTURE_HEADER]: "1" } : {}),
+      ...(remaining !== undefined ? { [EVAL_BUDGET_HEADER]: String(remaining), [EVAL_MAX_OUTPUT_HEADER]: String(MAX_OUTPUT) } : {}),
+    },
     body: JSON.stringify({ messages, settings: SETTINGS }),
   });
   if (!res.ok || !res.body) return { error: `HTTP ${res.status}: ${(await res.text()).slice(0, 300)}` };
@@ -223,11 +234,9 @@ async function play(household: TestHousehold): Promise<Result> {
   }
 
   for (let i = start; i <= MAX_TURNS; i++) {
-    if (BUDGET !== undefined && !canStart(spend.charged, BUDGET, CALL_ALLOWANCE)) {
-      result.findings.push({
-        category: "completion",
-        text: `Call ${i + 1} not sent: its worst case (${MAX_PROVIDER_CALLS_PER_REQUEST} provider calls × ${CALL_ALLOWANCE}) no longer fits the ${BUDGET}-token budget, with ${spend.charged} charged`,
-      });
+    const remaining = remainingBudget();
+    if (remaining === 0) {
+      result.findings.push({ category: "completion", text: `Call ${i + 1} not sent: the ${BUDGET}-token budget is spent, with ${spend.charged} charged` });
       break;
     }
     messages.push(userMessage(`u${i}`, next));
@@ -252,17 +261,30 @@ async function play(household: TestHousehold): Promise<Result> {
       inputTokens: metadata?.usage?.inputTokens,
       outputTokens: metadata?.usage?.outputTokens,
       calls: metadata?.calls,
-      charged: chargeRequest(metadata?.calls, CALL_ALLOWANCE),
+      // The server never reserves past what was sent, so a request without per-call metadata is charged all of it.
+      charged:
+        remaining !== undefined
+          ? chargeRequest(metadata?.calls, remaining, remaining)
+          : chargeRequest(metadata?.calls, UNBUDGETED_CALL_CHARGE, UNBUDGETED_CALL_CHARGE * MAX_PROVIDER_CALLS_PER_REQUEST),
     };
     spend.charged += record.charged!;
     spend.reported += (record.calls ?? []).reduce((sum, call) => sum + (reportedTokens(call) ?? 0), 0);
-    const over = BUDGET !== undefined ? overAllowance(record.calls, CALL_ALLOWANCE) : [];
+    const over = BUDGET !== undefined ? overBound(record.calls) : [];
     const stopOver = () =>
       result.findings.push({
         category: "completion",
-        text: `Call ${i + 1} over its allowance: a provider call reported ${over.map(reportedTokens).join(", ")} tokens, over ${CALL_ALLOWANCE}, so the worst-case bound no longer holds and the run stopped`,
+        text: `Call ${i + 1} over its bound: ${over.map((c) => `a provider call reported ${c.inputTokens} input tokens (bound ${c.inputBound}) and ${c.outputTokens} output (limit ${c.maxOutputTokens})`).join("; ")}, so the budget's guarantee no longer holds and the run stopped`,
       });
     if (metadata?.debriefCapture) writeCapture(household, record, outcome.error, metadata.debriefCapture);
+    if (metadata?.budgetStop) {
+      result.turns.push({ ...record, error: outcome.error });
+      const { needed, remaining: left } = metadata.budgetStop;
+      result.findings.push({
+        category: "completion",
+        text: `Call ${i + 1} stopped by the budget: its next provider call needed up to ${needed} tokens and ${left} remained, so the server didn't send it`,
+      });
+      break;
+    }
     if (outcome.error || !outcome.message) {
       result.turns.push({ ...record, error: outcome.error });
       result.findings.push({ category: "completion", text: `Call ${i + 1} failed: ${outcome.error}` });
@@ -415,14 +437,14 @@ function largestTurnCall(result: Result) {
 function tokenSection(result: Result) {
   const rows = liveCalls(result).flatMap(({ label, call, kind }) => {
     const calls = call.calls ?? [];
-    const total = `| ${label} | **response total** | ${call.inputTokens ?? "?"} | ${call.outputTokens ?? "?"} | ${call.charged ?? "?"} | |`;
-    if (!calls.length) return [`| ${label} | no per-call usage reported | | | ${call.charged ?? "?"} | |`];
+    const total = `| ${label} | **response total** | ${call.inputTokens ?? "?"} | ${call.outputTokens ?? "?"} | | | ${call.charged ?? "?"} | |`;
+    if (!calls.length) return [`| ${label} | no per-call usage reported | | | | | ${call.charged ?? "?"} | |`];
     return [
       ...calls.map((c, n) => {
         const reported = reportedTokens(c);
         const what = c.rejected ? `rejected${c.status !== undefined ? ` (status ${c.status})` : ""}` : reported === undefined ? "no usage reported (cut off)" : "reported";
         const target = kind === "turn" && c.inputTokens !== undefined ? (c.inputTokens < G6_INPUT_TARGET ? "under" : "**over**") : "";
-        return `| ${label} | provider call ${n + 1}: ${what} | ${c.inputTokens ?? ""} | ${c.outputTokens ?? ""} | ${reported ?? CALL_ALLOWANCE} | ${target} |`;
+        return `| ${label} | provider call ${n + 1}: ${what} | ${c.inputTokens ?? ""} | ${c.outputTokens ?? ""} | ${c.inputBound ?? ""} | ${c.maxOutputTokens ?? ""} | ${reported ?? c.reserved ?? UNBUDGETED_CALL_CHARGE} | ${target} |`;
       }),
       ...(calls.length > 1 ? [total] : []),
     ];
@@ -431,10 +453,10 @@ function tokenSection(result: Result) {
   return [
     "## Tokens per provider call",
     "",
-    `Each provider call's own usage, apart from each response's total, which adds retries and, for a debrief, the repair. Charged: a call's reported usage, or its ${CALL_ALLOWANCE}-token allowance when it reported none. G6's target applies to a single turn call's input.`,
+    `Each provider call's own usage, apart from each response's total, which adds retries and, for a debrief, the repair. In a budgeted run the server enforced each call's input bound and output limit before sending it. Charged: a call's reported usage, or, when it reported none, its whole reserve (bound plus limit; ${UNBUDGETED_CALL_CHARGE} without a budget). G6's target applies to a single turn call's input.`,
     "",
-    `| Call | Provider call | Input | Output | Charged | Input vs ${G6_INPUT_TARGET} |`,
-    "| --- | --- | --- | --- | --- | --- |",
+    `| Call | Provider call | Input | Output | Input bound | Output limit | Charged | Input vs ${G6_INPUT_TARGET} |`,
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ...rows,
     "",
   ];
@@ -649,8 +671,11 @@ describe(`test households against ${BASE_URL}`, () => {
       );
     }
     if (BUDGET !== undefined) {
+      if (body?.evalBudget !== true) {
+        throw new Error(`EVAL_BUDGET is set, but ${BASE_URL} won't enforce it: start it with READYSTATE_EVAL_BUDGET=1. No model call was made.`);
+      }
       console.log(
-        `Budget ${BUDGET} tokens; each request's worst case ${MAX_PROVIDER_CALLS_PER_REQUEST} provider calls × ${CALL_ALLOWANCE}; the eval's own resends off; clock ${EXERCISE_HOURS} hours`,
+        `Budget ${BUDGET} tokens, enforced by the server before every provider call; output limit ${MAX_OUTPUT} per call; the eval's own resends off; clock ${EXERCISE_HOURS} hours`,
       );
     }
     if (!CAPTURE) return;
@@ -680,7 +705,7 @@ describe(`test households against ${BASE_URL}`, () => {
         "",
         `Server ${BASE_URL}; model ${SETTINGS ? `${SETTINGS.provider}/${SETTINGS.model ?? "default"}` : "server default"}; up to ${MAX_TURNS + 1} calls; responses chosen "${CHOOSE}"${REPLAY ? `; replaying ${REPLAY}${REPLAY_TURNS !== undefined ? ` (first ${REPLAY_TURNS} turns)` : ""}` : ""}; clock ${EXERCISE_HOURS} hours.`,
         "",
-        `**Tokens:** ${spend.reported} reported tokens; ${spend.charged} conservatively charged against the budget${BUDGET !== undefined ? ` of ${BUDGET}` : ""}. The charge is budget accounting, not measured usage: a provider call without reported usage is charged its ${CALL_ALLOWANCE}-token allowance.`,
+        `**Tokens:** ${spend.reported} reported tokens; ${spend.charged} conservatively charged against the budget${BUDGET !== undefined ? ` of ${BUDGET}` : ""}. The charge is budget accounting, not measured usage: a provider call without reported usage is charged its whole reserve (input bound plus output limit).`,
         "",
         "Completing an exercise is reported separately from its content: a run can finish and still have continuity, safety or suitability problems. Content checks are heuristics: passing means \"passed the implemented checks\", not verified safe or accurate. A valid citation shows the cited event exists, not that the advice describes it correctly. Findings from replayed turns are listed but not counted.",
         "",
@@ -710,7 +735,7 @@ describe(`test households against ${BASE_URL}`, () => {
     // Only a privacy leak, a failed call or a budget stop fails the test runner. That's a gate on the run, not a quality
     // result: content findings (grading language included) are reported for review, and the manual verdict is separate.
     expect(
-      result.findings.filter((f) => f.category === "privacy" || (f.category === "completion" && /^Call \d+ (failed|not sent|over its allowance):/.test(f.text))),
+      result.findings.filter((f) => f.category === "privacy" || (f.category === "completion" && /^Call \d+ (failed|not sent|stopped by the budget|over its bound):/.test(f.text))),
     ).toEqual([]);
   });
 });

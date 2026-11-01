@@ -21,6 +21,7 @@ import { requireTrialAccess } from "@/lib/trial-access";
 import { getHostedServices, type HostedAccount } from "@/lib/hosted";
 import { reportBudgetTimeout } from "@/lib/budget-timeout";
 import { exerciseHours } from "@/lib/exercise-clock";
+import { EvalBudgetExhausted, evalBudgetEnabled, evalCallBudget, inputBound, type EvalCallBudget } from "@/lib/eval-call-budget";
 import { describeProviderError, isSchemaSlip, providerStatus } from "@/lib/provider-errors";
 import { providerSettingsSchema, resolveModel, type ResolvedModel } from "@/lib/providers";
 import { safetyPrompt } from "@/lib/rules";
@@ -104,8 +105,11 @@ interface CallCounts {
   debriefRepairs: number;
   /** Each provider call's own usage, in order (TtxMetadata.calls). */
   calls: ProviderCallUsage[];
+  /** A budgeted eval's call that wasn't sent (lib/eval-call-budget.ts). */
+  budgetStop?: { needed: number; remaining: number };
 }
 
+type CallParams = Parameters<NonNullable<LanguageModelMiddleware["wrapStream"]>>[0]["params"];
 type ProviderUsage = { inputTokens: { total: number | undefined }; outputTokens: { total: number | undefined } };
 const callUsage = (usage: ProviderUsage) => ({ inputTokens: usage.inputTokens.total, outputTokens: usage.outputTokens.total });
 
@@ -117,12 +121,37 @@ const callUsage = (usage: ProviderUsage) => ({ inputTokens: usage.inputTokens.to
  * started streaming is retried by `streamText`'s `onError` instead. Every
  * call's own usage is recorded too: a call rejected or cut off before the
  * provider reported usage is recorded without any.
+ *
+ * In a budgeted eval, every call also passes the budget here first
+ * (lib/eval-call-budget.ts): its output is capped, and it's refused before
+ * reaching the provider when its reserve doesn't fit what remains.
  */
-const retrySchemaSlipOnce = (counts: CallCounts): LanguageModelMiddleware => {
-  const once = async <T>(call: () => PromiseLike<T>, record: (result: T, entry: ProviderCallUsage) => T): Promise<T> => {
+const retrySchemaSlipOnce = (counts: CallCounts, evalBudget: EvalCallBudget | null): LanguageModelMiddleware => {
+  /** Corrects a finished call's reserve to its reported usage; a call without usage keeps the whole reserve. */
+  const settle = (entry: ProviderCallUsage) => {
+    if (!evalBudget || entry.reserved === undefined) return;
+    if (entry.inputTokens === undefined || entry.outputTokens === undefined) return;
+    evalBudget.remaining += entry.reserved - entry.inputTokens - entry.outputTokens;
+  };
+  const once = async <T>(
+    params: CallParams,
+    call: () => PromiseLike<T>,
+    record: (result: T, entry: ProviderCallUsage) => T,
+  ): Promise<T> => {
     const attempt = async () => {
-      counts.providerCalls++;
       const entry: ProviderCallUsage = {};
+      if (evalBudget) {
+        const maxOutputTokens = params.maxOutputTokens ?? evalBudget.maxOutputTokens;
+        const bound = inputBound(params);
+        const needed = bound + maxOutputTokens;
+        if (needed > evalBudget.remaining) {
+          counts.budgetStop = { needed, remaining: evalBudget.remaining };
+          throw new EvalBudgetExhausted(needed, evalBudget.remaining);
+        }
+        evalBudget.remaining -= needed;
+        Object.assign(entry, { inputBound: bound, maxOutputTokens, reserved: needed });
+      }
+      counts.providerCalls++;
       counts.calls.push(entry);
       try {
         return record(await call(), entry);
@@ -144,19 +173,22 @@ const retrySchemaSlipOnce = (counts: CallCounts): LanguageModelMiddleware => {
   };
   return {
     specificationVersion: "v4",
-    wrapStream: ({ doStream }) =>
-      once(doStream, (result, entry) => ({
+    transformParams: async ({ params }) =>
+      evalBudget ? { ...params, maxOutputTokens: Math.min(params.maxOutputTokens ?? Infinity, evalBudget.maxOutputTokens) } : params,
+    wrapStream: ({ doStream, params }) =>
+      once(params, doStream, (result, entry) => ({
         ...result,
         stream: result.stream.pipeThrough(
           new TransformStream({
             transform(part, controller) {
-              if (part.type === "finish") Object.assign(entry, callUsage(part.usage));
+              if (part.type === "finish") settle(Object.assign(entry, callUsage(part.usage)));
               controller.enqueue(part);
             },
           }),
         ),
       })),
-    wrapGenerate: ({ doGenerate }) => once(doGenerate, (result, entry) => (Object.assign(entry, callUsage(result.usage)), result)),
+    wrapGenerate: ({ doGenerate, params }) =>
+      once(params, doGenerate, (result, entry) => (settle(Object.assign(entry, callUsage(result.usage))), result)),
   };
 };
 
@@ -303,13 +335,18 @@ function rejectCrossSite(req: Request): Response | null {
  * Whether this server would capture debrief drafts for this request, so a
  * local eval can confirm it before spending a model call
  * (lib/debrief-capture.ts). Always false in hosted mode and on Vercel. Also the
- * exercise clock this server uses (lib/exercise-clock.ts), for the same reason.
+ * exercise clock this server uses (lib/exercise-clock.ts) and whether it
+ * enforces an eval's token budget (lib/eval-call-budget.ts), for the same reason.
  */
 export function GET(req: Request) {
   const denied = requireTrialAccess(req);
   if (denied) return denied;
   const mode = getAppMode();
-  return Response.json({ captureDebriefDrafts: captureEnabled(req, mode), exerciseHours: exerciseHours(mode) });
+  return Response.json({
+    captureDebriefDrafts: captureEnabled(req, mode),
+    exerciseHours: exerciseHours(mode),
+    evalBudget: evalBudgetEnabled(mode),
+  });
 }
 
 export async function POST(req: Request) {
@@ -356,12 +393,15 @@ export async function POST(req: Request) {
     );
   }
 
+  const evalBudget = evalCallBudget(req, mode);
+  // Only a wrapped model passes the budget before each call.
+  if (evalBudget && typeof resolved.model === "string") return errorResponse(400, "A budgeted eval needs a provider model, not a model id.");
   const counts: CallCounts = { providerCalls: 0, schemaRetries: 0, debriefRepairs: 0, calls: [] };
   const budget = modelBudget(req.signal);
   const model =
     typeof resolved.model === "string"
       ? resolved.model
-      : wrapLanguageModel({ model: resolved.model, middleware: retrySchemaSlipOnce(counts) });
+      : wrapLanguageModel({ model: resolved.model, middleware: retrySchemaSlipOnce(counts, evalBudget) });
   const instructions = `${systemPrompt(hours)}\n\n${phaseInstructions(hours)[phase]}`;
   // A single compact briefing instead of the replayed chat keeps each call
   // well under Groq's per-minute token limit (docs/architecture/groq-models.md).
@@ -371,9 +411,25 @@ export async function POST(req: Request) {
     await hosted.recordUsage(account, { phase, provider: resolved.provider, inputTokens, outputTokens });
   };
   const onModelError = (error: unknown) => {
+    // The SDK may wrap the refusal in a RetryError, so the stop recorded before it is what counts.
+    if (counts.budgetStop) return new EvalBudgetExhausted(counts.budgetStop.needed, counts.budgetStop.remaining).message;
     console.error("[ttx] model call failed", error);
     return describeProviderError(error, mode);
   };
+  /** A failed response still reports its provider calls, so a budgeted eval charges what was spent. */
+  const callsBeforeError = () =>
+    new TransformStream<InferUIMessageChunk<TtxUIMessage>, InferUIMessageChunk<TtxUIMessage>>({
+      transform(chunk, controller) {
+        if (chunk.type === "error") {
+          const { providerCalls, calls, schemaRetries, budgetStop } = counts;
+          controller.enqueue({
+            type: "message-metadata",
+            messageMetadata: { providerCalls, calls, schemaRetries, ...(budgetStop ? { budgetStop } : {}) },
+          });
+        }
+        controller.enqueue(chunk);
+      },
+    });
 
   if (phase === "ended") {
     const capture = captureEnabled(req, mode);
@@ -436,7 +492,7 @@ export async function POST(req: Request) {
           }
         },
         onError: onModelError,
-      }),
+      }).pipeThrough(callsBeforeError()),
     });
   }
 
@@ -477,6 +533,8 @@ export async function POST(req: Request) {
             }
           : undefined,
       onError: onModelError,
-    }).pipeThrough(reportBudgetTimeout<InferUIMessageChunk<TtxUIMessage>>(budget.timeout, onModelError)),
+    })
+      .pipeThrough(reportBudgetTimeout<InferUIMessageChunk<TtxUIMessage>>(budget.timeout, onModelError))
+      .pipeThrough(callsBeforeError()),
   });
 }

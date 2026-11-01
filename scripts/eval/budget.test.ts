@@ -1,44 +1,32 @@
 import { describe, expect, it } from "vitest";
 
-import { MAX_PROVIDER_CALLS_PER_REQUEST, canStart, capFor, chargeRequest, overAllowance } from "./budget";
+import { MAX_PROVIDER_CALLS_PER_REQUEST, chargeRequest, overBound } from "./budget";
 
-const ALLOWANCE = 8_000;
+const reserve = { inputBound: 26_000, maxOutputTokens: 2_500, reserved: 28_500 };
 
 describe("the G6 budget", () => {
   it("counts every retry layer in a request's worst case: 2 attempts × 3 SDK tries × 2 middleware calls", () => {
     expect(MAX_PROVIDER_CALLS_PER_REQUEST).toBe(12);
   });
 
-  it("charges each call its reported usage, and a call without usage its full allowance", () => {
-    expect(chargeRequest([{ inputTokens: 4_600, outputTokens: 1_100 }], ALLOWANCE)).toBe(5_700);
+  it("charges each call its reported usage, and a call without usage the whole reserve the server enforced", () => {
+    expect(chargeRequest([{ ...reserve, inputTokens: 4_600, outputTokens: 1_100 }], 0, 0)).toBe(5_700);
     // A schema slip rejected before output, then the call that streamed.
-    expect(chargeRequest([{ rejected: true, status: 400 }, { inputTokens: 4_600, outputTokens: 1_100 }], ALLOWANCE)).toBe(13_700);
+    expect(chargeRequest([{ ...reserve, rejected: true, status: 400 }, { ...reserve, inputTokens: 4_600, outputTokens: 1_100 }], 0, 0)).toBe(34_200);
     // A discarded mid-stream attempt reports nothing.
-    expect(chargeRequest([{}, { inputTokens: 4_600, outputTokens: 1_100 }], ALLOWANCE)).toBe(13_700);
+    expect(chargeRequest([reserve, { ...reserve, inputTokens: 4_600, outputTokens: 1_100 }], 0, 0)).toBe(34_200);
+    // Usage is never guessed: input alone isn't a reported total.
+    expect(chargeRequest([{ ...reserve, inputTokens: 4_600 }], 0, 0)).toBe(28_500);
   });
 
-  it("charges a request with no per-call metadata its worst case", () => {
-    expect(chargeRequest(undefined, ALLOWANCE)).toBe(96_000);
+  it("charges a call without usage or a reserve, and a request without per-call metadata, the given fallbacks", () => {
+    expect(chargeRequest([{}], 8_000, 0)).toBe(8_000);
+    expect(chargeRequest(undefined, 8_000, 61_000)).toBe(61_000);
   });
 
-  it("flags a call over its allowance, since the worst-case bound then fails", () => {
-    expect(overAllowance([{ inputTokens: 6_500, outputTokens: 1_600 }, { inputTokens: 5_000, outputTokens: 1_000 }], ALLOWANCE)).toHaveLength(1);
-    expect(overAllowance([{ rejected: true }], ALLOWANCE)).toEqual([]);
-  });
-
-  it("starts a request only when its whole worst case fits", () => {
-    expect(canStart(56_000, 152_000, ALLOWANCE)).toBe(true);
-    expect(canStart(56_001, 152_000, ALLOWANCE)).toBe(false);
-    expect(canStart(0, 72_000, ALLOWANCE)).toBe(false);
-  });
-
-  it("sizes the cap so all 8 live turns can start: 7 single calls plus the last request's worst case", () => {
-    expect(capFor(8, ALLOWANCE)).toBe(152_000);
-    // Under that cap, 8 one-call requests at their full allowance all start.
-    let charged = 0;
-    for (let request = 0; request < 8; request++) {
-      expect(canStart(charged, capFor(8, ALLOWANCE), ALLOWANCE)).toBe(true);
-      charged += chargeRequest([{}], ALLOWANCE);
-    }
+  it("flags a call that reported more than the server enforced", () => {
+    expect(overBound([{ ...reserve, inputTokens: 26_001, outputTokens: 10 }])).toHaveLength(1);
+    expect(overBound([{ ...reserve, inputTokens: 5_000, outputTokens: 2_501 }])).toHaveLength(1);
+    expect(overBound([{ ...reserve, inputTokens: 5_000, outputTokens: 2_500 }, { ...reserve, rejected: true }, {}])).toEqual([]);
   });
 });

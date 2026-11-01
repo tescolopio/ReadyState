@@ -44,6 +44,10 @@ PowerShell: `$env:EVAL_ONLY="alex"; npm run eval`.
 | `EVAL_PROVIDER`, `EVAL_MODEL` | server default | Send these as the app's provider settings, to test another provider or model (for example `EVAL_MODEL=openai/gpt-oss-20b`, which has its own Groq quota) |
 | `EVAL_CAPTURE_DRAFTS` | off | `1` writes every debrief draft, rejected ones included, to `<household>-debrief-drafts.json` and `.md` for manual review. The server must also run with `READYSTATE_CAPTURE_DEBRIEF_DRAFTS=1`; see below. |
 | `EVAL_REPLAY` | none | A previous run's folder, for targeted reruns. Each household replays that run's successful turns without calling the model, then continues: a failed call is resent, and a finished exercise goes straight to the debrief. |
+| `EVAL_REPLAY_TURNS` | all | Replay only the first N successful turns of `EVAL_REPLAY`, then continue live. |
+| `EVAL_EXERCISE_HOURS` | `72` | The clock the server must report before any call; start it with the same `READYSTATE_EVAL_TARGET_HOURS` (local only). |
+| `EVAL_BUDGET` | none | A token cap for the run, enforced by the server before every provider call; start it with `READYSTATE_EVAL_BUDGET=1` (local only). Also turns off the eval's own resends. See `lib/eval-call-budget.ts`. |
+| `EVAL_MAX_OUTPUT` | `2500` | With `EVAL_BUDGET`, the output limit the server enforces on each provider call. |
 
 ```bash
 # Rerun only the debrief, and resume an interrupted exercise, from an earlier run
