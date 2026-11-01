@@ -5,6 +5,42 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("per-user installer ownership", () => {
+  it.skipIf(process.platform !== "win32")("rejects junction ancestors before creating any installation files", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "readystate-junction-"));
+    const source = path.join(root, "package");
+    try {
+      mkdirSync(source);
+      cpSync(path.resolve("scripts/local/install.ps1"), path.join(source, "install.ps1"));
+      writeFileSync(path.join(source, "release.json"), "{}");
+      execFileSync("powershell.exe", ["-NoProfile", "-Command", `
+$ErrorActionPreference = 'Stop'
+$source = $env:READYSTATE_TEST_SOURCE
+$alias = Join-Path (Split-Path $source) 'alias'
+New-Item -ItemType Junction -Path $alias -Target $source | Out-Null
+try {
+    foreach ($destination in @((Join-Path $alias 'nested'), (Join-Path $alias 'missing\\deeper'))) {
+        $rejected = $false
+        try { & (Join-Path $source 'install.ps1') -Destination $destination -NoShortcut }
+        catch {
+            if ($_.Exception.Message -notlike '*junctions or symbolic links*') { throw }
+            $rejected = $true
+        }
+        if (!$rejected -or (Test-Path -LiteralPath $destination)) { throw 'Junction install created files or was not rejected.' }
+    }
+    $outside = Join-Path (Split-Path $source) 'outside'
+    $rejected = $false
+    try { & (Join-Path $alias 'install.ps1') -Destination $outside -NoShortcut }
+    catch {
+        if ($_.Exception.Message -notlike '*junctions or symbolic links*') { throw }
+        $rejected = $true
+    }
+    if (!$rejected -or (Test-Path -LiteralPath $outside)) { throw 'Junction source was not rejected before copying.' }
+} finally {
+    [IO.Directory]::Delete($alias)
+}
+`], { env: { ...process.env, READYSTATE_TEST_SOURCE: source }, stdio: "pipe", timeout: 20_000 });
+    } finally { rmSync(root, { recursive: true }); }
+  }, 30_000);
   it.skipIf(process.platform !== "linux")("rejects nested physical paths and removes only the exact shortcut through aliases", () => {
     const root = mkdtempSync(path.join(tmpdir(), "readystate-installer-"));
     const source = path.join(root, "source");

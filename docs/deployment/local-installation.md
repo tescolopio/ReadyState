@@ -100,6 +100,9 @@ release content.
 For updates, stop ReadyState and move the old installation aside, then install
 the new version. Installers refuse to overwrite existing installations or
 shortcuts. Remove the previous shortcut using its uninstall script first.
+Windows installation source/destination paths must not contain directory
+junctions or symbolic links; use ordinary physical directories. This prevents
+recursive copying back into the extracted package through an alias.
 Back up any separately created configuration file; do not copy old `app` or
 `runtime` directories into the new version. There is no automatic updater.
 

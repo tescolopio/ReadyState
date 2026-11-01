@@ -1,5 +1,5 @@
 import { createServer } from "node:net";
-import { chmod, mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -25,12 +25,20 @@ describe("local launcher", () => {
       await new Promise<void>(resolve => server.close(() => resolve()));
     }
   });
-  it("stops its server cleanly without waiting for a Unix browser opener", async () => {
+  it("starts through a package alias and stops without waiting for a Unix browser opener", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "readystate-launch-"));
     const server = path.join(directory, "server.cjs");
     await writeFile(server, `require("node:http").createServer((req,res)=>res.end("{}")).listen(process.env.PORT,process.env.HOSTNAME); process.on("SIGTERM",()=>process.exit(143));`);
     const openerPidFile = path.join(directory, "opener.pid");
+    const alias = path.join(directory, "alias");
+    const packageDirectory = path.join(directory, "package");
+    await mkdir(packageDirectory);
+    await copyFile(path.resolve("scripts/local/launch.mjs"), path.join(packageDirectory, "launch.mjs"));
+    await symlink(packageDirectory, alias, process.platform === "win32" ? "junction" : "dir");
     if (process.platform === "linux") {
+      await mkdir(path.join(packageDirectory, "runtime"));
+      await symlink(process.execPath, path.join(packageDirectory, "runtime", "node"));
+      await copyFile(path.resolve("scripts/local/start.sh"), path.join(packageDirectory, "start.sh"));
       const opener = path.join(directory, "opener.cjs");
       await writeFile(opener, `require("node:fs").writeFileSync(${JSON.stringify(openerPidFile)},String(process.pid)); setInterval(()=>{},1000);`);
       await writeFile(path.join(directory, "xdg-open"), `#!/bin/sh\nexec "${process.execPath}" "${opener}"\n`);
@@ -41,7 +49,7 @@ describe("local launcher", () => {
     const address = probe.address();
     if (!address || typeof address === "string") throw new Error("No port");
     await new Promise<void>(resolve => probe.close(() => resolve()));
-    const child = spawn(process.execPath, [path.resolve("scripts/local/launch.mjs"), "--server", server, "--no-env", ...(process.platform === "linux" ? ["--open-browser"] : [])], {
+    const child = spawn(process.platform === "linux" ? "sh" : process.execPath, [path.join(alias, process.platform === "linux" ? "start.sh" : "launch.mjs"), "--server", server, "--no-env"], {
       env: { ...process.env, PATH: `${directory}${path.delimiter}${process.env.PATH}`, READYSTATE_MODE: "self-hosted", PORT: String(address.port) },
       stdio: ["ignore", "pipe", "pipe", "ipc"],
     });
