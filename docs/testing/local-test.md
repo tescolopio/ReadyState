@@ -72,6 +72,7 @@ Use Chrome, Firefox and Safari (or Edge) at least once each before a release (wo
 - [ ] Select a word the masker missed, choose **Mask selected text**, and confirm: the review is rebuilt with it tagged. With edits, it warns first.
 - [ ] Delete one bracket of a tag: Send is disabled with an explanation. Deleting a whole tag is fine.
 - [ ] Type a phone number into the review's copy and send: it's masked and shown again before anything goes.
+- [ ] With mocked transport, split an edited phone number across lines: it is masked and shown again. A saved Always Mask change during review also requires another approval; explicitly masking a word in public guidance actually tags it. Unknown placeholder tags are rejected, including tags typed before opening the review.
 - [ ] Double-click **Send this**: one request.
 - [ ] After a failed request, **Send the same message again** resends it unchanged, even after changing Settings.
 - [ ] Review and Settings explain that keys go to ReadyState's server for provider authentication, not into conversation text. With a synthetic key and mocked transport, confirm retry credentials are separate from message history.

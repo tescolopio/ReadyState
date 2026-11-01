@@ -431,6 +431,8 @@ export interface MaskOptions {
    * once it's sent (work item S2).
    */
   ledger?: Record<string, string>;
+  /** Apply only explicit masking terms and ledger values, without automatic detection. */
+  explicitOnly?: boolean;
 }
 
 /**
@@ -448,15 +450,15 @@ export function maskInput(text: string, options: MaskOptions = {}): string {
   const alwaysMask = options.alwaysMask ?? storedAlwaysMask;
 
   const detected: Detection[] = [
-    ...contactDetectors(text),
-    ...contextDetectors(text),
+    ...(options.explicitOnly ? [] : contactDetectors(text)),
+    ...(options.explicitOnly ? [] : contextDetectors(text)),
     ...alwaysMask.map((term): Detection => (typeof term === "string" ? { value: term, kind: "Person" } : term)),
-    ...nlpDetectors(text),
+    ...(options.explicitOnly ? [] : nlpDetectors(text)),
   ];
   const people = detected.filter((d) => d.kind === "Person").map((d) => cleanEntity(d.value));
-  detected.push(...surnameDetectors(text, people));
+  if (!options.explicitOnly) detected.push(...surnameDetectors(text, people));
   const places = detected.filter((d) => d.kind === "Location").map((d) => cleanEntity(d.value));
-  detected.push(...placeExtensions(text, places));
+  if (!options.explicitOnly) detected.push(...placeExtensions(text, places));
   // Earlier messages' values, so "Priya" stays masked even without context.
   detected.push(
     ...Object.values(initialMap).map((value) => ({ value, kind: "Person" as const })),

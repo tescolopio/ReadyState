@@ -1,4 +1,4 @@
-import type { HouseholdProfile } from "@/lib/household";
+import { NEEDS, type HouseholdProfile } from "@/lib/household";
 import { maskInput, type MaskTerm } from "@/utils/obfuscator";
 
 /**
@@ -27,6 +27,8 @@ export interface OutgoingReview {
   base: Readonly<Record<string, string>>;
   /** Tags this review introduced. They join the ledger only when it's sent. */
   pending: Readonly<Record<string, string>>;
+  /** Masking rules used to prepare this copy; changes require another review. */
+  alwaysMask: MaskTerm[];
   /** For a baseline: the household the exercise starts with, once it's sent. */
   start?: { profile: HouseholdProfile; sampleId?: string };
 }
@@ -42,8 +44,11 @@ export function prepareReview(
   start?: OutgoingReview["start"],
 ): OutgoingReview {
   const ledger = { ...base };
-  const text = build((part) => maskInput(part, { alwaysMask, ledger }));
-  return { id: ++lastId, kind, build, generated: text, text, base: { ...base }, pending: added(base, ledger), start };
+  const built = build((part) => maskInput(part, { alwaysMask, ledger }));
+  // Public guidance skips automatic detection, but explicit masks must still apply.
+  const text = maskInput(built, { alwaysMask, ledger, explicitOnly: true });
+  const rules = alwaysMask.map((term) => typeof term === "string" ? term : { ...term });
+  return { id: ++lastId, kind, build, generated: text, text, base: { ...base }, pending: added(base, ledger), alwaysMask: rules, start };
 }
 
 const added = (base: Record<string, string>, ledger: Record<string, string>) =>
@@ -55,6 +60,7 @@ export const editReview = (review: OutgoingReview, text: string): OutgoingReview
 export const isEdited = (review: OutgoingReview) => review.text !== review.generated;
 
 const BRACKETED = /\[[^[\]\n]*\]/g;
+const FUNCTIONAL_TAGS = Object.values(NEEDS).flatMap(({ tag }) => tag.match(BRACKETED) ?? []);
 
 /**
  * Damaged or unknown placeholder tags in an edited review: "[Person 1" with
@@ -63,7 +69,11 @@ const BRACKETED = /\[[^[\]\n]*\]/g;
  * tag is fine.
  */
 export function tagProblems(review: OutgoingReview): string[] {
-  const known = new Set([...Object.keys(review.base), ...Object.keys(review.pending), ...(review.generated.match(BRACKETED) ?? [])]);
+  const known = new Set([
+    ...Object.keys(review.base),
+    ...Object.keys(review.pending),
+    ...FUNCTIONAL_TAGS,
+  ]);
   const problems = [...new Set(review.text.match(BRACKETED) ?? [])]
     .filter((tag) => !known.has(tag))
     .map((tag) => `${tag} isn't one of this message's tags. Restore the original tag or delete it.`);
@@ -88,16 +98,27 @@ export function maskableSelection(selected: string): { value: string } | { probl
 }
 
 /**
- * Masks only the lines the participant edited. Lines left as built aren't
+ * Masks contiguous edited blocks together, preserving cross-line detectors.
+ * Lines left as built aren't
  * masked again: the baseline's official guidance is public text, deliberately
  * unmasked, where a second pass could tag words like "Ready.gov".
  */
 function remaskEdits(review: OutgoingReview, mask: (line: string) => string): string {
   const built = new Set(review.generated.split("\n"));
-  return review.text
-    .split("\n")
-    .map((line) => (built.has(line) ? line : mask(line)))
-    .join("\n");
+  const result: string[] = [];
+  let edited: string[] = [];
+  const flush = () => {
+    if (edited.length) result.push(mask(edited.join("\n")));
+    edited = [];
+  };
+  for (const line of review.text.split("\n")) {
+    if (line.trim() && built.has(line)) {
+      flush();
+      result.push(line);
+    } else edited.push(line);
+  }
+  flush();
+  return result.join("\n");
 }
 
 export type ApproveResult =
@@ -112,7 +133,7 @@ export interface ApproveDeps {
   /** The privacy ledger as it is now. */
   ledger: () => Record<string, string>;
   addMapping: (value: string, tag: string) => void;
-  alwaysMask: () => MaskTerm[];
+  alwaysMask: (review: OutgoingReview) => MaskTerm[];
   /** Sends the approved review's text. Called at most once per review. */
   send: (text: string, review: OutgoingReview) => void;
 }
@@ -134,16 +155,18 @@ export function createApprover(deps: ApproveDeps) {
 
     const now = deps.ledger();
     const changed = Object.keys(now).length !== Object.keys(review.base).length || Object.entries(review.base).some(([tag, value]) => now[tag] !== value);
-    if (changed) {
+    const rules = deps.alwaysMask(review);
+    const rulesChanged = JSON.stringify(rules) !== JSON.stringify(review.alwaysMask);
+    if (changed || rulesChanged) {
       return {
         status: "review-again",
-        review: prepareReview(review.kind, review.build, now, deps.alwaysMask(), review.start),
-        reason: "The privacy tags changed since this preview was made, so it was rebuilt. Review it again, then send.",
+        review: prepareReview(review.kind, review.build, now, rules, review.start),
+        reason: "The privacy tags or masking rules changed since this preview was made, so it was rebuilt. Review it again, then send.",
       };
     }
 
     const ledger = { ...review.base, ...review.pending };
-    const remasked = remaskEdits(review, (line) => maskInput(line, { alwaysMask: deps.alwaysMask(), ledger }));
+    const remasked = remaskEdits(review, (line) => maskInput(line, { alwaysMask: rules, ledger }));
     if (remasked !== review.text) {
       return {
         status: "review-again",

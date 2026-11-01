@@ -112,7 +112,7 @@ export default function ExercisePage() {
     createApprover({
       ledger,
       addMapping: (value, tag) => usePrivacyStore.getState().addMapping(value, tag),
-      alwaysMask: () => alwaysMask(),
+      alwaysMask: (review) => alwaysMask(review.start?.profile),
       send: (text, { start }) => {
         // A baseline starts the exercise only now, once it's sent.
         if (start) useExerciseSession.getState().begin(start.profile, start.sampleId);

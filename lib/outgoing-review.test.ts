@@ -74,6 +74,20 @@ describe("tagProblems", () => {
     expect(tagProblems(editReview(r, "[Person 1 checks the furnace."))[0]).toMatch(/damaged near "\[Person/);
     expect(tagProblems(editReview(r, `${r.text} [Person 9] helps.`))[0]).toMatch(/\[Person 9\] isn't one of this message's tags/);
   });
+
+  it("does not trust unknown tags already present in a typed response", () => {
+    const r = responseReview("[Person 99] checks the furnace.");
+    expect(tagProblems(r)[0]).toMatch(/\[Person 99\] isn't one of this message's tags/);
+    const { approve, send } = approver();
+    expect(approve(r)).toMatchObject({ status: "blocked" });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("allows defined functional tags but rejects unknown tags in baseline notes too", () => {
+    expect(tagProblems(responseReview("Support [Hardware Power Dependent]."))).toEqual([]);
+    const r = prepareReview("baseline", (mask) => mask("Notes: [Person 99] checks the furnace."), {}, []);
+    expect(tagProblems(r)[0]).toMatch(/\[Person 99\] isn't one of this message's tags/);
+  });
 });
 
 describe("createApprover", () => {
@@ -120,6 +134,52 @@ describe("createApprover", () => {
 
     expect(approve(again)).toEqual({ status: "sent" });
     expect(send).toHaveBeenCalledExactlyOnceWith(again.text, again);
+  });
+
+  it("masks a phone number split across contiguous edited lines before sending", () => {
+    const { approve, send } = approver();
+    const result = approve(editReview(responseReview("We check the furnace."), "303\n555\n0142"));
+    expect(result.status).toBe("review-again");
+    if (result.status !== "review-again") throw new Error("Expected remasked review");
+    expect(result.review.text).toBe("[Phone 1]");
+    expect(send).not.toHaveBeenCalled();
+    expect(approve(result.review)).toEqual({ status: "sent" });
+  });
+
+  it("requires another review when masking rules change without a ledger change", () => {
+    let rules = ["Jamie"];
+    const send = vi.fn();
+    const approve = createApprover({ ledger, addMapping: vi.fn(), alwaysMask: () => rules, send });
+    const review = prepareReview("response", (mask) => mask("The Coleman stove is ready."), {}, rules);
+    rules = [...rules, "Coleman"];
+    const result = approve(review);
+    expect(result.status).toBe("review-again");
+    if (result.status !== "review-again") throw new Error("Expected rebuilt review");
+    expect(result.review.text).not.toContain("Coleman");
+    expect(send).not.toHaveBeenCalled();
+    expect(approve(result.review)).toEqual({ status: "sent" });
+  });
+
+  it("uses the pending sample household's masking rules before starting its session", () => {
+    const send = vi.fn();
+    const start = { profile: sam, sampleId: "sam" };
+    const approve = createApprover({
+      ledger,
+      addMapping: vi.fn(),
+      alwaysMask: (review) => privateTerms(review.start!.profile),
+      send,
+    });
+    const review = prepareReview("baseline", (mask) => engineBaseline(sam, mask), {}, terms, start);
+    expect(approve(review)).toEqual({ status: "sent" });
+    expect(send).toHaveBeenCalledOnce();
+  });
+
+  it("honors explicit masks in public guidance without automatic detection there", () => {
+    const build = (mask: (text: string) => string) => `${mask("We check the furnace.")}\nOfficial guidance: Ready.gov; Battery CO detectors.`;
+    const review = prepareReview("baseline", build, {}, ["Ready.gov"]);
+    expect(review.text).not.toContain("Ready.gov");
+    expect(review.text).toContain("Battery CO detectors");
+    expect(review.pending).toEqual({ "[Person 1]": "Ready.gov" });
   });
 
   it("leaves unedited lines alone, so the baseline's public guidance isn't masked again", () => {
