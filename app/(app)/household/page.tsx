@@ -38,19 +38,18 @@ const SUPPLY_LABELS: Record<string, string> = Object.assign({}, ...Object.values
  * opens the same setup steps as the first visit.
  */
 export default function HouseholdPage() {
+  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
+  return hydrated ? <HouseholdContent /> : <main className="flex-1" />;
+}
+
+function HouseholdContent() {
   const router = useRouter();
   const profile = useHouseholdStore((state) => state.profile);
-  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
-  const setupRequested = useSyncExternalStore(
-    noSubscribe,
-    () => new URLSearchParams(window.location.search).get("setup") === "1",
-    () => false,
+  // Decide once after hydration; autosaved answers must not end this setup visit.
+  const [editing, setEditing] = useState(
+    () => new URLSearchParams(window.location.search).get("setup") === "1" || !hasProfile(profile),
   );
-  const [editing, setEditing] = useState<boolean | null>(null);
-
-  if (!hydrated) return <main className="flex-1" />;
   const saved = hasProfile(profile);
-  const showWizard = editing ?? (setupRequested || !saved);
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 space-y-6 px-4 py-6">
@@ -58,7 +57,7 @@ export default function HouseholdPage() {
         title="My household"
         intro="Who lives with you, your home and what you have on hand. It stays in this browser; the scenario engine sees only the attribute summary below."
       >
-        {!showWizard && (
+        {!editing && (
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => setEditing(true)}>
               <Pencil className="h-4 w-4" aria-hidden />
@@ -72,11 +71,12 @@ export default function HouseholdPage() {
         )}
       </PageHeader>
 
-      {showWizard ? (
+      {editing ? (
         <HouseholdWizard
           onStart={() => {
             // A fresh exercise with the edited household, as from the Exercises page; otherwise one in progress resumes.
             resetExercise();
+            setEditing(false);
             router.push("/exercise?start=1");
           }}
           onClose={() => (saved ? setEditing(false) : router.push("/journal"))}

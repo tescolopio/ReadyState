@@ -51,9 +51,20 @@ Use Chrome, Firefox and Safari (or Edge) at least once each before a release (wo
 ### Household setup
 
 - [ ] **Set up my household** opens the wizard: People, Pets, Home, Health needs, Supplies, Review.
+- [ ] In a fresh browser, open `/household` directly (no setup query). Add the first adult: the People step remains open even though the partial answer is saved. Continue through all six steps to **Emergency to practice**.
+- [ ] Selecting a scenario and **Start exercise** opens the outgoing review, with no model request. Cancel the review rather than sending during no-call checks.
+- [ ] **Close household setup** after a partial answer shows the saved household; editing reopens setup and later saves do not close it. Cancelling an empty household returns to the journal. Explicit `/household?setup=1` still works for an existing household, and cancellation leaves it closed.
 - [ ] After saving, **My household** summarizes it, **Start with my saved household** appears on the exercise screen, and the household survives a reload.
 - [ ] Switching backup power from a battery to a generator or none drops the battery capacity from the summary.
 - [ ] **Action plan** lists the household check's suggestions, and an added item survives a reload.
+
+The first-run lifecycle regressions run with
+`npm test -- 'app/(app)/household/page.test.tsx'` using jsdom and the real wizard.
+They cover autosave continuity, scenario selection/completion, cancellation,
+persisted households and editing while rejecting any request. Browser checks
+must use a dedicated key-free server and intercept `/api/ttx` before navigation.
+The earlier merged-main packaging walkthrough passed through **explicit setup**;
+its direct-entry failure is historical evidence, not retroactively a pass.
 
 ### Privacy masking (S1)
 
