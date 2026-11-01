@@ -8,9 +8,154 @@ for the unused Sharp/platform dependency stack. Local Windows, WSL Ubuntu and
 Docker builds exclude native/WASM image processors; static SVG and disabled
 optimizer checks validate the intended behavior without deleting traced files.
 See [scope and historical component record](binary-components.md).
-Remote new-head archive CI and config review remain required; binary publishing
-stays disabled. Historical Sharp-containing artifacts are not cleared by this
-change.
+Final-commit review and archive CI passed; PR #26 was merged as infrastructure
+only. Binary publishing stays disabled. Historical Sharp-containing artifacts
+remain excluded from distribution. The record below identifies the merged-main
+builds and separates current obligations from those historical findings.
+
+## Merged-main installation walkthrough (2026-11-01)
+
+PR #26 merged as `b4f12899a52a76c66f40e84197424649bbe66af4`.
+The final PR head `69a53ad45a73344a8db5f77b43cecb889c35723b` had passing
+Windows/Ubuntu archive, application/Docker and CodeQL checks. Independent
+configuration and installer follow-up reviews reported no significant issues;
+the final Docker payload change was reviewed directly, with a passing synthetic
+negative asset build. Concrete review findings have fix/verification replies.
+This was an infrastructure merge, **not release or binary-upload approval**.
+
+Both local native archives were rebuilt from an isolated, clean checkout of
+merged `main`, using Node 24.13.0. Their `release.json` identifies the merge
+revision, `uncommittedChanges: false` and `developmentPreview: true`.
+The exact archives exercised in the walkthrough have these SHA-256 values:
+
+```text
+cd64abf96657443342f76f817d3a62899626af6d6451723cab0ef2761a4c9552  main-ReadyState-windows-x64.zip
+9e5765ee33ddbcd7f46cd5120a81bbd407cb1ecc05329b242032456934f6117f  ReadyState-0.1.0-linux-x64.tar.gz
+```
+
+These hashes are **not** the separately rebuilt CI archives' hashes.
+[Merged-main archive CI](https://github.com/tescolopio/ReadyState/actions/runs/41334039881),
+[application/Docker CI](https://github.com/tescolopio/ReadyState/actions/runs/41334039852)
+and [CodeQL](https://github.com/tescolopio/ReadyState/actions/runs/41334039431)
+also passed. Only two small manifest/checksum artifacts were uploaded, not
+archives (558/552 bytes). Their source manifests and distinct checksums were
+retained separately.
+
+### Walkthrough evidence and boundaries
+
+| Action | Windows x64 | Linux x64 |
+| --- | --- | --- |
+| Extract/install | ZIP extracted to a path with spaces; per-user PowerShell install to isolated destination with `-NoShortcut` | tar.gz extracted; shell install with isolated HOME/destination; owned desktop entry created |
+| Launch/assets | Installed `start.ps1 --no-env`; six-page/72-asset smoke, static SVG and disabled optimizer passed | Installed `start.sh --no-env`; same native smoke passed |
+| Synthetic household/scenario | Explicit setup wizard: one fictional adult, general region, fictional home note; selected Extended power outage | Same user-interface path |
+| Review/edit/mask/cancel | Person name absent from outgoing text; copy-only edit; whole-word mask rebuilt preview, discarded copy edits and restored focus; edited again then confirmed going back without sending | Same assertions passed |
+| Settings | Saved custom provider, synthetic model name, empty key and inert `http://127.0.0.1:9/v1` endpoint; no endpoint test performed | Same settings |
+| Stop/restart | Initial owned process-tree stop; restarted at same origin; final launcher IPC stop exited 0 and endpoint stopped responding | SIGINT to the exact owned launcher PID; clean exit; restarted at same origin; final SIGINT clean exit |
+| Saved data | Restart showed exact saved household/settings values; review edits had not modified household | Same assertions passed |
+| Uninstall | `-RemoveInstallation` removed named package files and retained unrelated sentinel file | Uninstaller removed only its owned shortcut; manual removal of specifically named package files retained unrelated sentinel |
+| Browser data after removal | Exact saved household/settings still readable at the same origin, using intercepted offline HTML, not a running app | Same storage-only check |
+
+Linux removal was two separate actions:
+
+1. `uninstall.sh` verified its installation marker, removed the desktop entry
+   only when its `Exec` line matched this installation, and printed the path
+   for manual removal. It did **not** delete any application files.
+2. After stopping the server, the tester manually removed only `app`, `runtime`,
+   `launch.mjs`, `start.sh`, `install.sh`, `uninstall.sh`, `LICENSE`,
+   `configuration.example`, `INSTALL.md`, `packaging-review.md`,
+   `binary-components.md` and `release.json`. The installation directory and
+   unrelated sentinel file remained. No automatic full Linux removal is claimed.
+
+The browser pane could not connect (CDP timeout); the walkthrough therefore
+used a separate headless installed Microsoft Edge with isolated persistent
+profiles. It drove the real installed application's UI, not injected household
+or provider state. Before navigation, interception blocked every `/api/ttx`
+request and any external browser origin. Each platform recorded **zero attempted
+model requests, zero forwarded model requests, and no browser runtime errors**.
+Neither Send nor debrief was pressed. Provider keys were unset; no model or
+browser download occurred. Restart reused each platform's exact origin
+(`127.0.0.1:64321` / `127.0.0.1:41991`) and browser profile.
+
+The privacy ledger and additional always-mask rules are intentionally in memory,
+not persisted. Household/provider settings persistence passed; this does not
+claim masking rules survive a browser restart. Post-uninstall checks establish
+browser storage retention, not continued app availability.
+
+### Observed first-run navigation limitation
+
+Starting a completely empty household directly at `/household` (without
+`?setup=1`) closed the wizard after the first adult was added, because the
+partially saved profile then satisfied `hasProfile`. This was reproduced on
+both native builds and is not a packaging/extraction defect. The explicit
+`/household?setup=1` first-run flow passed all six steps; editing an already saved
+household is also available. Treat direct-entry wizard continuity as a separate
+UI follow-up, not a universally passing first-run experience. No app behavior
+was changed during this packaging walkthrough.
+
+### Remaining notices against these artifacts
+
+Both native builds contain 61 package notice records in `app/THIRD-PARTY.json`:
+51 MIT declarations, three Apache-2.0, two BSD-3-Clause, two ISC, one CC0-1.0,
+one BlueOak-1.0.0, and one missing license declaration (`busboy`).
+The vendored busboy `LICENSE` contains the MIT permission/copyright text and is
+included; its package metadata does not provide a version or license field.
+Forty-nine Next-vendored records lack version metadata. Their containing
+Next.js 16.4.3 release is known; independent constituent revision mapping is
+not established by this inventory. Do not invent versions or describe that
+provenance gap as fully cleared. Unknown constituent versions are metadata/
+provenance gaps, **not by themselves evidence that distribution is prohibited**.
+
+All 61 recorded packages have their recorded license materials in these
+artifacts; no missing recorded notice file was found. Busboy's absent license
+field is an inventory-metadata issue, not an absent license text. These checks
+do not establish whether every embedded constituent is covered. Distinguish
+that scope limitation from a demonstrated missing notice or unmet obligation:
+none is asserted solely from an unknown version.
+
+The exact Node 24.13.0 license, including third-party notices, is bundled at
+`runtime/LICENSE`. ReadyState's AGPL-3.0-only text is at `LICENSE`; corresponding
+modified source is identified by the exact merge-revision link. Inter, Source
+Sans 3 and Source Serif 4 have bundled SIL OFL notices under
+`app/public/licenses`. Source/notice locators for packages lacking separate
+upstream files remain in the existing supplement manifest; all recorded notice
+files were checked in the extracted archives.
+
+Before any separately authorized release, retain the matching source and build
+instructions, verify applicable attribution/source requirements for Node and
+Next's embedded constituents, and review remaining interpretation questions
+with qualified help where needed. File presence and passing CI are engineering
+evidence, not blanket legal clearance. Docker has additional Node/Alpine base-OS
+notice and provenance obligations; merged-main Docker CI is runtime evidence,
+not a published, pinned-digest container redistribution assessment.
+
+The specific release work still needed is to confirm the required attribution
+set for the actual bundled constituents, arrange any applicable matching-source
+delivery and build instructions, and record a pinned container/base-OS notice
+assessment if a Docker image will be published. Version mapping supports that
+review; it is not an automatic legal veto. Binary publication remains disabled
+pending resolution of these requirements and separate release authorization.
+
+Do not reopen the removed image-stack assessment unless the absence guard
+fails or a new consumer needs those components. Old Sharp-containing copies
+remain historical, uncleared and excluded from distribution.
+
+### Remaining platform and experience limits
+
+- Local Linux means **Ubuntu 24.04 under WSL**. The UI was controlled by Windows
+  Edge against that Linux server, not a Linux graphical desktop browser.
+  Hosted Ubuntu archive CI adds native coverage beyond WSL, but neither proves
+  independent Linux Docker Engine, other distributions or end-user desktop UX.
+- Windows used the no-shortcut installation option. Real Start menu/browser
+  opening UX, clean machines, signing, admin/organization PowerShell policies
+  and antivirus interaction remain unverified.
+- Local Docker evidence remains Docker Desktop's Linux environment. This turn
+  adds merged-main remote Docker CI, not a separate graphical Docker installation
+  walkthrough or independent Linux Engine certification.
+- Headless Edge is not manual desktop usability, Safari, Firefox or phone
+  coverage. The supplied shared browser tabs/servers were untouched.
+- No model was contacted: complete exercises, real-provider responses,
+  multi-turn/debrief quality and accuracy/safety findings remain unverified.
+  Ollama is experimental. Vercel was not inspected or changed.
 
 ## Source and S2
 
@@ -42,8 +187,8 @@ Original development-preview SHA-256 values (not rebuilt review candidates):
 | Ubuntu 24.04 under WSL2 / Node 24.13.0 | Native glibc build/startup, relocated tar.gz, per-user script install/application entry, installed server and shortcut removal | Independent Linux machines, graphical desktop UX, other distributions |
 | Docker Desktop's Linux environment on Windows | Production image, loopback-only Compose, key-free configuration, pages/assets, notices | Independent Linux Docker Engine |
 | Ubuntu WSL Compose client | Same Docker Desktop daemon, configuration and six page GETs | Not independent Linux Engine evidence |
-| GitHub-hosted Ubuntu 24.04 x64 / Node 24.13.0 | Remote native build, archive extraction, per-user install/remove, assets and clean shutdown at `df80b5e` | Adds coverage beyond local WSL; not independent Linux Engine or end-user desktop behavior |
-| GitHub-hosted Windows x64 / Node 24.13.0 | Same remote archive/lifecycle checks at `df80b5e` | Hosted automation, not clean end-user desktop certification |
+| GitHub-hosted Ubuntu 24.04 x64 / Node 24.13.0 | Merged `b4f1289` native build, image-free archive extraction, per-user install/remove, assets and clean shutdown | Adds coverage beyond local WSL; not independent Linux Engine or end-user desktop behavior |
+| GitHub-hosted Windows x64 / Node 24.13.0 | Same merged `b4f1289` archive/lifecycle checks | Hosted automation, not clean end-user desktop certification |
 
 Native no-call smokes check six pages and static assets, key-free self-hosted
 configuration, refusal of a second instance on the same port, clean launcher
@@ -127,7 +272,7 @@ ReadyState is AGPL-3.0-only; publish corresponding source for the final artifact
 including modifications. License collection and review here are engineering
 checks, not legal advice or a complete binary/SBOM audit.
 
-### Additional findings from remote package CI
+### Historical findings from Sharp-containing package CI
 
 The [component-by-component record](binary-components.md) lists observed
 versions, notice/source locators and conditional redistribution requirements.
@@ -156,12 +301,14 @@ An unbounded `sk-` regex falsely matched a substring of its embedded SVG
 provider-shaped lengths; regression tests still reject actual-shaped tokens
 inside binary data and captured secret canaries anywhere in a file.
 
-## Gates still open
+## Current gates still open
 
-1. Draft PR code review and final Windows/Linux archive CI.
-2. Binary dependency redistribution/source/attribution review described above.
-3. Rebuild from the reviewed clean source revision; publish source and hashes
-   together only with separate release approval.
+1. Separate binary-publication/release authorization; #26 is merged, but uploads
+   remain disabled.
+2. Remaining runtime attribution/source/provenance obligations identified for
+   the merged-main artifacts above, not removed Sharp components.
+3. Publish matching source and hashes together only with separate release
+   approval; retain the rebuilt development artifacts unchanged.
 4. Independent Linux Engine / clean-machine desktop validation, signing and
    actual shortcut/browser-opening UX.
 5. Complete exercise/provider behavior, multi-turn/debrief quality and remaining
