@@ -3,6 +3,10 @@ ReadyState is a dynamic, AI-powered Tabletop Exercise (TTX) simulator designed f
 
 Run it yourself with your own model API keys (or a fully local model through Ollama). For a private online trial, follow the [Vercel trial guide](docs/deployment/vercel-trial.md). The paid hosted service is not implemented yet; see [Deployment modes](docs/architecture/deployment-modes.md).
 
+For Windows/Linux native, Docker and bundled-runtime portable/per-user installs,
+see [Local installation](docs/deployment/local-installation.md). Ollama support
+is experimental; no model is included with ReadyState.
+
 ## Stack
 
 Next.js (App Router) · TypeScript · Tailwind CSS · Vercel AI SDK (`ai`, `@ai-sdk/react`, `@ai-sdk/openai`, `@ai-sdk/google`) · Zod · Zustand · compromise · lucide-react · Dexie · Supabase (hosted service).
@@ -27,7 +31,7 @@ npm run dev                           # or: npm run build && npm start
 
 Open http://localhost:3000 for the website, or http://localhost:3000/journal for the app. Then pick a provider and paste your API key in the app's **Settings**, or set keys in `.env.local`. Supported providers are Groq (default), Google Gemini, Cerebras, OpenRouter, Ollama (local, no key) and any OpenAI-compatible endpoint. Keep self-hosted instances on localhost or a trusted network; see the [security notes](docs/architecture/deployment-modes.md#security-notes).
 
-Scripts: `npm run dev`, `npm run build`, `npm start`, `npm run lint`, `npm run typecheck`, `npm test` (Vitest). CI (`.github/workflows/ci.yml`) runs all of these plus a Docker smoke test on every PR.
+Scripts: `npm run dev`, `npm run build`, `npm start` (loopback standalone production launcher), `npm run package:local`, `npm run lint`, `npm run typecheck`, `npm test` (Vitest). CI (`.github/workflows/ci.yml`) runs application checks and Docker smoke tests on every PR.
 
 ## Architecture
 
