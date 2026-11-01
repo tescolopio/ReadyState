@@ -91,6 +91,10 @@ Installed shortcuts open a terminal with the server and your normal browser.
 Closing/stopping that terminal stops the server; it is not an always-on service.
 Browser-opening failures print the URL to open manually.
 
+Docker builds assemble public assets and Next static files into the standalone
+payload before content inspection; the runtime stage copies only that inspected
+application payload.
+
 To configure an extracted/installed bundle, copy `configuration.example` to
 `.env.local` beside `launch.mjs`, or set `READYSTATE_ENV_FILE` to an absolute
 external configuration path before launching. An explicitly selected missing

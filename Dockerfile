@@ -12,6 +12,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build && node scripts/local/notices.mjs .next/standalone/node_modules \
+    && cp -R .next/static .next/standalone/.next/static \
+    && cp -R public .next/standalone/public \
+    && cp LICENSE .next/standalone/LICENSE \
     && node scripts/local/inspect.mjs .next/standalone
 
 FROM node:24-alpine AS runtime
@@ -22,9 +25,6 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0
 RUN addgroup -S readystate && adduser -S readystate -G readystate
 COPY --from=build --chown=readystate:readystate /app/.next/standalone ./
-COPY --from=build --chown=readystate:readystate /app/.next/static ./.next/static
-COPY --from=build --chown=readystate:readystate /app/public ./public
-COPY --from=build --chown=readystate:readystate /app/LICENSE ./LICENSE
 LABEL org.opencontainers.image.source="https://github.com/tescolopio/ReadyState" \
     org.opencontainers.image.licenses="AGPL-3.0-only"
 USER readystate

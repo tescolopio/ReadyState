@@ -40,6 +40,17 @@ jobs:
       - uses: actions/checkout@v5
       - run: docker build -t readystate:ci .
 
+      - name: Docker rejects forbidden public assets
+        run: |
+          log=$(mktemp)
+          trap 'rm -f public/package-canary.pem "$log"' EXIT
+          printf '%s\n' 'synthetic package inspection fixture' > public/package-canary.pem
+          if docker build --target build . > "$log" 2>&1; then
+            echo 'Docker accepted a forbidden public asset.'
+            exit 1
+          fi
+          grep -F 'Forbidden package path: public/package-canary.pem' "$log"
+
       - name: Start self-hosted and hosted containers
         run: |
           docker run -d --name selfhosted -p 3000:3000 readystate:ci

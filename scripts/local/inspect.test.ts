@@ -5,6 +5,20 @@ import { describe, expect, it } from "vitest";
 import { inspectPackage } from "./inspect.mjs";
 
 describe("extracted package inspection", () => {
+  it("checks separately assembled public and static asset trees", () => {
+    for (const directory of ["public", ".next/static"]) {
+      const root = mkdtempSync(path.join(tmpdir(), "readystate-assets-"));
+      try {
+        const assets = path.join(root, directory);
+        mkdirSync(assets, { recursive: true });
+        writeFileSync(path.join(assets, "bundle.js"), `sk-${"a".repeat(48)}`);
+        expect(() => inspectPackage(root)).toThrow("Credential-shaped content");
+        rmSync(path.join(assets, "bundle.js"));
+        writeFileSync(path.join(assets, "package-canary.pem"), "synthetic");
+        expect(() => inspectPackage(root)).toThrow("Forbidden package path");
+      } finally { rmSync(root, { recursive: true }); }
+    }
+  });
   it("rejects developer environment files, evaluation output and credentials", () => {
     for (const name of [".env.local", ".env", ".npmrc", "eval-results", "trace.log", "private.pem", "fixture.test.ts"]) {
       const root = mkdtempSync(path.join(tmpdir(), "readystate-content-"));
