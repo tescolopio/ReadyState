@@ -33,13 +33,21 @@ export interface RetriedOutcome<M> extends SendOutcome<M> {
 }
 
 /**
- * Sends, waits out per-minute limits (up to MAX_RATE_LIMIT_WAITS), and
- * resubmits once after an incomplete turn, which the server has already
- * retried once itself. `send` must make the identical request every time.
+ * Sends, waits out per-minute limits (up to `maxWaits`, MAX_RATE_LIMIT_WAITS
+ * by default), and resubmits once after an incomplete turn, which the server
+ * has already retried once itself, unless `resubmit` is false. A budgeted run
+ * turns both off, so every turn is one request. `send` must make the
+ * identical request every time.
  */
 export async function sendWithRetries<M>(
   send: () => Promise<SendOutcome<M>>,
-  { sleep, notes, label }: { sleep: (ms: number) => Promise<void>; notes: string[]; label: string },
+  {
+    sleep,
+    notes,
+    label,
+    maxWaits = MAX_RATE_LIMIT_WAITS,
+    resubmit = true,
+  }: { sleep: (ms: number) => Promise<void>; notes: string[]; label: string; maxWaits?: number; resubmit?: boolean },
 ): Promise<RetriedOutcome<M>> {
   let attempts = 0;
   let waits = 0;
@@ -52,14 +60,14 @@ export async function sendWithRetries<M>(
     const requestMs = Math.round(performance.now() - started);
     if (!result.error) return { ...result, attempts, waitedMs, requestMs };
     const wait = rateLimitWait(result.error);
-    if (wait !== undefined && waits < MAX_RATE_LIMIT_WAITS) {
+    if (wait !== undefined && waits < maxWaits) {
       waits++;
       waitedMs += wait;
       notes.push(`${label}: rate limited, waited ${Math.round(wait / 1000)} s`);
       await sleep(wait);
       continue;
     }
-    if (/incomplete turn/i.test(result.error) && !resubmitted) {
+    if (resubmit && /incomplete turn/i.test(result.error) && !resubmitted) {
       resubmitted = true;
       notes.push(`${label}: incomplete turn after the server's retry; resubmitted`);
       continue;

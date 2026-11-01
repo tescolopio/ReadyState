@@ -72,7 +72,8 @@ jobs:
         run: |
           docker run -d --name trial -p 3002:3000 \
             -e VERCEL=1 -e READYSTATE_TRIAL_PASSWORD=synthetic-trial-password-for-ci \
-            -e READYSTATE_CAPTURE_DEBRIEF_DRAFTS=1 readystate:ci
+            -e READYSTATE_CAPTURE_DEBRIEF_DRAFTS=1 -e READYSTATE_EVAL_BUDGET=1 \
+            -e READYSTATE_EVAL_TARGET_HOURS=168 readystate:ci
           docker run -d --name unconfigured-trial -p 3003:3000 \
             -e VERCEL=1 readystate:ci
           for port in 3002 3003; do
@@ -91,7 +92,7 @@ jobs:
             jq -e '.mode == "self-hosted"'
           curl -fs -u trial:synthetic-trial-password-for-ci \
             -H 'x-readystate-capture-debrief-drafts: 1' http://localhost:3002/api/ttx | \
-            jq -e '.captureDebriefDrafts == false'
+            jq -e '.captureDebriefDrafts == false and .evalBudget == false and .exerciseHours == 72'
           curl -fs -u trial:synthetic-trial-password-for-ci http://localhost:3002/journal > /dev/null
 
       - name: Container logs
