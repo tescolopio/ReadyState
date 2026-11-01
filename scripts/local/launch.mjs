@@ -82,9 +82,10 @@ export async function launch(args = process.argv.slice(2)) {
     console.log(`ReadyState: ${url}\nKeep this window open. Ctrl+C stops the local server.`);
     if (args.includes("--open-browser")) {
       const command = process.platform === "win32" ? "rundll32.exe" : "xdg-open";
-      const browser = spawn(command, process.platform === "win32" ? ["url.dll,FileProtocolHandler", url] : [url], { stdio: "ignore" });
+      const browser = spawn(command, process.platform === "win32" ? ["url.dll,FileProtocolHandler", url] : [url], { stdio: "ignore", detached: true });
       browser.once("error", error => console.error(`Could not open browser: ${error.message}. Open ${url} manually.`));
       browser.once("exit", code => { if (code) console.error(`Browser opener exited ${code}. Open ${url} manually.`); });
+      browser.unref();
     }
     const result = await ending;
     if (result.code && !(stopping && [130, 143].includes(result.code))) throw new Error(`ReadyState server exited ${result.code}.`);

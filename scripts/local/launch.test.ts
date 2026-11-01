@@ -1,5 +1,5 @@
 import { createServer } from "node:net";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -25,21 +25,29 @@ describe("local launcher", () => {
       await new Promise<void>(resolve => server.close(() => resolve()));
     }
   });
-  it("stops its server cleanly when the controlling process requests shutdown", async () => {
+  it("stops its server cleanly without waiting for a Unix browser opener", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "readystate-launch-"));
     const server = path.join(directory, "server.cjs");
     await writeFile(server, `require("node:http").createServer((req,res)=>res.end("{}")).listen(process.env.PORT,process.env.HOSTNAME); process.on("SIGTERM",()=>process.exit(143));`);
+    const openerPidFile = path.join(directory, "opener.pid");
+    if (process.platform === "linux") {
+      const opener = path.join(directory, "opener.cjs");
+      await writeFile(opener, `require("node:fs").writeFileSync(${JSON.stringify(openerPidFile)},String(process.pid)); setInterval(()=>{},1000);`);
+      await writeFile(path.join(directory, "xdg-open"), `#!/bin/sh\nexec "${process.execPath}" "${opener}"\n`);
+      await chmod(path.join(directory, "xdg-open"), 0o755);
+    }
     const probe = createServer();
     await new Promise<void>(resolve => probe.listen(0, "127.0.0.1", resolve));
     const address = probe.address();
     if (!address || typeof address === "string") throw new Error("No port");
     await new Promise<void>(resolve => probe.close(() => resolve()));
-    const child = spawn(process.execPath, [path.resolve("scripts/local/launch.mjs"), "--server", server, "--no-env"], {
-      env: { ...process.env, READYSTATE_MODE: "self-hosted", PORT: String(address.port) },
+    const child = spawn(process.execPath, [path.resolve("scripts/local/launch.mjs"), "--server", server, "--no-env", ...(process.platform === "linux" ? ["--open-browser"] : [])], {
+      env: { ...process.env, PATH: `${directory}${path.delimiter}${process.env.PATH}`, READYSTATE_MODE: "self-hosted", PORT: String(address.port) },
       stdio: ["ignore", "pipe", "pipe", "ipc"],
     });
     const ending = new Promise<number | null>((resolve, reject) => { child.once("exit", resolve); child.once("error", reject); });
     let errors = "";
+    let openerPid: number | undefined;
     try {
       const output = child.stdout;
       const errorOutput = child.stderr;
@@ -51,11 +59,27 @@ describe("local launcher", () => {
         child.once("exit", () => { clearTimeout(timeout); reject(new Error(`Launcher exited before readiness: ${errors}`)); });
         child.once("error", error => { clearTimeout(timeout); reject(error); });
       });
+      if (process.platform === "linux") {
+        for (let i = 0; i < 30; i++) {
+          try { openerPid = Number(await readFile(openerPidFile, "utf8")); break; }
+          catch (error) {
+            if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
+            await new Promise(resolve => setTimeout(resolve, 25));
+          }
+        }
+        expect(openerPid).toBeGreaterThan(0);
+      }
       child.send("stop");
-      expect(await ending).toBe(0);
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        expect(await Promise.race([ending, new Promise((_, reject) => {
+          timeout = setTimeout(() => reject(new Error("Launcher waited for browser after shutdown")), 1000);
+        })])).toBe(0);
+      } finally { clearTimeout(timeout); }
       expect(errors).toBe("");
       await expect(checkPort(address.port)).resolves.toBeUndefined();
     } finally {
+      if (openerPid) process.kill(openerPid, "SIGTERM");
       if (child.exitCode === null && child.connected) child.send("stop");
       await ending;
       await rm(directory, { recursive: true });

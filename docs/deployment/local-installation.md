@@ -247,7 +247,10 @@ Windows/Linux desktop machines are still validation gaps. Menu entries are
 inspected and installed servers are HTTP-smoked; real desktop double-click,
 browser-opening UX and organization-specific PowerShell policy remain manual
 checks. The Windows/Linux package workflow is added but its remote run is not
-yet evidence until it completes.
+yet evidence until it completes. Run `41329116910` at `df80b5e` subsequently
+passed on GitHub-hosted Windows and Ubuntu 24.04. This adds remote Ubuntu native
+archive coverage beyond WSL, not independent Linux Engine or end-user desktop
+behavior. Required fixes must pass on their new head.
 
 Before publishing a release, run that workflow on the final clean source
 revision, review its results and the existing dependency/safety findings, then
@@ -258,3 +261,9 @@ These development previews include S2: their base revision is `979b58f`, the
 merge of #25. They are dirty-worktree packaging previews, not artifacts rebuilt
 from an approved packaging commit. The draft PR and its remote archive CI are
 the next review gate; Vercel and model evaluations remain paused.
+
+Binary artifact upload is disabled while
+[component redistribution requirements](binary-components.md) remain open.
+CI publishes only build manifests/checksums; the previous publicly downloadable
+CI binaries were removed with user approval. Development-preview labels are
+not access restrictions.

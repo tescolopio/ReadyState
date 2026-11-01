@@ -30,6 +30,8 @@ Original development-preview SHA-256 values (not rebuilt review candidates):
 | Ubuntu 24.04 under WSL2 / Node 24.13.0 | Native glibc build/startup, relocated tar.gz, per-user script install/application entry, installed server and shortcut removal | Independent Linux machines, graphical desktop UX, other distributions |
 | Docker Desktop's Linux environment on Windows | Production image, loopback-only Compose, key-free configuration, pages/assets, notices | Independent Linux Docker Engine |
 | Ubuntu WSL Compose client | Same Docker Desktop daemon, configuration and six page GETs | Not independent Linux Engine evidence |
+| GitHub-hosted Ubuntu 24.04 x64 / Node 24.13.0 | Remote native build, archive extraction, per-user install/remove, assets and clean shutdown at `df80b5e` | Adds coverage beyond local WSL; not independent Linux Engine or end-user desktop behavior |
+| GitHub-hosted Windows x64 / Node 24.13.0 | Same remote archive/lifecycle checks at `df80b5e` | Hosted automation, not clean end-user desktop certification |
 
 Native no-call smokes check six pages and static assets, key-free self-hosted
 configuration, refusal of a second instance on the same port, clean launcher
@@ -115,6 +117,11 @@ checks, not legal advice or a complete binary/SBOM audit.
 
 ### Additional findings from remote package CI
 
+The [component-by-component record](binary-components.md) lists observed
+versions, notice/source locators and conditional redistribution requirements.
+It explicitly separates evidence from unresolved source/relinking obligations;
+binary redistribution remains uncleared.
+
 The first remote run failed before archive validation. It correctly identified
 two libvips platform packages omitted from the original Windows-only notice
 assessment: `@img/sharp-libvips-linux-x64` and
@@ -152,3 +159,24 @@ Vercel remains paused. Ollama remains experimental: **ReadyState runs locally**
 does not mean **the selected model runs locally**. A configured cloud provider
 still receives approved masked text. The prior `gpt-oss:20b` trial configuration
 remains unsuitable; no further model inference or downloads are authorized.
+
+## Review and artifact access
+
+Code review at `df80b5e`: the requested independent read-only review reported no
+significant issues; GitHub's review separately identified four concrete bugs:
+logical Linux source paths bypassed nested-install guards through aliases,
+logical uninstall paths missed owned shortcuts through aliases, Windows
+substring ownership removed sibling shortcuts, and a referenced browser opener
+could outlive/block server shutdown. These require targeted fixes and tests,
+then re-review of the new head rather than reusing the earlier assessment.
+
+The repository is public. CI binary artifacts were accessible to signed-in
+readers; anonymous API download returning 401 did not make them private.
+With user approval, binary artifact IDs `13092860898` and `13092781704` from
+run `41329116910` were deleted and the API confirmed zero remaining artifacts
+for that run. Previous downloads cannot be recalled. CI now uploads **only
+build manifests and checksums**, while still assembling/extracting/testing
+archives on runners. Do not restore binary uploads until redistribution clears.
+
+Vercel settings, preview protection and provider keys were not inspected in
+this local-only follow-up, per the user's clarification. No inference occurred.

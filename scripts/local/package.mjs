@@ -33,6 +33,7 @@ cpSync(path.join(root, "LICENSE"), path.join(target, "LICENSE"));
 cpSync(path.join(root, ".env.example"), path.join(target, "configuration.example"));
 cpSync(path.join(root, "docs", "deployment", "local-installation.md"), path.join(target, "INSTALL.md"));
 cpSync(path.join(root, "docs", "deployment", "packaging-review.md"), path.join(target, "packaging-review.md"));
+cpSync(path.join(root, "docs", "deployment", "binary-components.md"), path.join(target, "binary-components.md"));
 const revision = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
 if (revision.status !== 0) throw new Error("Cannot determine matching source revision.");
 const status = spawnSync("git", ["status", "--porcelain"], { encoding: "utf8" });

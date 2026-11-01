@@ -31,7 +31,7 @@ jobs:
           node-version: 24.13.0
           cache: npm
       - run: npm ci
-      - run: npm test -- scripts/local/launch.test.ts scripts/local/inspect.test.ts
+      - run: npm test -- scripts/local/launch.test.ts scripts/local/inspect.test.ts scripts/local/install.test.ts
       - run: npm run build
       - name: Verify native source startup
         shell: pwsh
@@ -96,12 +96,12 @@ jobs:
           sh "$HOME/ReadyState installed/uninstall.sh"
           test ! -f "$HOME/.local/share/applications/readystate.desktop"
           (cd dist && sha256sum "$folder.tar.gz" > SHA256SUMS.txt)
+      # Public-repository artifacts are downloadable by signed-in readers.
+      # Keep validation, but do not distribute uncleared native/WASM binaries.
       - uses: actions/upload-artifact@v4
         with:
-          name: ReadyState-${{ runner.os }}-x64
+          name: ReadyState-${{ runner.os }}-x64-build-evidence
           path: |
-            dist/*.zip
-            dist/*.tar.gz
             dist/SHA256SUMS.txt
             dist/BUILD-MANIFEST.json
           if-no-files-found: error

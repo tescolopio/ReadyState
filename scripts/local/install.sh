@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-base=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+base=$(CDPATH= cd -P -- "$(dirname -- "$0")" && pwd -P)
 destination=${1:-"$HOME/.local/share/ReadyState"}
 case "$destination" in /*) ;; *) echo "Use an absolute installation path." >&2; exit 1 ;; esac
 destination=$(realpath -m -- "$destination")
