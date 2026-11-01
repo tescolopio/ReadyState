@@ -13,10 +13,12 @@ import { SimulationLabel } from "@/components/brand";
 import { DecisionPath } from "@/components/decision-path";
 import { HouseholdSummary } from "@/components/household-summary";
 import { HouseholdWizard } from "@/components/household-wizard";
+import { OutgoingReviewPanel } from "@/components/outgoing-review";
 import { Button } from "@/components/ui/button";
-import { exerciseChat, resetExercise, useExerciseSession } from "@/lib/exercise-session";
+import { exerciseChat, resendLast, resetExercise, sendToExercise, useExerciseSession } from "@/lib/exercise-session";
 import { SCENARIOS, hasProfile, privateTerms, type HouseholdProfile } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
+import { createApprover, editReview, prepareReview, type OutgoingReview } from "@/lib/outgoing-review";
 import { TEST_HOUSEHOLDS } from "@/lib/test-households";
 import {
   DEBRIEF_REQUEST,
@@ -32,7 +34,7 @@ import {
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePlanStore } from "@/store/usePlanStore";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
-import { maskInput, unmaskOutput } from "@/utils/obfuscator";
+import { unmaskOutput } from "@/utils/obfuscator";
 
 
 /** Three recorded, already-masked turns from an eval run of the "sam" test household. */
@@ -66,13 +68,16 @@ export default function ExercisePage() {
   const router = useRouter();
   const [input, setInput] = useState("");
   // The exercise lives outside this page, so leaving for Journal or Settings doesn't end it.
-  const { messages, sendMessage, setMessages, status, error } = useChat<TtxUIMessage>({ chat: exerciseChat });
+  const { messages, setMessages, status, error } = useChat<TtxUIMessage>({ chat: exerciseChat });
   // Subscribe so unmasked output re-renders whenever the ledger changes.
   const entityMap = usePrivacyStore((state) => state.entityMap);
-  const { activeProfile, sampleId: activeSampleId, begin } = useExerciseSession();
+  const alwaysMaskList = usePrivacyStore((state) => state.alwaysMask);
+  const { activeProfile, sampleId: activeSampleId } = useExerciseSession();
 
   const ttx = deriveTtxState(messages);
   const busy = status === "submitted" || status === "streaming";
+  // Read from the chat itself, so two clicks in one frame see the first one's request.
+  const exerciseBusy = () => exerciseChat.status === "submitted" || exerciseChat.status === "streaming";
   const inputLocked = busy || ttx.phase === "ended" || ttx.phase === "aar";
   const complete = ttx.phase === "ended" || ttx.phase === "aar";
 
@@ -91,29 +96,78 @@ export default function ExercisePage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Sanitizes raw text before it reaches chat state / the API. The household's
-  // names and medication names are always masked, even in typed responses.
-  const maskFor = (profile: HouseholdProfile) => (text: string) =>
-    maskInput(text, { alwaysMask: [...usePrivacyStore.getState().alwaysMask, ...privateTerms(profile)] });
+  // Every message is reviewed before it leaves the browser (work item S2):
+  // masked into a review, and sent only when the participant chooses Send.
+  const [review, setReview] = useState<OutgoingReview | null>(null);
+  const [reviewNotice, setReviewNotice] = useState<string>();
+  const [reviewBlocked, setReviewBlocked] = useState<string[]>();
+
+  // The household's names and medication names are always masked, even in typed responses.
+  const alwaysMask = (profile?: HouseholdProfile) => [
+    ...usePrivacyStore.getState().alwaysMask,
+    ...privateTerms(profile ?? useExerciseSession.getState().activeProfile ?? useHouseholdStore.getState().profile),
+  ];
+  const ledger = () => usePrivacyStore.getState().entityMap;
+  const [approve] = useState(() =>
+    createApprover({
+      ledger,
+      addMapping: (value, tag) => usePrivacyStore.getState().addMapping(value, tag),
+      alwaysMask: () => alwaysMask(),
+      send: (text, { start }) => {
+        // A baseline starts the exercise only now, once it's sent.
+        if (start) useExerciseSession.getState().begin(start.profile, start.sampleId);
+        else setInput("");
+        void sendToExercise(text);
+      },
+    }),
+  );
+
+  const openReview = (next: OutgoingReview, notice?: string) => {
+    setReview(next);
+    setReviewNotice(notice);
+    setReviewBlocked(undefined);
+  };
   const submitText = (raw: string) => {
     const text = raw.trim();
-    if (!text || inputLocked) return;
-    setInput("");
-    void sendMessage({ text: maskFor(activeProfile ?? household)(text) });
+    if (!text || inputLocked || review) return;
+    openReview(prepareReview("response", (mask) => mask(text), ledger(), alwaysMask()));
   };
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     submitText(input);
   };
-  const sendBaseline = (profile: HouseholdProfile, sampleId?: string) => {
-    begin(profile, sampleId);
+  const reviewBaseline = (profile: HouseholdProfile, sampleId?: string) => {
     // Only the household part is masked; the official guidance is public text.
-    void sendMessage({ text: engineBaseline(profile, maskFor(profile)) });
+    openReview(prepareReview("baseline", (mask) => engineBaseline(profile, mask), ledger(), alwaysMask(profile), { profile, sampleId }));
   };
   const startWithHousehold = (profile: HouseholdProfile, sampleId?: string) => {
-    if (inputLocked) return;
+    if (inputLocked || review) return;
     setWizardOpen(false);
-    sendBaseline(profile, sampleId);
+    reviewBaseline(profile, sampleId);
+  };
+  const sendReview = () => {
+    if (!review || exerciseBusy()) return;
+    const result = approve(review);
+    if (result.status === "sent" || result.status === "duplicate") setReview(null);
+    else if (result.status === "blocked") setReviewBlocked(result.problems);
+    else openReview(result.review, result.reason);
+  };
+  const maskAndRebuild = (value: string) => {
+    if (!review) return;
+    const store = usePrivacyStore.getState();
+    store.setAlwaysMask([...store.alwaysMask, value]);
+    openReview(prepareReview(review.kind, review.build, ledger(), alwaysMask(review.start?.profile), review.start), `"${value}" is now masked everywhere. Review the rebuilt message.`);
+  };
+  const leaveReview = () => {
+    const kind = review?.kind;
+    setReview(null);
+    // Back to the typed response, which is kept as it was.
+    if (kind === "response") setTimeout(() => inputRef.current?.focus());
+  };
+  // A failed request is sent again exactly as approved, with the same Settings.
+  const retry = () => {
+    if (exerciseBusy()) return;
+    void resendLast();
   };
 
   useEffect(() => {
@@ -125,7 +179,8 @@ export default function ExercisePage() {
     if (!autoStart || autoStarted.current || !hydrated || exerciseChat.messages.length > 0) return;
     autoStarted.current = true;
     router.replace("/exercise");
-    if (hasProfile(household)) sendBaseline(household);
+    // After this effect, like a click: the review is state, not a side effect of rendering.
+    if (hasProfile(household)) setTimeout(() => reviewBaseline(household));
     // Runs once, when the saved household is readable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart, hydrated]);
@@ -143,16 +198,17 @@ export default function ExercisePage() {
 
   const requestDebrief = () => {
     if (busy) return;
-    void sendMessage({ text: DEBRIEF_REQUEST });
+    void sendToExercise(DEBRIEF_REQUEST);
   };
   const startOver = () => {
     resetExercise();
+    setReview(null);
     setInput("");
     setConfirmingReset(false);
   };
 
   const alerts = ttx.latestTurn?.critical_alerts ?? [];
-  const shownProfile = activeProfile ?? (hydrated && hasProfile(household) ? household : null);
+  const shownProfile = activeProfile ?? review?.start?.profile ?? (hydrated && hasProfile(household) ? household : null);
   const scenario = activeProfile && activeProfile.scenario !== "surprise" ? SCENARIOS[activeProfile.scenario] : "Exercise";
   const source: LessonSource = { scenario, keepable: !activeSampleId && !preview };
 
@@ -162,6 +218,22 @@ export default function ExercisePage() {
   const earlier = lastUser > 0 ? messages.slice(0, lastUser) : [];
   const current = lastUser >= 0 ? messages.slice(lastUser) : messages;
   const decisions = earlier.filter((message) => message.role === "user").length;
+
+  const reviewPanel = review && (
+    <OutgoingReviewPanel
+      review={review}
+      notice={reviewNotice}
+      blocked={reviewBlocked}
+      sending={busy}
+      onEdit={(text) => {
+        setReview(editReview(review, text));
+        setReviewBlocked(undefined);
+      }}
+      onMask={maskAndRebuild}
+      onSend={sendReview}
+      onBack={leaveReview}
+    />
+  );
 
   return (
     <main className="mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -183,7 +255,10 @@ export default function ExercisePage() {
           </div>
         )}
 
+        {review?.kind === "baseline" && reviewPanel}
+
         {messages.length === 0 &&
+          !review &&
           (wizardOpen ? (
             <HouseholdWizard onStart={(profile) => startWithHousehold(profile)} onClose={() => setWizardOpen(false)} />
           ) : (
@@ -233,8 +308,14 @@ export default function ExercisePage() {
                 <Link href="/settings" className="font-semibold text-ink underline underline-offset-2">
                   Settings
                 </Link>
-                , then send your response again.
+                , or send the same message again.
               </p>
+            )}
+            {ttx.phase !== "ended" && (
+              <Button size="sm" variant="outline" onClick={retry} disabled={busy}>
+                <RotateCcw className="h-4 w-4" aria-hidden />
+                Send the same message again
+              </Button>
             )}
           </div>
         )}
@@ -247,7 +328,9 @@ export default function ExercisePage() {
         )}
         {ttx.phase === "aar" && !busy && (activeSampleId ? <MakeThisMine router={router} /> : <WhatNext router={router} />)}
 
-        {ttx.turns.length > 0 && !complete && (
+        {review?.kind === "response" && reviewPanel}
+
+        {ttx.turns.length > 0 && !complete && !review && (
           <form onSubmit={handleSubmit} className="space-y-3 rounded-panel border border-line bg-surface p-4 shadow-panel">
             <label htmlFor="response" className="block font-heading text-lg font-semibold">
               What would you do next?
@@ -288,7 +371,7 @@ export default function ExercisePage() {
               className="block w-full resize-y rounded-control border border-line-strong bg-field px-3 py-2.5 text-base text-ink placeholder:text-ink-3 disabled:opacity-60"
             />
             <p id="response-hint" className="text-xs text-ink-3">
-              Ctrl+Enter to submit. Names and places are masked before sending.
+              Ctrl+Enter to review it. You&apos;ll see exactly what&apos;s sent, with names and places masked, before it goes.
             </p>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Link
@@ -300,7 +383,7 @@ export default function ExercisePage() {
               </Link>
               <Button type="submit" disabled={inputLocked || !input.trim()}>
                 <Send className="h-4 w-4" aria-hidden />
-                Submit response
+                Review before sending
               </Button>
             </div>
             <p className="text-xs text-ink-3">Paused exercises wait in this tab until you close it or reload.</p>
@@ -356,7 +439,8 @@ export default function ExercisePage() {
                 ))}
               </ul>
             )}
-            <AlwaysMaskCard />
+            {/* Keyed by the list, so a word masked from a review shows up in the card. */}
+            <AlwaysMaskCard key={alwaysMaskList.join(" ")} />
           </div>
         </details>
 
@@ -497,7 +581,8 @@ function StartPanel({
         )}
       </div>
       <p className="text-sm text-ink-3">
-        Names, medication and device names, places, addresses and contact details are replaced with tags like [Person 1] before anything leaves your browser.
+        Names, medication and device names, places, addresses and contact details are replaced with tags like [Person 1], and
+        you review exactly what&apos;s sent before it leaves your browser.
       </p>
     </section>
   );

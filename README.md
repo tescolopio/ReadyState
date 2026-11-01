@@ -70,6 +70,8 @@ Further reading:
 
 Before anything is sent to `/api/ttx`, the browser replaces the names in your household profile, names you add in Settings, and detected addresses, phone numbers, email addresses, ZIP codes and URLs with tags such as `[Person 1]`. Tags are restored in the browser before rendering. Your profile stays in this browser's storage; its real values aren't sent.
 
+Every message opens a review first: the exact masked text, which you can edit or mask further (**Mask selected text**), sent only when you choose **Send this**. **Back** sends nothing. The review shows what leaves the browser; it doesn't guarantee anonymity or control how long a provider keeps what it receives.
+
 What masking doesn't do:
 
 - **Your circumstances are sent.** The model provider receives the household's ages, functional needs (such as "refrigerated medication"), pets, home, supplies and region, and your responses with identifiers masked.

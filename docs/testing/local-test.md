@@ -64,6 +64,18 @@ Use Chrome, Firefox and Safari (or Edge) at least once each before a release (wo
 - [ ] A household name that is also a common word (for example a person named "Will") hides the name but not the ordinary word ("we will leave").
 - [ ] Add a name under **Settings → Privacy**, use it in a response, and check that it's masked.
 
+### Reviewing what's sent (S2)
+
+- [ ] Starting an exercise opens **Review what leaves this browser** with the complete masked briefing; DevTools → Network shows no `ttx` request yet.
+- [ ] **Back, don't send** returns to the start with nothing sent; for a response, the typed text is still in the box.
+- [ ] **Review before sending** (or Ctrl+Enter) on a response opens its review; the request payload's last message matches the review's text exactly after **Send this**.
+- [ ] Select a word the masker missed, choose **Mask selected text**, and confirm: the review is rebuilt with it tagged. With edits, it warns first.
+- [ ] Delete one bracket of a tag: Send is disabled with an explanation. Deleting a whole tag is fine.
+- [ ] Type a phone number into the review's copy and send: it's masked and shown again before anything goes.
+- [ ] Double-click **Send this**: one request.
+- [ ] After a failed request, **Send the same message again** resends it unchanged, even after changing Settings.
+- [ ] On a phone (or a narrow window), the review fits without sideways scrolling and its buttons are easy to tap; with only the keyboard, Tab reaches the copy, Mask, Back and Send.
+
 ### Exercise loop (G8, D8)
 
 - [ ] The first turn shows the situation, with no feedback block.

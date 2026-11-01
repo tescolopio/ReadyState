@@ -425,6 +425,12 @@ export interface MaskOptions {
   alwaysMask?: MaskTerm[];
   /** Return the masked text without recording anything in the ledger (for previews). */
   dryRun?: boolean;
+  /**
+   * A staged ledger to mask against instead of the privacy store. New tags are
+   * added to it, not to the store, so a reviewed message records its tags only
+   * once it's sent (work item S2).
+   */
+  ledger?: Record<string, string>;
 }
 
 /**
@@ -437,7 +443,8 @@ export interface MaskOptions {
  * messages are masked too, and existing `[...]` tags are preserved.
  */
 export function maskInput(text: string, options: MaskOptions = {}): string {
-  const { entityMap: initialMap, alwaysMask: storedAlwaysMask } = usePrivacyStore.getState();
+  const { entityMap: storedMap, alwaysMask: storedAlwaysMask } = usePrivacyStore.getState();
+  const initialMap = options.ledger ?? storedMap;
   const alwaysMask = options.alwaysMask ?? storedAlwaysMask;
 
   const detected: Detection[] = [
@@ -456,7 +463,8 @@ export function maskInput(text: string, options: MaskOptions = {}): string {
   );
 
   // Work on a copy so a dry run (a preview) leaves the real ledger untouched.
-  const ledger = { ...initialMap };
+  const ledger = options.ledger ?? { ...initialMap };
+  const record = !options.dryRun && !options.ledger;
   // Keyed by lowercase value; `exact` is set for a case-sensitive value, which only its own capitalization matches.
   const replacements = new Map<string, { tag: string; exact?: string }>();
   // Case-sensitive values, so the same word from the ledger doesn't come back as a case-insensitive match.
@@ -476,7 +484,7 @@ export function maskInput(text: string, options: MaskOptions = {}): string {
     if (!tag) {
       tag = nextTag(kind, ledger);
       ledger[tag] = realValue;
-      if (!options.dryRun) usePrivacyStore.getState().addMapping(realValue, tag);
+      if (record) usePrivacyStore.getState().addMapping(realValue, tag);
     }
     replacements.set(key, { tag, exact: caseSensitive ? realValue : undefined });
   }
