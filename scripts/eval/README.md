@@ -47,7 +47,7 @@ PowerShell: `$env:EVAL_ONLY="alex"; npm run eval`.
 | `EVAL_REPLAY_TURNS` | all | Replay only the first N successful turns of `EVAL_REPLAY`, then continue live. |
 | `EVAL_EXERCISE_HOURS` | `72` | The clock the server must report before any call; start it with the same `READYSTATE_EVAL_TARGET_HOURS` (local only). |
 | `EVAL_BUDGET` | none | A token cap for the run, enforced by the server before every provider call; start it with `READYSTATE_EVAL_BUDGET=1` (local only). Also turns off the eval's own resends. See `lib/eval-call-budget.ts`. |
-| `EVAL_MAX_OUTPUT` | `2500` | With `EVAL_BUDGET`, the output limit the server enforces on each provider call. |
+| `EVAL_MAX_OUTPUT` | `2500` | With `EVAL_BUDGET`, the output limit the server enforces on each provider call. Production sets no output limit, so a budgeted run cuts off output that production would allow. |
 
 ```bash
 # Rerun only the debrief, and resume an interrupted exercise, from an earlier run
