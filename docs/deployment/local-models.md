@@ -432,3 +432,75 @@ opening on this configuration. Before recommending it, document and verify
 the repeatable preload/startup procedure, memory requirements, readiness
 checks and failure messaging. Multi-turn behavior, cold startup handling,
 debrief quality, Linux and remaining browser coverage stay unverified.
+
+## Authorized warm-opening result: 2026-11-01
+
+The proposed test was explicitly authorized and executed once. The bounded
+harness and raw synthetic evidence are retained in the session workspace,
+not added to the normal test suite. ReadyState revision: `d9ddf9f`, on the
+separate local-model documentation branch. The 55-second budget was unchanged.
+
+Before loading, a synthetic upstream verified that the test guard forwards
+the first generation request, preserves its payload and stream, rejects a
+second request without forwarding, and cancels upstream on client disconnect.
+The real run forwarded **one** generation request; zero subsequent attempts
+were made or blocked. Cloud features were disabled on the isolated runtime
+and cloud-provider keys were unset on ReadyState.
+
+| Measurement | Result |
+| --- | --- |
+| Empty-prompt preload wall time | 12,504 ms |
+| Preload completion | `done_reason: load`, empty response; no generated text |
+| Opening upstream request/stream time | 49,874 ms |
+| ReadyState request through complete UI stream | 49,986 ms |
+| Total helper startup, load, request and cleanup | 66,636 ms, below 300 seconds |
+| Cleanup time | 1,278 ms |
+| Generation requests forwarded / blocked | 1 / 0 |
+| Token usage reported by ReadyState | 2,056 input; 571 output |
+| Server schema retries reported | 0 |
+| Complete stream | Yes; HTTP 200 and stream termination, but tool errors |
+| Complete valid turn delivered | **No** |
+
+The preload returned no `load_duration` or `total_duration`; their values are
+unknown. The opening time is end-to-end generation/streaming wall time, not a
+pure token-generation measurement. No per-request load metric was captured,
+so additional model reconfiguration/loading during the opening is unknown.
+Ollama reported the loaded context as 16,384, approximately 14.1 GB allocated,
+and approximately 3.85 GB in VRAM.
+
+The model attempted `generate_turn`, but each of its four `response_options`
+was an object containing `option`, rather than the required string.
+Offline validation against `turnSchema` confirmed failures at
+`response_options[0]` through `[3]`. ReadyState returned tool-input and
+tool-output errors, not an accepted turn. The harness's passing test means
+its bounds and guard assertions passed, **not** model compatibility.
+
+### Manual review of the rejected raw draft
+
+No participant-ready response was delivered. The captured raw tool input was
+reviewed offline after stopping the model:
+
+- "Kitchen appliances turn red" after power loss is unexplained and physically
+  inconsistent.
+- Stored water "nearing its 24-hour limit" at Hour 0 confuses a one-day supply
+  with an expiration timer and implies time already elapsed.
+- Phone charge at 15% and poorly insulated walls are asserted without baseline
+  support. The absence of a recorded smoke detector becomes confirmed absence.
+- Sitting outside and drinking the whole gallon is an exaggerated flawed
+  option, weak for constructive beginner practice.
+- Shutting windows "to seal the cold air in" is contradictory; setting a timer
+  assumes an unestablished resource.
+- Borrowing blankets and obtaining water are plausible themes, but the schema
+  failure and contradictions make the draft unsuitable as delivered.
+
+The model was unloaded with an empty request and `keep_alive: 0`; `/api/ps`
+confirmed no model remained loaded in the isolated service. Test-owned
+ReadyState, guard and Ollama process trees were stopped. Existing runtimes
+and installed model files were left untouched. No automatic resubmission,
+second generation, debrief request or cloud call occurred.
+
+**Conclusion:** this warm request returned within the budget, but failed the
+required tool schema. `gpt-oss:20b` on this machine remains **not yet validated
+for ReadyState's 55-second request budget and output contract**. No further
+inference is authorized by this result. Multi-turn, debrief and Linux behavior
+remain unverified; this does not block or certify the private Vercel trial.
