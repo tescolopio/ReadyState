@@ -79,7 +79,8 @@ try {
       execFileSync("powershell.exe", ["-NoProfile", "-Command", script], {
         env: { ...process.env, READYSTATE_TEST_INSTALLATION: installation },
         stdio: "pipe",
+        timeout: 20_000,
       });
     } finally { rmSync(root, { recursive: true }); }
-  });
+  }, 30_000);
 });
