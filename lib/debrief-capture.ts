@@ -1,7 +1,7 @@
 /**
  * Capture of every debrief draft, rejected ones included, for manual review
  * in local evals. Off by default: the server must set
- * READYSTATE_CAPTURE_DEBRIEF_DRAFTS=1, it is never on in hosted mode, and the
+ * READYSTATE_CAPTURE_DEBRIEF_DRAFTS=1, it is never on in hosted mode or Vercel, and the
  * request must ask for it with the CAPTURE_HEADER the eval sends when
  * EVAL_CAPTURE_DRAFTS=1. The eval writes it to eval-results/ (git-ignored).
  *
@@ -38,7 +38,7 @@ export interface DebriefCapture {
 }
 
 export const captureEnabled = (req: Request, mode: string) =>
-  mode !== "hosted" && process.env.READYSTATE_CAPTURE_DEBRIEF_DRAFTS === "1" && req.headers.get(CAPTURE_HEADER) === "1";
+  process.env.VERCEL !== "1" && mode !== "hosted" && process.env.READYSTATE_CAPTURE_DEBRIEF_DRAFTS === "1" && req.headers.get(CAPTURE_HEADER) === "1";
 
 /** The briefing after the household baseline: the log, the latest turn and the debrief request. */
 export function briefingWithoutBaseline(briefing: string) {
