@@ -7,6 +7,7 @@ import {
   type UIMessageChunk,
 } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
+import { inspect } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AfterActionReport, TtxUIMessage } from "@/lib/ttx";
@@ -427,6 +428,64 @@ describe("POST /api/ttx: the debrief", () => {
         failedFirst: [expect.stringContaining("action is a list")],
         stillFailing: [expect.stringContaining("action is a list")],
       },
+    });
+  });
+
+  describe("what the server logs", () => {
+    /** Everything passed to console.error and console.warn, as it would appear in a host's logs. */
+    const logged = () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      return {
+        text: () => inspect([...error.mock.calls, ...warn.mock.calls], { depth: Infinity }),
+        error,
+        warn,
+      };
+    };
+    afterEach(() => vi.restoreAllMocks());
+
+    const household = "[Person 1] needs insulin kept cold; the spare key is under the mat at [Address 1].";
+    const secrets = ["insulin", "spare key", "org_01SECRETORG", "gsk_SECRETKEY", "sk-proj-SECRET"];
+
+    it("logs a failed model call's status, kind and code, never its request, response or credentials", async () => {
+      const logs = logged();
+      env.model = new MockLanguageModelV4({
+        doStream: async (options) => {
+          // As the SDK does: the error carries the request it sent and the provider's raw reply.
+          throw new APICallError({
+            message: "Invalid API Key for organization org_01SECRETORG",
+            url: "https://api.groq.com/openai/v1/chat/completions",
+            requestBodyValues: { messages: options.prompt, api_key: "gsk_SECRETKEY" },
+            statusCode: 401,
+            responseHeaders: { "x-groq-org": "org_01SECRETORG" },
+            responseBody: JSON.stringify({ error: { message: "Invalid API Key sk-proj-SECRET", code: "invalid_api_key" } }),
+          });
+        },
+      });
+
+      const body = await (
+        await post([{ ...userMessage, parts: [{ type: "text", text: household }] }], { provider: "groq", apiKey: "gsk_SECRETKEY" })
+      ).text();
+      expect(body).toContain("rejected the API key");
+      expect(logs.error).toHaveBeenCalledWith("[ttx] model call failed", {
+        error: "AI_APICallError",
+        status: 401,
+        kind: "other",
+        code: "invalid_api_key",
+      });
+      for (const secret of secrets) expect(logs.text()).not.toContain(secret);
+    });
+
+    it("logs which debrief checks failed and where, never the debrief's text", async () => {
+      const logs = logged();
+      env.model = debriefModel([kitList, kitList]);
+
+      await (await post(endedExercise)).text();
+      expect(logs.warn).toHaveBeenCalledWith(
+        "[ttx] debrief failed checks",
+        expect.arrayContaining([{ category: "suitability", check: "list-shaped", field: "do_better[0].action" }]),
+      );
+      expect(logs.text()).not.toMatch(/emergency kit|NOAA radio|sleeping bag|inventory gaps/);
     });
   });
 

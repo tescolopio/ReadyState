@@ -1,7 +1,7 @@
 import { APICallError, RetryError, StreamProviderError } from "ai";
 import { describe, expect, it } from "vitest";
 
-import { describeProviderError, failureSummary, isSchemaSlip, providerErrorDetails, retryAfterSeconds } from "@/lib/provider-errors";
+import { describeProviderError, errorDiagnostics, failureSummary, isSchemaSlip, providerErrorDetails, retryAfterSeconds } from "@/lib/provider-errors";
 
 const apiError = (statusCode: number, responseBody = "", responseHeaders: Record<string, string> = {}) =>
   new APICallError({
@@ -81,6 +81,31 @@ describe("describeProviderError", () => {
     expect(describeProviderError(new Error("boom"), "self-hosted")).toBe(
       "Something went wrong generating this turn. Please try again.",
     );
+  });
+});
+
+describe("errorDiagnostics", () => {
+  it("keeps only the status, kind and code of a provider failure, unwrapped from retries", () => {
+    const wrapped = new RetryError({ message: "Failed after 3 attempts", reason: "maxRetriesExceeded", errors: [dailyLimit] });
+    expect(errorDiagnostics(wrapped)).toEqual({ error: "AI_RetryError", status: 429, kind: "rate limit" });
+    expect(JSON.stringify(errorDiagnostics(wrapped))).not.toContain("org_secret123");
+  });
+
+  it("includes a provider's error code only when it looks like one", () => {
+    expect(errorDiagnostics(apiError(400, '{"error":{"code":"tool_use_failed","message":"tool call validation failed"}}'))).toMatchObject({
+      kind: "malformed tool call",
+      code: "tool_use_failed",
+    });
+    expect(errorDiagnostics(apiError(400, '{"error":{"code":"bad key gsk_abc for org_secret123"}}'))).not.toHaveProperty("code");
+    expect(errorDiagnostics(new StreamProviderError({ message: "overloaded for org_secret123", statusCode: 503, code: 529 }))).toMatchObject({
+      status: 503,
+      code: "529",
+    });
+  });
+
+  it("names a timeout or an unknown error without its message", () => {
+    expect(errorDiagnostics(new DOMException("took too long", "TimeoutError"))).toEqual({ error: "TimeoutError", timedOut: true });
+    expect(errorDiagnostics(new Error("household details"))).toEqual({ error: "Error" });
   });
 });
 
