@@ -27,6 +27,8 @@ npm run dev                           # or: npm run build && npm start
 
 Open http://localhost:3000 for the website, or http://localhost:3000/journal for the app. Then pick a provider and paste your API key in the app's **Settings**, or set keys in `.env.local`. Supported providers are Groq (default), Google Gemini, Cerebras, OpenRouter, Ollama (local, no key) and any OpenAI-compatible endpoint. Keep self-hosted instances on localhost or a trusted network; see the [security notes](docs/architecture/deployment-modes.md#security-notes).
 
+For downloaded local models, follow [Local models with Ollama](docs/deployment/local-models.md): Windows/Linux installation, local-only configuration, native versus Docker endpoints, hardware considerations and an explicit acceptance test plan. Local-model exercise quality is not yet verified.
+
 Scripts: `npm run dev`, `npm run build`, `npm start`, `npm run lint`, `npm run typecheck`, `npm test` (Vitest). CI (`.github/workflows/ci.yml`) runs all of these plus a Docker smoke test on every PR.
 
 ## Architecture

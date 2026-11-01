@@ -47,6 +47,11 @@ Presets live in `lib/providers.ts`:
 
 Only Groq has been benchmarked against the forced `generate_turn` tool call. Other providers and local models may handle forced tool calls less reliably; test them before recommending one.
 
+See [Local models with Ollama](../deployment/local-models.md) for installation
+references, local-only configuration, endpoint selection and explicit
+Windows/Linux acceptance tests. Ollama also supports cloud models: using its
+local endpoint alone does not prove that inference stays on the machine.
+
 ### Security notes
 
 - **Self-hosted mode trusts the browser.** It accepts API keys and, for `ollama` and `custom`, arbitrary base URLs from the client, so the server makes outbound requests wherever the browser says. That's fine on your own machine, but don't expose a self-hosted instance to the internet or an untrusted network. `docker-compose.yml` binds to `127.0.0.1` for this reason.

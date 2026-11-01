@@ -1,6 +1,12 @@
 # Live evaluations
 
-These play the app against a real model, so they need a running server and a provider key. They take minutes and use tokens, so they're separate from `npm test`.
+These play the app against a real model, so they need a running server and, for cloud providers, a provider key. They take minutes and use tokens, so they're separate from `npm test`.
+
+Local Ollama runs need no provider key, but still require authorization for
+downloads and inference. Follow [Local models with Ollama](../../docs/deployment/local-models.md)
+for setup and bounded tests. Set both `EVAL_PROVIDER=ollama` and `EVAL_MODEL`;
+setting only the model makes the eval use Groq. These API evaluations do not
+verify the browser's review-before-send UI or establish safety certification.
 
 ## Test households
 
