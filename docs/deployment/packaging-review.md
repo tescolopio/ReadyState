@@ -13,6 +13,40 @@ only. Binary publishing stays disabled. Historical Sharp-containing artifacts
 remain excluded from distribution. The record below identifies the merged-main
 builds and separates current obligations from those historical findings.
 
+## Bundled application attribution follow-up
+
+The original collector inventoried traced server packages only. The separate
+notice fix also covers every declared production application dependency, its
+required dependency closure and installed executable peers, including nested
+versions. This is **conservative attribution coverage**, not a claim that every
+declared package is emitted into JavaScript (Dexie, for example, is currently
+declared but not imported). Type-only `@types/*` peers and optional platform
+build dependencies are not added by this closure; shipped traced dependencies
+remain covered independently. The removed image-processing stack stays excluded.
+
+Installed LICENSE, NOTICE, COPYING and COPYRIGHT files are copied verbatim.
+Application-only materials live under `app/THIRD-PARTY-LICENSES`; packages already
+covered by server traces reuse their existing notice directory. The inventory
+records both scopes, installed versions, relative notice directories and SHA-256
+hashes. Build and extracted-archive checks independently resolve the installed
+application closure and reject missing records, altered license bytes or omitted
+NOTICE files. Docker applies the same checks to its assembled app payload.
+
+This closes the collector's omission of Zustand's installed-version MIT license
+and `Copyright (c) 2019 Paul Henschel` in new builds only. Other direct application
+dependencies and their required closure receive the same treatment, including
+Dexie's separate NOTICE and full Apache-2.0 license text. Two installed versions
+of `@ai-sdk/provider-utils` omit license files; exact-version upstream release
+commits supply the checked-in Vercel Apache attribution supplements. Sources are
+recorded in `scripts/local/license-supplements.json`; whitespace-only line-ending
+normalization in the checked-in supplements does not change their license text.
+
+The historical artifacts and findings below are not retroactively corrected.
+Publication remains disabled pending review, merge and verification of final
+merged-main artifacts, followed by an explicit release decision. Metadata-only
+CI uploads remain unchanged. No browser walkthrough, model calls, downloads or
+Vercel changes are needed for this notice-only fix.
+
 ## Merged-main installation walkthrough (2026-11-01)
 
 PR #26 merged as `b4f12899a52a76c66f40e84197424649bbe66af4`.

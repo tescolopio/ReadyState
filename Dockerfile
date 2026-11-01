@@ -15,6 +15,7 @@ RUN npm run build && node scripts/local/notices.mjs .next/standalone/node_module
     && cp -R .next/static .next/standalone/.next/static \
     && cp -R public .next/standalone/public \
     && cp LICENSE .next/standalone/LICENSE \
+    && node --input-type=module -e "import { verifyNotices } from './scripts/local/notices.mjs'; verifyNotices('.next/standalone');" \
     && node scripts/local/inspect.mjs .next/standalone
 
 FROM node:24-alpine AS runtime

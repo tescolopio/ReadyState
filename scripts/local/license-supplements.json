@@ -1,5 +1,19 @@
 [
   {
+    "name": "@ai-sdk/provider-utils",
+    "version": "5.0.59",
+    "license": "Apache-2.0",
+    "file": "ai-sdk-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/vercel/ai/543d42cdda96e2ecb59c0a28f197067b96b5ac8d/LICENSE"
+  },
+  {
+    "name": "@ai-sdk/provider-utils",
+    "version": "5.0.69",
+    "license": "Apache-2.0",
+    "file": "ai-sdk-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/vercel/ai/e197b50b5ddd21b121b704710bddd945970b4d34/LICENSE"
+  },
+  {
     "name": "client-only",
     "version": "0.0.1",
     "license": "MIT",
