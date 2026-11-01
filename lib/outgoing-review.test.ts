@@ -232,6 +232,14 @@ describe("createApprover", () => {
 });
 
 describe("maskableSelection", () => {
+  it("rejects partial words using surrounding text, including unicode and identifiers", () => {
+    expect(maskableSelection("Cole", "The ", "man stove")).toHaveProperty("problem");
+    expect(maskableSelection("man", "Cole", " stove")).toHaveProperty("problem");
+    expect(maskableSelection("iar", "C", "án")).toHaveProperty("problem");
+    expect(maskableSelection("name", "_", "1")).toHaveProperty("problem");
+    expect(maskableSelection("Coleman", "The ", " stove")).toEqual({ value: "Coleman" });
+    expect(maskableSelection(" Ready.gov ", "", "")).toEqual({ value: "Ready.gov" });
+  });
   it("accepts plain text and refuses an empty selection, a tag or a long passage", () => {
     expect(maskableSelection("  Ciaran ")).toEqual({ value: "Ciaran" });
     expect(maskableSelection(" ")).toHaveProperty("problem");

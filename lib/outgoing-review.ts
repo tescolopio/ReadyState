@@ -100,11 +100,17 @@ export function reviewTags(review: OutgoingReview): [tag: string, value: string]
 }
 
 /** Plain text to add to the always-mask list, or why the selection can't be used. */
-export function maskableSelection(selected: string): { value: string } | { problem: string } {
+export function maskableSelection(selected: string, before = "", after = ""): { value: string } | { problem: string } {
   const value = selected.trim();
   if (!value) return { problem: "Select a word or phrase in the message first." };
   if (/[[\]]/.test(value)) return { problem: "Select plain text, not a tag." };
   if (value.length > 80) return { problem: "Select a shorter phrase, up to 80 characters." };
+  const start = selected.indexOf(value);
+  const preceding = [...(before + selected.slice(0, start))].at(-1) ?? "";
+  const following = [...(selected.slice(start + value.length) + after)][0] ?? "";
+  if (/[\p{L}\p{N}_]/u.test(preceding) || /[\p{L}\p{N}_]/u.test(following)) {
+    return { problem: "Select the whole word or phrase, not part of a word." };
+  }
   return { value };
 }
 

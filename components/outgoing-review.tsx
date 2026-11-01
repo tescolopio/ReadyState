@@ -39,7 +39,7 @@ export function OutgoingReviewPanel({
   const [confirmingBack, setConfirmingBack] = useState(false);
 
   // Keyboard and screen-reader users land on the review, not wherever focus was.
-  useEffect(() => headingRef.current?.focus(), [review.kind]);
+  useEffect(() => headingRef.current?.focus(), [review.id]);
 
   const problems = tagProblems(review);
   const tags = reviewTags(review);
@@ -48,7 +48,9 @@ export function OutgoingReviewPanel({
 
   const startMask = () => {
     const el = textRef.current;
-    setMasking(maskableSelection(el ? el.value.slice(el.selectionStart, el.selectionEnd) : ""));
+    setMasking(el
+      ? maskableSelection(el.value.slice(el.selectionStart, el.selectionEnd), el.value.slice(0, el.selectionStart), el.value.slice(el.selectionEnd))
+      : maskableSelection(""));
   };
   const back = () => (edited && !confirmingBack ? setConfirmingBack(true) : onBack());
 

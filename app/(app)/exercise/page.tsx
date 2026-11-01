@@ -166,7 +166,7 @@ export default function ExercisePage() {
   };
   // A failed request is sent again exactly as approved, with the same Settings.
   const retry = () => {
-    if (exerciseBusy()) return;
+    if (exerciseBusy() || review) return;
     void resendLast();
   };
 
@@ -312,7 +312,7 @@ export default function ExercisePage() {
               </p>
             )}
             {ttx.phase !== "ended" && (
-              <Button size="sm" variant="outline" onClick={retry} disabled={busy}>
+              <Button size="sm" variant="outline" onClick={retry} disabled={busy || !!review}>
                 <RotateCcw className="h-4 w-4" aria-hidden />
                 Send the same message again
               </Button>

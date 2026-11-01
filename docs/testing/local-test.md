@@ -75,6 +75,7 @@ Use Chrome, Firefox and Safari (or Edge) at least once each before a release (wo
 - [ ] With mocked transport, split an edited phone number across lines: it is masked and shown again. A saved Always Mask change during review also requires another approval; explicitly masking a word in public guidance actually tags it. Unknown placeholder tags are rejected, including tags typed before opening the review.
 - [ ] Double-click **Send this**: one request.
 - [ ] After a failed request, **Send the same message again** resends it unchanged, even after changing Settings.
+- [ ] With an open response review, retry is disabled; cancelling the review enables retry again. Masking a partial word is rejected with an explanation, and a rebuilt review receives keyboard focus without interrupting ordinary textarea edits.
 - [ ] Review and Settings explain that keys go to ReadyState's server for provider authentication, not into conversation text. With a synthetic key and mocked transport, confirm retry credentials are separate from message history.
 - [ ] Before requesting a debrief, the button's description explains that the existing history includes model-generated events and is sent for another model call; no separate editable preview is promised.
 - [ ] On a phone (or a narrow window), the review fits without sideways scrolling and its buttons are easy to tap; with only the keyboard, Tab reaches the copy, Mask, Back and Send.
