@@ -1,9 +1,12 @@
 # Local models with Ollama
 
 Run both ReadyState and a downloaded model on your Windows or Linux machine.
-No model-provider API key is required. Local-model compatibility and exercise
-quality are **not yet verified**; this guide is setup guidance and a test plan,
-not a recommendation that any model produces safe or accurate advice.
+No model-provider API key is required. The tested `gpt-oss:20b` configuration
+on this Windows machine is **unsuitable for the current ReadyState trial
+configuration**: installation/connectivity passed and one warm request met the
+timing budget, but usable output failed schema and manual content review.
+Other local-model configurations are unverified; this guide is not a
+recommendation that any model produces safe or accurate advice.
 
 This work is separate from the private Vercel trial and PR #25. Do not run
 these evaluations against that trial or a cloud-provider-connected dev server.
@@ -499,8 +502,25 @@ ReadyState, guard and Ollama process trees were stopped. Existing runtimes
 and installed model files were left untouched. No automatic resubmission,
 second generation, debrief request or cloud call occurred.
 
-**Conclusion:** this warm request returned within the budget, but failed the
-required tool schema. `gpt-oss:20b` on this machine remains **not yet validated
-for ReadyState's 55-second request budget and output contract**. No further
-inference is authorized by this result. Multi-turn, debrief and Linux behavior
-remain unverified; this does not block or certify the private Vercel trial.
+### Disposition: unsuitable for the current trial configuration
+
+| Outcome | Disposition |
+| --- | --- |
+| Installation and local connectivity | **Passed** |
+| Warm request timing | **Passed once**, 49.99 s against 55 s, approximately 5 s headroom |
+| Usable exercise output | **Failed**, invalid options schema and substantive manual content findings |
+
+Loading was not the only obstacle. **`gpt-oss:20b` on this machine is unsuitable
+for the current ReadyState trial configuration**, based on these observed
+results, not merely untested. This is specific to the tested hardware, runtime
+and application configuration; it is not a claim about all deployments of
+the model.
+
+Do not loosen the schema, extend the timeout or add retries to make this test
+pass. No further inference or model downloads are authorized. Multi-turn and
+debrief behavior remain **untested**, and Linux behavior remains unverified.
+Preserve the cold-run artifacts and session warm-run evidence/harness.
+
+Return priority to PR #25 and the private Vercel trial. These local results
+neither block nor certify that separate path. A different local model can be
+a separately authorized, bounded evaluation later.
