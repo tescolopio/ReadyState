@@ -138,9 +138,10 @@ export function ProviderSettingsCard({ config }: { config: ServerConfig }) {
             </Button>
           </div>
           <p className="text-xs text-ink-3">
-            {status ??
- "Keys stay in this browser and are sent only to this ReadyState server."}
+            Keys are saved in this browser and sent to ReadyState&apos;s server to authenticate with the selected provider.
+            They are not part of the model&apos;s conversation text.
           </p>
+          {status && <p role="status" className="text-xs text-ink-3">{status}</p>}
         </form>
       </CardContent>
     </Card>

@@ -74,7 +74,11 @@ Use Chrome, Firefox and Safari (or Edge) at least once each before a release (wo
 - [ ] Type a phone number into the review's copy and send: it's masked and shown again before anything goes.
 - [ ] Double-click **Send this**: one request.
 - [ ] After a failed request, **Send the same message again** resends it unchanged, even after changing Settings.
+- [ ] Review and Settings explain that keys go to ReadyState's server for provider authentication, not into conversation text. With a synthetic key and mocked transport, confirm retry credentials are separate from message history.
+- [ ] Before requesting a debrief, the button's description explains that the existing history includes model-generated events and is sent for another model call; no separate editable preview is promised.
 - [ ] On a phone (or a narrow window), the review fits without sideways scrolling and its buttons are easy to tap; with only the keyboard, Tab reaches the copy, Mask, Back and Send.
+
+Mocked browser checks establish transmission behavior only, not real provider responses or debrief quality. Real-phone, Safari and Firefox checks remain outstanding until performed. No-call checks must not use **Send this**, retry or debrief on a provider-connected server; use an isolated mocked transport for transmission assertions.
 
 ### Exercise loop (G8, D8)
 

@@ -73,7 +73,9 @@ export function OutgoingReviewPanel({
           </p>
         )}
         <p className="text-sm text-ink-2">
-          It goes to this ReadyState server, which sends it to the model provider in Settings, with any API key you entered there.
+          The message goes to this ReadyState server, which sends the conversation to the selected model provider.
+          Any API key you entered in Settings also goes to ReadyState&apos;s server to authenticate with that provider;
+          it is not part of the model&apos;s conversation text.
         </p>
         <p className="rounded-control border-l-4 border-attention-accent bg-attention-soft px-3 py-2 text-sm text-ink">
           This is a review, not a guarantee of anonymity. Masking can miss details, so read it before sending. Once sent, the

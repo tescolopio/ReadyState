@@ -197,7 +197,7 @@ export default function ExercisePage() {
   const options = ttx.phase === "loop" && !busy ? (ttx.latestTurn?.response_options ?? []) : [];
 
   const requestDebrief = () => {
-    if (busy) return;
+    if (exerciseBusy()) return;
     void sendToExercise(DEBRIEF_REQUEST);
   };
   const startOver = () => {
@@ -321,10 +321,16 @@ export default function ExercisePage() {
         )}
 
         {messages.length > 0 && ttx.phase === "ended" && (
-          <Button onClick={requestDebrief} disabled={busy} className="self-start">
-            <ClipboardCheck className="h-4 w-4" aria-hidden />
-            Debrief: what we learned
-          </Button>
+          <div className="space-y-2">
+            <p id="debrief-disclosure" className="text-sm text-ink-2">
+              This sends the existing exercise history, including your reviewed messages and model-generated events,
+              to ReadyState&apos;s server for another model call with the selected provider.
+            </p>
+            <Button onClick={requestDebrief} disabled={busy} aria-describedby="debrief-disclosure">
+              <ClipboardCheck className="h-4 w-4" aria-hidden />
+              Debrief: what we learned
+            </Button>
+          </div>
         )}
         {ttx.phase === "aar" && !busy && (activeSampleId ? <MakeThisMine router={router} /> : <WhatNext router={router} />)}
 
@@ -440,7 +446,7 @@ export default function ExercisePage() {
               </ul>
             )}
             {/* Keyed by the list, so a word masked from a review shows up in the card. */}
-            <AlwaysMaskCard key={alwaysMaskList.join(" ")} />
+            <AlwaysMaskCard key={alwaysMaskList.join("\0")} />
           </div>
         </details>
 

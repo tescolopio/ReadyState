@@ -47,4 +47,22 @@ describe("sendToExercise and resendLast", () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(exerciseChat.messages).toEqual([]);
   });
+
+  it("keeps retry credentials separate from conversation history and clears them on reset", async () => {
+    const settings = { provider: "groq" as const, apiKey: "synthetic-retry-key" };
+    useSettingsStore.getState().setSettings(settings);
+    await sendToExercise("[Person 1] checks the furnace.");
+    settings.apiKey = "synthetic-changed-key";
+    await resendLast();
+
+    expect(requests[1].settings).toEqual({ provider: "groq", apiKey: "synthetic-retry-key" });
+    expect(JSON.stringify(exerciseChat.messages)).not.toContain("synthetic-retry-key");
+    expect(JSON.stringify(requests[1].messages)).not.toContain("synthetic-retry-key");
+
+    resetExercise();
+    useSettingsStore.getState().setSettings(null);
+    await sendToExercise("We check the pipes.");
+    expect(requests[2].settings).toBeUndefined();
+    expect(texts(requests[2])).toEqual(["We check the pipes."]);
+  });
 });

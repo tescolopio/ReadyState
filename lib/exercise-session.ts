@@ -22,12 +22,13 @@ export const exerciseChat = new Chat<TtxUIMessage>({
   }),
 });
 
-/** The Settings the last message was sent with, so a retry sends it the same way. */
+/** Memory-only retry credentials; never attach to messages, history or logs. */
 let sentSettings: ProviderSettings | undefined;
 
-/** Sends a message the participant approved (work item S2), with the current Settings. */
+/** Sends a reviewed message or the disclosed debrief request, with the current Settings. */
 export function sendToExercise(text: string) {
-  sentSettings = useSettingsStore.getState().settings ?? undefined;
+  const settings = useSettingsStore.getState().settings;
+  sentSettings = settings ? { ...settings } : undefined;
   return exerciseChat.sendMessage({ text }, { body: { settings: sentSettings } });
 }
 

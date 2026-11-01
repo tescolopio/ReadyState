@@ -71,7 +71,7 @@ describe("tagProblems", () => {
 
   it("flags a tag with a bracket deleted, and a tag the ledger doesn't know", () => {
     const r = review();
-    expect(tagProblems(editReview(r, r.text.replace("]", "")))[0]).toMatch(/damaged near "\[Person/);
+    expect(tagProblems(editReview(r, "[Person 1 checks the furnace."))[0]).toMatch(/damaged near "\[Person/);
     expect(tagProblems(editReview(r, `${r.text} [Person 9] helps.`))[0]).toMatch(/\[Person 9\] isn't one of this message's tags/);
   });
 });
@@ -102,7 +102,7 @@ describe("createApprover", () => {
     const { approve, send } = approver();
     const review = responseReview("Sam Okafor checks the furnace.");
     expect(approve(editReview(review, "  "))).toMatchObject({ status: "blocked" });
-    expect(approve(editReview(review, review.text.replace("[", "")))).toMatchObject({ status: "blocked" });
+    expect(approve(editReview(review, "Person 1] checks the furnace."))).toMatchObject({ status: "blocked" });
     expect(send).not.toHaveBeenCalled();
     expect(ledger()).toEqual({});
   });

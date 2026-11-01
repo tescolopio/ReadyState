@@ -70,7 +70,9 @@ Further reading:
 
 Before anything is sent to `/api/ttx`, the browser replaces the names in your household profile, names you add in Settings, and detected addresses, phone numbers, email addresses, ZIP codes and URLs with tags such as `[Person 1]`. Tags are restored in the browser before rendering. Your profile stays in this browser's storage; its real values aren't sent.
 
-Every message opens a review first: the exact masked text, which you can edit or mask further (**Mask selected text**), sent only when you choose **Send this**. **Back** sends nothing. The review shows what leaves the browser; it doesn't guarantee anonymity or control how long a provider keeps what it receives.
+Each household briefing and response opens a review first: the exact masked text, which you can edit or mask further (**Mask selected text**), sent only when you choose **Send this**. **Back** sends nothing. The review shows what leaves the browser; it doesn't guarantee anonymity or control how long a provider keeps what it receives.
+
+The debrief button sends the existing exercise history, including reviewed participant messages and model-generated events, for another model call; it does not open a separate editable preview. Settings keys go to ReadyState's server to authenticate with the selected provider, not into conversation text. The retry settings snapshot stays in memory, separate from exercise messages, and is cleared when the exercise is reset; it must not be logged or included in future saved exercise history.
 
 What masking doesn't do:
 

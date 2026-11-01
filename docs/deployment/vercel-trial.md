@@ -51,6 +51,18 @@ those deployment URLs need the same protection as the production URL.
    work. A deployment missing the trial password must return 503.
 5. Check the Vercel build and runtime logs for failures. Do not run the paid evals
    or click through an AI exercise as part of this no-call smoke test.
+6. With provider keys unset on the server and in a fresh browser's Settings,
+   start a fictional household review, inspect the editable masked briefing,
+   test masking and damaged-tag validation, then cancel with **Back, don't send**.
+   Confirm no POST to `/api/ttx` occurred. Do not press **Send this**, retry or
+   debrief on the Groq-connected development server. Transmission assertions
+   belong in an isolated mocked browser run.
+
+Prioritize this private trial over downloadable releases. Packaging does not
+resolve the open accuracy or safety findings. Mocked browser runs do not verify
+real provider responses or debrief quality; real-phone, Safari and Firefox
+coverage remains outstanding. Authorize a live exercise separately after the
+deployed no-call checks.
 
 After these checks, enable AI deliberately: add `GROQ_API_KEY` in Vercel and
 redeploy, or use the app's Settings for your own key. Settings keys are stored
