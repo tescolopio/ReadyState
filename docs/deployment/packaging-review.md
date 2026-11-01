@@ -13,7 +13,7 @@ only. Binary publishing stays disabled. Historical Sharp-containing artifacts
 remain excluded from distribution. The record below identifies the merged-main
 builds and separates current obligations from those historical findings.
 
-## Current candidates and specific release requirements (after #27 / #28)
+## Historical candidates and specific release requirements (after #27 / #28)
 
 PR #28 and the documentation corrections in #27 were merged after final direct
 review found no actionable issues. Final merged source is
@@ -50,8 +50,8 @@ No model calls, model downloads or Vercel changes were made for these post-merge
 | **Release-time source delivery condition, not a demonstrated missing-license defect** | The candidate manifests identify the exact public source revision; source, lockfile and build/install instructions are available. No release has been published, so no violated source-delivery obligation is asserted. | When a release is separately authorized, make matching source and build instructions available with that release and record the source/archive identifiers. A different source revision or generic `main` link must not replace the candidate's exact source. |
 | **Conditional Docker publication prerequisite, not a native-archive blocker** | These rebuilt candidates are native ZIP/tar.gz files. Existing Docker runtime CI does not record a published image's immutable digest and base-OS notice/source delivery record. | Only if distributing a container, identify the exact image/base digest and preserve the applicable Node/Alpine notices and any required source delivery. Do not block native archives merely because that separate container record is not prepared. |
 
-The confirmed omission arises because
-[notice collection](../../scripts/local/notices.mjs) walks only the traced
+The confirmed omission arose because the collector at `9a9b709`
+walked only the traced
 `node_modules` tree; [package assembly](../../scripts/local/package.mjs) then
 copies the compiled static files without collecting their dependency notices.
 This is a specific packaging-scope gap, not a request to reopen the removed
@@ -70,6 +70,44 @@ the concrete Zustand omission above disproves that broader claim.
 Binary publication remains disabled until the confirmed attribution gap is
 closed and release-time conditions/authorization are met. Old Sharp-containing
 archives remain excluded. Platform/model/desktop limits below remain qualified.
+
+## Bundled application attribution follow-up
+
+The original collector inventoried traced server packages only. The separate
+notice fix also covers every declared production application dependency, its
+required dependency closure and installed executable peers, including nested
+versions. This is **conservative attribution coverage**, not a claim that every
+declared package is emitted into JavaScript (Dexie, for example, is currently
+declared but not imported). Type-only `@types/*` peers and optional platform
+build dependencies are not added by this closure; shipped traced dependencies
+remain covered independently. The removed image-processing stack stays excluded.
+
+Installed LICENSE, NOTICE, COPYING and COPYRIGHT files are copied verbatim.
+Application-only materials live under `app/THIRD-PARTY-LICENSES`; packages already
+covered by server traces reuse their existing notice directory. The inventory
+records both scopes, installed versions, relative notice directories and SHA-256
+hashes. Build and extracted-archive checks independently resolve the installed
+application closure and reject missing records, altered license bytes or omitted
+NOTICE files. Expected installed and supplemental materials are derived from
+their version-matched sources, independently of inventory hashes, including
+the Next env/root fallback and additional supplemental notices. Ten regression
+tests cover this behavior. Docker applies the same checks to its assembled app
+payload.
+
+This closes the collector's omission of Zustand's installed-version MIT license
+and `Copyright (c) 2019 Paul Henschel` in new builds only. Other direct application
+dependencies and their required closure receive the same treatment, including
+Dexie's separate NOTICE and full Apache-2.0 license text. Two installed versions
+of `@ai-sdk/provider-utils` omit license files; exact-version upstream release
+commits supply the checked-in Vercel Apache attribution supplements. Sources are
+recorded in `scripts/local/license-supplements.json`; whitespace-only line-ending
+normalization in the checked-in supplements does not change their license text.
+
+The historical artifacts and findings in this document are not retroactively corrected.
+Publication remains disabled pending review, merge and verification of final
+merged-main artifacts, followed by an explicit release decision. Metadata-only
+CI uploads remain unchanged. No browser walkthrough, model calls, downloads or
+Vercel changes are needed for this notice-only fix.
 
 ## Historical merged-main installation walkthrough (2026-11-01, before #28)
 
