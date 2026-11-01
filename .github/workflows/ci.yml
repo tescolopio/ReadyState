@@ -68,8 +68,36 @@ jobs:
           echo "POST /api/ttx -> $status"
           test "$status" = 503
 
+      - name: Private Vercel trial access (no model calls)
+        run: |
+          docker run -d --name trial -p 3002:3000 \
+            -e VERCEL=1 -e READYSTATE_TRIAL_PASSWORD=synthetic-trial-password-for-ci \
+            -e READYSTATE_CAPTURE_DEBRIEF_DRAFTS=1 readystate:ci
+          docker run -d --name unconfigured-trial -p 3003:3000 \
+            -e VERCEL=1 readystate:ci
+          for port in 3002 3003; do
+            for i in $(seq 1 30); do
+              curl -s -o /dev/null "http://localhost:$port/" && break
+              sleep 1
+            done
+          done
+          for path in / /journal /settings /api/config /api/ttx; do
+            test "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:3002$path")" = 401
+          done
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' -d '{}' http://localhost:3002/api/ttx)" = 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3003/api/ttx)" = 503
+          curl -fs -u trial:synthetic-trial-password-for-ci http://localhost:3002/api/config | \
+            jq -e '.mode == "self-hosted"'
+          curl -fs -u trial:synthetic-trial-password-for-ci \
+            -H 'x-readystate-capture-debrief-drafts: 1' http://localhost:3002/api/ttx | \
+            jq -e '.captureDebriefDrafts == false'
+          curl -fs -u trial:synthetic-trial-password-for-ci http://localhost:3002/journal > /dev/null
+
       - name: Container logs
         if: always()
         run: |
           docker logs selfhosted || true
           docker logs hosted || true
+          docker logs trial || true
+          docker logs unconfigured-trial || true

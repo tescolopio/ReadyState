@@ -1,7 +1,7 @@
 # ReadyState
 ReadyState is a dynamic, AI-powered Tabletop Exercise (TTX) simulator designed for personal and household emergency preparedness.
 
-Run it yourself with your own model API keys (or a fully local model through Ollama), or use the hosted online service. See [Deployment modes](docs/architecture/deployment-modes.md).
+Run it yourself with your own model API keys (or a fully local model through Ollama). For a private online trial, follow the [Vercel trial guide](docs/deployment/vercel-trial.md). The paid hosted service is not implemented yet; see [Deployment modes](docs/architecture/deployment-modes.md).
 
 ## Stack
 

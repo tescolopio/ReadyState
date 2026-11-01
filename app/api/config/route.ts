@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 
 import { getAppMode } from "@/lib/config";
+import { requireTrialAccess } from "@/lib/trial-access";
 import {
   PROVIDERS,
   PROVIDER_IDS,
@@ -14,7 +15,9 @@ import {
  * decide whether to show the provider Settings panel (self-hosted) or the
  * hosted-service flow, and which providers already have a server-side key.
  */
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = requireTrialAccess(req);
+  if (denied) return denied;
   // Read env at request time, not at build time, so one image serves both modes.
   await connection();
   const mode = getAppMode();

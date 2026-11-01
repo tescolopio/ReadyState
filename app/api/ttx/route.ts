@@ -17,6 +17,7 @@ import { checkDebrief, omitKitImprovement, repairInstructions, storyDefects, typ
 import { storyFacts, storyFactsBriefing } from "@/lib/story-facts";
 
 import { getAppMode } from "@/lib/config";
+import { requireTrialAccess } from "@/lib/trial-access";
 import { getHostedServices, type HostedAccount } from "@/lib/hosted";
 import { reportBudgetTimeout } from "@/lib/budget-timeout";
 import { describeProviderError, isSchemaSlip } from "@/lib/provider-errors";
@@ -268,13 +269,18 @@ function rejectCrossSite(req: Request): Response | null {
 /**
  * Whether this server would capture debrief drafts for this request, so a
  * local eval can confirm it before spending a model call
- * (lib/debrief-capture.ts). Always false in hosted mode.
+ * (lib/debrief-capture.ts). Always false in hosted mode and on Vercel.
  */
 export function GET(req: Request) {
+  const denied = requireTrialAccess(req);
+  if (denied) return denied;
   return Response.json({ captureDebriefDrafts: captureEnabled(req, getAppMode()) });
 }
 
 export async function POST(req: Request) {
+  // Enforce access at the model boundary as well as in Proxy.
+  const denied = requireTrialAccess(req);
+  if (denied) return denied;
   const rejected = rejectCrossSite(req);
   if (rejected) return rejected;
 

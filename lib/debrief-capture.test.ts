@@ -17,6 +17,12 @@ describe("captureEnabled", () => {
     vi.stubEnv("READYSTATE_CAPTURE_DEBRIEF_DRAFTS", "1");
     expect(captureEnabled(request(), "hosted")).toBe(false);
   });
+
+  it("is never on in a Vercel trial, even with both capture flags", () => {
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("READYSTATE_CAPTURE_DEBRIEF_DRAFTS", "1");
+    expect(captureEnabled(request(), "self-hosted")).toBe(false);
+  });
 });
 
 describe("briefingWithoutBaseline", () => {
