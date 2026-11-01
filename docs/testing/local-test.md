@@ -88,7 +88,7 @@ To run one:
 1. Open **My household → Set up my household**, choose **Load a test household (fictional)**, and save. Or enter your own made-up household.
 2. Open **Exercises** and start a scenario. Its household is whichever one you saved.
 
-Every response is a model call. A full exercise is usually a dozen or more responses, plus the debrief. Late turns use about 6,000 tokens each, so Groq's free 200,000-token daily limit covers roughly two full exercises a day.
+Every response is a model call. A full exercise is usually a dozen or more responses, plus the debrief. As a rough estimate, not an allowance: with Groq's `openai/gpt-oss-120b`, late turns measured about 6,000 tokens each, so a 200,000-token daily quota might cover about two full exercises. Retries (after a rate limit or a malformed turn) and debrief repairs use more, and other models, quotas and households differ.
 
 **Coverage differs by scenario:**
 - **Checklists:** power outage, winter storm and heat wave have a checklist of what good responses cover, which grounds the feedback. Hurricane uses parts of it. The other scenarios rely on the general rules and official guidance only.
