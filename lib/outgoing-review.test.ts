@@ -146,6 +146,22 @@ describe("createApprover", () => {
     expect(approve(result.review)).toEqual({ status: "sent" });
   });
 
+  it("does not let unchanged private lines split a new phone number", () => {
+    for (const kind of ["response", "baseline"] as const) {
+      const { approve, send } = approver();
+      const build = (mask: (text: string) => string) =>
+        `${mask("555")}${kind === "baseline" ? "\nOfficial guidance: Ready.gov" : ""}`;
+      const review = prepareReview(kind, build, {}, terms);
+      const result = approve(editReview(review, `303\n555\n0142${kind === "baseline" ? "\nOfficial guidance: Ready.gov" : ""}`));
+      expect(result.status).toBe("review-again");
+      if (result.status !== "review-again") throw new Error("Expected remasked review");
+      expect(result.review.text).toContain("[Phone 1]");
+      expect(result.review.text).not.toContain("555");
+      expect(send).not.toHaveBeenCalled();
+      if (kind === "baseline") expect(result.review.text).toContain("Ready.gov");
+    }
+  });
+
   it("requires another review when masking rules change without a ledger change", () => {
     let rules = ["Jamie"];
     const send = vi.fn();

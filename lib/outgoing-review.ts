@@ -29,6 +29,8 @@ export interface OutgoingReview {
   pending: Readonly<Record<string, string>>;
   /** Masking rules used to prepare this copy; changes require another review. */
   alwaysMask: MaskTerm[];
+  /** Original public guidance lines, exempt from automatic detection only. */
+  publicLines: string[];
   /** For a baseline: the household the exercise starts with, once it's sent. */
   start?: { profile: HouseholdProfile; sampleId?: string };
 }
@@ -44,11 +46,20 @@ export function prepareReview(
   start?: OutgoingReview["start"],
 ): OutgoingReview {
   const ledger = { ...base };
-  const built = build((part) => maskInput(part, { alwaysMask, ledger }));
+  const privateLines = new Set<string>();
+  const built = build((part) => {
+    const masked = maskInput(part, { alwaysMask, ledger });
+    for (const line of masked.split("\n")) privateLines.add(line);
+    return masked;
+  });
   // Public guidance skips automatic detection, but explicit masks must still apply.
   const text = maskInput(built, { alwaysMask, ledger, explicitOnly: true });
+  const publicLines = kind === "baseline"
+    ? built.split("\n").filter((line) => line.trim() && !privateLines.has(line))
+      .map((line) => maskInput(line, { alwaysMask, ledger, explicitOnly: true }))
+    : [];
   const rules = alwaysMask.map((term) => typeof term === "string" ? term : { ...term });
-  return { id: ++lastId, kind, build, generated: text, text, base: { ...base }, pending: added(base, ledger), alwaysMask: rules, start };
+  return { id: ++lastId, kind, build, generated: text, text, base: { ...base }, pending: added(base, ledger), alwaysMask: rules, publicLines, start };
 }
 
 const added = (base: Record<string, string>, ledger: Record<string, string>) =>
@@ -98,13 +109,13 @@ export function maskableSelection(selected: string): { value: string } | { probl
 }
 
 /**
- * Masks contiguous edited blocks together, preserving cross-line detectors.
- * Lines left as built aren't
- * masked again: the baseline's official guidance is public text, deliberately
+ * Responses are remasked as a whole to preserve cross-line detection.
+ * Only original public guidance lines in a baseline are exempt: deliberately
  * unmasked, where a second pass could tag words like "Ready.gov".
  */
 function remaskEdits(review: OutgoingReview, mask: (line: string) => string): string {
-  const built = new Set(review.generated.split("\n"));
+  if (review.kind === "response") return mask(review.text);
+  const publicLines = new Set(review.publicLines);
   const result: string[] = [];
   let edited: string[] = [];
   const flush = () => {
@@ -112,7 +123,7 @@ function remaskEdits(review: OutgoingReview, mask: (line: string) => string): st
     edited = [];
   };
   for (const line of review.text.split("\n")) {
-    if (line.trim() && built.has(line)) {
+    if (publicLines.has(line)) {
       flush();
       result.push(line);
     } else edited.push(line);
