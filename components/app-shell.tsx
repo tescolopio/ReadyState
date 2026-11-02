@@ -52,6 +52,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const guided = useLocalRecordsStore(state => !state.simpleRecovery && state.data.guidedAssessment?.mode === "guided");
   const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
   const focused = hydrated && pathname === "/assessment" && guided;
+  const resumePointWriteError = useLocalRecordsStore(state => state.resumePointWriteError);
   useEffect(() => {
     try {
       if (useLocalRecordsStore.getState().error) return;
@@ -108,6 +109,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>}
         {recordsError && <p role="alert" className="m-4 rounded-control border border-error p-3 text-sm">{recordsError}</p>}
+        {resumePointWriteError && <p role="alert" className="m-4 rounded-control border border-error p-3 text-sm">{resumePointWriteError}</p>}
         {children}
         {!focused && <SiteFooter />}
       </div>

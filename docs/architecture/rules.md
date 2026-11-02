@@ -189,6 +189,11 @@ consumed after loading; it is not continuous exercise autosave. Full restore
 reloads the page, invalidating stale reviews and memory-only retry credentials.
 Reopening a saved exercise sends nothing and requires fresh S2 review for a new
 response. Previously captured retry settings are not reconstructible.
+History retains saved debrief omission/failed-check qualifications without
+presenting rejected suggestions as guidance. A failed resume-point cleanup
+shows a separate write warning, not a false records-corruption lock; valid
+backup operations remain available, and the next successful records commit
+persists the cleared resume point.
 Opening an older exercise restores its tag mappings for that transcript but
 keeps the union of current and saved always-mask terms; it never silently
 removes newer masking protections.

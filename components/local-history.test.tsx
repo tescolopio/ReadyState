@@ -4,7 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LocalHistory } from "@/components/local-history";
-import { createAssessmentRecord, emptyLocalRecords } from "@/lib/local-records";
+import { createAssessmentRecord, emptyLocalRecords, exerciseRecordSchema } from "@/lib/local-records";
+import { OMITTED_IMPROVEMENT_NOTICE } from "@/lib/ttx";
 import { emptyProfile } from "@/lib/household";
 import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
 import { resetExercise } from "@/lib/exercise-session";
@@ -37,6 +38,20 @@ async function click(label: string) {
 }
 
 describe("restored current assessment history", () => {
+  it("retains saved debrief omission and failed-check qualifications in history", async () => {
+    const record = exerciseRecordSchema.parse({
+      id: "qualified-debrief", savedAt: new Date().toISOString(), profile: null, sampleId: null, draft: "",
+      messages: [{ id: "debrief", role: "assistant", parts: [{ type: "text", text: "Synthetic debrief" }],
+        metadata: { debriefChecks: { passedImplementedChecks: false, failedFirst: ["Synthetic failed check"],
+          stillFailing: ["Synthetic failed check"], omittedImprovement: { action: "Rejected synthetic suggestion", checks: ["Synthetic failed check"] } } } }],
+      privacy: { entityMap: {}, alwaysMask: [] },
+    });
+    useLocalRecordsStore.setState({ data: { ...emptyLocalRecords(), exercises: [record] }, error: null });
+    await act(async () => root.render(<LocalHistory />));
+    expect(container.textContent).toContain(OMITTED_IMPROVEMENT_NOTICE);
+    expect(container.textContent).toContain("did not pass all implemented checks");
+    expect(container.textContent).not.toContain("Rejected synthetic suggestion");
+  });
   it("shows and confirms deletion of a report restored separately from capped history", async () => {
     const household = emptyProfile();
     household.supplies.absent = ["smoke-detector"];
