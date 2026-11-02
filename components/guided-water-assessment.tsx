@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { HouseholdWizard, InventoryCheck } from "@/components/household-wizard";
@@ -229,7 +230,7 @@ export function GuidedWaterAssessment({
       {householdError && <div className="space-y-2">
         <p role="alert" className="text-sm text-error">{householdError}</p>
         <Button variant="outline" onClick={() => persistHousehold()}>Retry saving household answers</Button>
-        <a className="block underline" href="/settings#backups">Open Settings to manage local backups and storage</a>
+        <Link className="block underline" href="/settings#backups">Open Settings to manage local backups and storage</Link>
       </div>}
     </section>
   );
