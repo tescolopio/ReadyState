@@ -23,7 +23,6 @@ import { usePlanStore } from "@/store/usePlanStore";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { deriveTtxState } from "@/lib/ttx";
-import { engineBaseline } from "@/lib/inventory";
 
 const password = "synthetic-backup-password";
 beforeEach(() => {
@@ -191,7 +190,7 @@ describe("dated local records and safe exercise recovery", () => {
       id: "reviewed-user", role: "user", parts: [{ type: "text", text: "[Person 1] checks supplies." }],
       metadata: { providerCalls: 2 },
     }];
-    useExerciseSession.setState({ activeProfile: emptyProfile(), draft: "An unsent synthetic response" });
+    useExerciseSession.setState({ activeProfile: null, draft: "An unsent synthetic response" });
     const record = captureExercise()!;
     expect(savedMessages(exerciseChat.messages)[0].metadata).toBeUndefined();
     expect(record.draft).toContain("unsent");
@@ -208,9 +207,18 @@ describe("dated local records and safe exercise recovery", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("creates dated assessment and exercise IDs without requiring crypto.randomUUID", () => {
+    vi.spyOn(crypto, "randomUUID").mockImplementation(() => { throw new Error("randomUUID unavailable on plain HTTP"); });
+    const assessment = createAssessmentRecord(useHouseholdStore.getState().profile);
+    useExerciseSession.getState().begin(emptyProfile());
+    exerciseChat.messages = [{ id: "local", role: "user", parts: [{ type: "text", text: "Synthetic local snapshot" }] }];
+    const exercise = captureExercise();
+    expect(assessment.id).toMatch(/^[a-z0-9]+$/);
+    expect(exercise?.id).toMatch(/^[a-z0-9]+$/);
+  });
+
   it("recovers an active exercise only once per runtime, leaving later live session changes untouched", () => {
-    const profile = emptyProfile();
-    useExerciseSession.getState().begin(profile);
+    useExerciseSession.setState({ activeProfile: null });
     exerciseChat.messages = [{ id: "saved", role: "user", parts: [{ type: "text", text: "Saved snapshot" }] }];
     const saved = captureExercise()!;
     useLocalRecordsStore.setState({ data: { ...emptyLocalRecords(), activeExercise: saved }, error: null });
@@ -226,11 +234,11 @@ describe("dated local records and safe exercise recovery", () => {
 
   it("turns an incomplete failed baseline snapshot into a fresh review without restoring retry approval", () => {
     const profile = useHouseholdStore.getState().profile;
-    const baseline = engineBaseline(profile, text => text);
     const record = exerciseRecordSchema.parse({
       id: "incomplete-baseline", savedAt: new Date().toISOString(), profile, sampleId: null, draft: "",
+      baselinePending: true,
       messages: [
-        { id: "failed-baseline", role: "user", parts: [{ type: "text", text: baseline }] },
+        { id: "failed-baseline", role: "user", parts: [{ type: "text", text: "User edited the reviewed baseline; no marker remains." }] },
         { id: "cancelled-response", role: "assistant", parts: [{ type: "text", text: "" }] },
       ],
       privacy: { entityMap: {}, alwaysMask: [] },
@@ -245,6 +253,24 @@ describe("dated local records and safe exercise recovery", () => {
     });
     expect(isCurrentExerciseGeneration(oldGeneration)).toBe(false);
     expect(() => resendLast()).toThrow(/no retry approval/);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("recognizes legacy incomplete baselines from transcript shape, not editable baseline text", () => {
+    const profile = useHouseholdStore.getState().profile;
+    const legacy = exerciseRecordSchema.parse({
+      id: "legacy-incomplete-baseline", savedAt: new Date().toISOString(), profile, sampleId: null, draft: "",
+      messages: [
+        { id: "edited-baseline", role: "user", parts: [{ type: "text", text: "Entire baseline replaced in review." }] },
+        { id: "cancelled-response", role: "assistant", parts: [{ type: "text", text: "" }] },
+      ],
+      privacy: { entityMap: {}, alwaysMask: [] },
+    });
+
+    openExercise(legacy);
+
+    expect(exerciseChat.messages).toEqual([]);
+    expect(useExerciseSession.getState()).toMatchObject({ baselinePending: true, baselineNeedsReview: true });
     expect(fetch).not.toHaveBeenCalled();
   });
 

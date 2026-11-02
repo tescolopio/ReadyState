@@ -11,6 +11,7 @@ import {
 import { invalidateHouseholdWizards } from "@/lib/household-restore";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePlanStore } from "@/store/usePlanStore";
+import { newId } from "@/lib/household";
 
 export function HouseholdSaves({ onRestore }: { onRestore: () => void }) {
   const nameId = useId();
@@ -42,7 +43,7 @@ export function HouseholdSaves({ onRestore }: { onRestore: () => void }) {
       if (current.some(save => save.name.toLocaleLowerCase() === label.toLocaleLowerCase())) {
         throw new Error("That name is already saved. Use a different name; existing saves are never overwritten.");
       }
-      const saves = [...current, { id: crypto.randomUUID(), name: label, snapshot: snapshot() }];
+      const saves = [...current, { id: newId(), name: label, snapshot: snapshot() }];
       writeNamedSaves(localStorage, saves);
       setLibrary({ saves, error: null });
       setName("");

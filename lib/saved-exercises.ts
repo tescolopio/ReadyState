@@ -1,5 +1,6 @@
 import { exerciseChat, resetExercise, useExerciseSession } from "@/lib/exercise-session";
 import { exerciseRecordSchema, savedMessages, type ExerciseRecord } from "@/lib/local-records";
+import { newId } from "@/lib/household";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
 
@@ -22,8 +23,9 @@ export function captureExercise(): ExerciseRecord | null {
   if (!exerciseChat.messages.length && !session.draft && !session.activeProfile) return null;
   const privacy = usePrivacyStore.getState();
   return exerciseRecordSchema.parse({
-    id: crypto.randomUUID(), savedAt: new Date().toISOString(), profile: session.activeProfile,
-    sampleId: session.sampleId, draft: session.draft, messages: savedMessages(exerciseChat.messages),
+    id: newId(), savedAt: new Date().toISOString(), profile: session.activeProfile,
+    sampleId: session.sampleId, draft: session.draft, baselinePending: session.baselinePending,
+    messages: savedMessages(exerciseChat.messages),
     privacy: { entityMap: privacy.entityMap, alwaysMask: privacy.alwaysMask },
   });
 }
@@ -33,15 +35,15 @@ export function openExercise(record: ExerciseRecord) {
   const parsed = exerciseRecordSchema.parse(record);
   const hasCompletedOutput = parsed.messages.some(message => message.role === "assistant" &&
     message.parts.some(part => part.type === "tool-generate_turn" || part.type === "tool-after_action_report"));
-  const includesBaseline = parsed.messages.some(message => message.role === "user" &&
-    message.parts.some(part => part.type === "text" &&
-      (part.text.startsWith("People:") || part.text.includes("\nOfficial guidance"))));
-  const incompleteBaseline = parsed.profile !== null && includesBaseline && !hasCompletedOutput;
+  const isLegacyIncompleteBaseline = parsed.profile !== null && !hasCompletedOutput &&
+    parsed.messages.filter(message => message.role === "user").length === 1 &&
+    parsed.messages[0]?.role === "user";
+  const incompleteBaseline = parsed.baselinePending || isLegacyIncompleteBaseline;
   resetExercise();
   exerciseChat.messages = incompleteBaseline ? [] : parsed.messages;
   useExerciseSession.setState({
     activeProfile: parsed.profile, sampleId: parsed.sampleId, draft: parsed.draft, restored: true,
-    baselineNeedsReview: incompleteBaseline,
+    baselinePending: incompleteBaseline, baselineNeedsReview: incompleteBaseline,
   });
   usePrivacyStore.setState(parsed.privacy);
 }

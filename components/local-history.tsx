@@ -34,7 +34,21 @@ export function LocalHistory() {
       {storageError && <p role="alert">{storageError}</p>}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      <h3 className="font-semibold">Dated assessments ({data.assessments.length})</h3>
+      <h3 className="font-semibold">Dated assessments ({data.assessments.length + Number(data.currentAssessment !== null)})</h3>
+      {data.currentAssessment && (
+        <details key={`current-${data.currentAssessment.id}`} className="rounded-control border border-line p-3">
+          <summary className="cursor-pointer">Assessment snapshot from full backup · {data.currentAssessment.savedAt}</summary>
+          <p className="my-2 text-sm">Answers and findings captured in the restored backup, not your current assessment. Deleting this snapshot does not change working answers or dated assessment records.</p>
+          <pre className="whitespace-pre-wrap break-words text-sm">{data.currentAssessment.report || "No findings recorded."}</pre>
+          <Button variant="outline" onClick={() => setDeleting(`current-${data.currentAssessment!.id}`)}>Delete assessment snapshot</Button>
+          {deleting === `current-${data.currentAssessment.id}` && <div role="group" aria-label="Confirm assessment snapshot deletion" className="flex flex-wrap gap-2">
+            <Button variant="destructive" onClick={() => run(() => {
+              commit({ ...data, currentAssessment: null }); setDeleting(null);
+            }, "Restored assessment snapshot deleted; working answers and dated history are unchanged.")}>Confirm snapshot deletion</Button>
+            <Button variant="outline" onClick={() => setDeleting(null)}>Keep snapshot</Button>
+          </div>}
+        </details>
+      )}
       {data.assessments.map(record => (
         <details key={record.id} className="rounded-control border border-line p-3">
           <summary className="cursor-pointer">Assessment saved {record.savedAt}</summary>

@@ -125,7 +125,7 @@ function ExercisePageContent({ generation }: { generation: number }) {
       alwaysMask: (review) => alwaysMask(review.start?.profile),
       send: (text, { start }) => {
         // A baseline starts the exercise only now, once it's sent.
-        if (start) useExerciseSession.getState().begin(start.profile, start.sampleId);
+        if (start) useExerciseSession.getState().begin(start.profile, start.sampleId, true);
         else setInput("");
         void sendToExercise(text);
       },
@@ -195,6 +195,12 @@ function ExercisePageContent({ generation }: { generation: number }) {
     reviewBaseline(activeProfile, activeSampleId ?? undefined);
     useExerciseSession.setState({ baselineNeedsReview: false });
   }, [activeProfile, activeSampleId, baselineNeedsReview, generation, reviewBaseline]);
+
+  useEffect(() => {
+    if (useExerciseSession.getState().baselinePending && ttx.turns.length > 0) {
+      useExerciseSession.setState({ baselinePending: false });
+    }
+  }, [ttx.turns.length]);
 
   useEffect(() => {
     if (preview && exerciseChat.messages.length === 0) {
