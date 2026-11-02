@@ -97,6 +97,7 @@ export interface Person {
   localName?: string;
   ageRange?: AgeRange;
   needs: Need[];
+  absentNeeds?: NeedKind[];
 }
 
 export const PET_KINDS = {
@@ -249,6 +250,8 @@ export interface Supplies {
   /** Days of pet food on hand. */
   petFoodDays?: number;
   have: SupplyId[];
+  /** Only explicitly confirmed absences; legacy unchecked items are unassessed. */
+  absent?: SupplyId[];
   /** Anything else, such as "2 cases of MREs". Masked before sending. */
   other?: string;
 }
@@ -288,6 +291,51 @@ export interface HouseholdProfile {
   home: Home;
   supplies: Supplies;
   scenario: ScenarioId;
+  /** Local answer provenance. Never serialized into provider summaries. */
+  answers?: Record<string, UnassessedAnswer>;
+}
+
+export const UNASSESSED_ANSWERS = {
+  skipped: "Skipped",
+  unknown: "Unknown",
+  withheld: "Prefer not to say",
+  "not-applicable": "Not applicable",
+} as const;
+export type UnassessedAnswer = keyof typeof UNASSESSED_ANSWERS;
+
+export function withAnswer(profile: HouseholdProfile, key: string, state?: UnassessedAnswer): HouseholdProfile {
+  const answers = { ...profile.answers };
+  if (state) answers[key] = state;
+  else delete answers[key];
+  return { ...profile, answers };
+}
+
+export function withoutAnswers(profile: HouseholdProfile, ...groups: string[]): HouseholdProfile {
+  return {
+    ...profile,
+    answers: Object.fromEntries(Object.entries(profile.answers ?? {}).filter(([key]) =>
+      !groups.some(group => key === group || key.startsWith(`${group}.`)))),
+  };
+}
+
+export function setSupplyAnswer(profile: HouseholdProfile, id: SupplyId, answer: "present" | "absent" | UnassessedAnswer): HouseholdProfile {
+  if (answer === "not-applicable" && id !== "formula") throw new Error("Not applicable is only supported for formula when formula feeding is not needed.");
+  const next = {
+    ...profile,
+    supplies: {
+      ...profile.supplies,
+      have: profile.supplies.have.filter(item => item !== id),
+      absent: (profile.supplies.absent ?? []).filter(item => item !== id),
+    },
+  };
+  if (answer === "present") next.supplies.have.push(id);
+  if (answer === "absent") next.supplies.absent.push(id);
+  return withAnswer(next, `supplies.${id}`, answer === "present" || answer === "absent" ? undefined : answer);
+}
+
+export function migrateHousehold(profile: HouseholdProfile): HouseholdProfile {
+  // Old checkboxes recorded positives only. An unchecked item was never proof of absence.
+  return { ...profile, supplies: { ...profile.supplies, absent: [] }, answers: {} };
 }
 
 export const emptyProfile = (): HouseholdProfile => ({
@@ -301,10 +349,7 @@ export const emptyProfile = (): HouseholdProfile => ({
 
 export const newId = () => Math.random().toString(36).slice(2, 10);
 
-const SUPPLY_LABELS: Record<string, string> = Object.assign(
-  {},
-  ...Object.values(SUPPLY_ITEMS),
-);
+export const SUPPLY_LABELS = Object.fromEntries(Object.values(SUPPLY_ITEMS).flatMap(Object.entries));
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
@@ -411,6 +456,7 @@ export function describeHousehold(profile: HouseholdProfile): string {
   if (unknown.length) {
     lines.push(`Not provided: ${unknown.join(", ")}. Treat these as unknown; don't assume them.`);
   }
+  lines.push("Only explicitly reported absences may be treated as missing supplies. Unlisted items and unanswered needs are unassessed, not absent.");
   lines.push(
     profile.scenario === "surprise"
       ? "Emergency to practice: choose one that fits the location and season."
@@ -423,6 +469,12 @@ export function describeHousehold(profile: HouseholdProfile): string {
 /** True once the profile has anything worth starting an exercise from. */
 export const hasProfile = (profile: HouseholdProfile) =>
   profile.people.length > 0 || profile.pets.length > 0 || Boolean(profile.location.region);
+
+export const hasAssessmentAnswers = (profile: HouseholdProfile) =>
+  hasProfile(profile) || Boolean(profile.location.setting) ||
+  Object.values(profile.home).some(value => value !== undefined && value !== "") ||
+  Object.values(profile.supplies).some(value => Array.isArray(value) ? value.length > 0 : value !== undefined && value !== "") ||
+  Object.keys(profile.answers ?? {}).length > 0;
 
 /**
  * Everything in the profile that must never be sent: names (whole, and each

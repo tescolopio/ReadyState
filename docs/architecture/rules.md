@@ -84,6 +84,63 @@ Every rule has `status`: `draft` or `reviewed`. Drafts work, but haven't had the
 
 A source's `verified` date means its page was retrieved and checked against the rules that cite it. This was done on 2026-10-27, by direct fetch or from search results that quote the page. It's an automated check, not the human sign-off D6 requires. Sources still marked `null` have not been checked.
 
+## Local assessment and answer semantics
+
+`/assessment` is an AI-free entry point sharing the household store, rule engine
+and action plan with the rest of the app. A short profile is enough to start;
+optional topics can be revisited independently. `assessInventory(profile,
+{ scenario: false })` ignores the selected exercise scenario, while retaining
+checks independently supported by household facts. Exercises continue to use
+the scenario-aware assessment and S2's review-before-send.
+
+Supply presence and absence are separate: `supplies.have` records positives,
+`supplies.absent` records explicit negatives. Numeric zero and explicit home
+answers such as backup power `none` remain facts. Local `answers` metadata
+distinguishes `unknown`, `skipped` and `withheld`; those states are not gaps.
+`Person.absentNeeds` records explicitly inapplicable practical needs rather
+than inferring them from an empty needs list. Formula alone can be marked
+`not-applicable`, meaning no formula feeding; that suppresses only the formula
+check, not other infant or supply guidance.
+
+Household storage version 1 migrates old checkbox data conservatively:
+positive items/needs, numbers (including zero) and explicit home choices survive;
+unchecked items/needs remain unassessed. Editing or clearing an answer removes
+the previous factual value before recording its new answer state.
+
+Conditions use three-valued logic internally: true, false and unassessed.
+Negating an unassessed item never makes it absent. `all`/`any` preserve a
+decisive false/true respectively, so an unrelated unknown does not erase
+independently supported findings. `exists: false` is deliberately a
+missing-information check, not a confirmed deficiency. Missing applicability
+or pass answers produce an unassessed finding without a purchase/action.
+
+Findings carry a category and the actual supporting facts (quantities,
+relevant item answers and contextual facts), shown alongside the rule and
+source links:
+
+- **Confirmed gaps:** explicitly absent items or known below-threshold supplies.
+- **Unassessed answers:** information not provided, unknown or withheld.
+- **Planning actions and guidance:** relevant reminders, not an assertion that
+  no arrangement exists. A future planning-gap rule must require an explicit
+  negative answer.
+- **Scenario-specific concerns:** concerns conditional on the selected exercise.
+- **Recorded resources:** recorded facts meeting that check, not a safety certification.
+
+Known gaps remain visible alongside unknown items. Only findings with a real
+action can be saved to the shared plan, and duplicate action text is not added.
+There is no aggregate preparedness score. All existing content-review caveats
+still apply; this implementation does not certify draft rules.
+
+Outgoing briefings exclude unassessed findings and local answer-status metadata.
+They retain explicitly supported gaps and the existing masking/review boundary.
+Assessment results and plan saving require neither an API key nor a model call.
+Dedicated communication/evacuation questions are outside this first increment.
+
+Historical Alex replay/evaluation evidence uses the baseline frozen in
+`lib/fixtures/alex-replay-turns.json` from pre-migration main `3f9dc8d`.
+Its legacy unchecked-as-absent interpretation is historical evidence only,
+not the behavior for current or migrated households. No evaluation was rerun.
+
 ## Facts
 
 Rules never read the profile directly. They use named facts from `lib/rules/engine.ts`, so the vocabulary stays stable when the profile changes:
@@ -99,6 +156,7 @@ Rules never read the profile directly. They use named facts from `lib/rules/engi
 | `hasBackupPower` | Backup power other than none |
 | `scenario` | The chosen emergency id |
 | `supplies.have` | Checked supply item ids |
+| `supplies.absent` | Only supply items explicitly reported absent |
 | `water.daysPerPerson`, `food.days`, `petFood.days` | Days of supply |
 
 Rules with `"forEach": "need"` run once per recorded need, and also get `person.id`, `person.label` ("Person 3 (older adult (65+))"), `need.kind`, `need.label`, `need.asksDays`, `need.daysSupply`, `need.watts` and `need.kwhPerDay`.
@@ -119,9 +177,9 @@ Rules with `"forEach": "need"` run once per recorded need, and also get `person.
 
 ## Inventory rule types
 
-- **`supply`** grades a days-of-supply `metric`: below `minimum` is Short, below `goal` (optional) is Partly covered, and anything else is Covered. A missing value is To check. Its `messages` and `actions` templates can use `{days}`, `{shortBy}` and `{shortByGallons}`.
-- **`check`** applies when `when` holds. It reports `failStatus` unless `pass` holds; with no `pass` it always reports, which suits plan prompts. `reportOk` also shows a Covered finding when it passes.
-- **`kit`** is a checklist of supply `items`. It's Short when more than `shortAbove` items are missing, otherwise Partly covered. Templates can use `{missingCount}`, `{total}` and `{missingList}`.
+- **`supply`** grades a days-of-supply `metric`: below `minimum` is Short, below `goal` (optional) is Partly covered, and anything else is Recorded. A missing value is Unassessed, with no action. Its `messages` and `actions` templates can use `{days}`, `{shortBy}` and `{shortByGallons}`.
+- **`check`** applies when `when` holds. It reports `failStatus` unless `pass` holds; with no `pass` it reports guidance or missing information as appropriate. `reportOk` shows a neutral Recorded finding when it passes, rather than reusing its failure text.
+- **`kit`** lists only explicitly absent supply `items`. It's Short when more than `shortAbove` items are explicitly absent, otherwise Partly covered. Unknown items are listed separately, never counted as missing. It is Recorded only when all required items are positively recorded. Templates can use `{missingCount}`, `{total}` and `{missingList}`.
 
 **Templates:**
 - `{fact}` inserts a value.

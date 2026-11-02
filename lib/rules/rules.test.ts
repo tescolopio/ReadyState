@@ -118,7 +118,7 @@ describe("safety detection", () => {
 });
 
 describe("rules engine", () => {
-  const facts: Facts = { "pets.any": true, "home.floors": 2, "supplies.have": ["cooler"], "need.kwhPerDay": undefined };
+  const facts: Facts = { "pets.any": true, "home.floors": 2, "supplies.have": ["cooler"], "supplies.absent": ["ice-packs"], "need.kwhPerDay": undefined };
 
   it("renders placeholders and optional sections", () => {
     expect(render("per day{pets.any?, plus extra for pets}", facts)).toBe("per day, plus extra for pets");

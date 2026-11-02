@@ -6,7 +6,6 @@ import { useMemo, useSyncExternalStore } from "react";
 
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { hasProfile } from "@/lib/household";
 import { assessInventory, gaps } from "@/lib/inventory";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { PLAN_STATUSES, usePlanStore, type PlanItem, type PlanStatus } from "@/store/usePlanStore";
@@ -26,7 +25,7 @@ export default function PlanPage() {
   // The plan and profile live in localStorage, which the server render can't see.
   const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
   const suggestions = useMemo(
-    () => (hasProfile(profile) ? gaps(assessInventory(profile)).filter((finding) => finding.action) : []),
+    () => gaps(assessInventory(profile, { scenario: false })).filter((finding) => finding.action),
     [profile],
   );
 
@@ -48,9 +47,9 @@ export default function PlanPage() {
         </h2>
         {active.length === 0 ? (
           <p className="rounded-panel border border-dashed border-line-strong p-5 text-ink-2">
-            During an exercise, choose <strong>Keep in my plan</strong> beside a next step and it appears here.{" "}
-            <Link href="/exercises" className="font-semibold text-ink underline underline-offset-2">
-              Start an exercise
+            Save a practical step from your household assessment. No exercise or AI is required.{" "}
+            <Link href="/assessment" className="font-semibold text-ink underline underline-offset-2">
+              Assess my household
             </Link>
           </p>
         ) : (

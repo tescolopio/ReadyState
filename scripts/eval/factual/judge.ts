@@ -30,11 +30,9 @@ import { z } from "zod";
 
 import { storyDefects } from "@/lib/debrief-checks";
 import alexReplay from "@/lib/fixtures/alex-replay-turns.json";
-import { engineBaseline } from "@/lib/inventory";
 import { failureSummary, providerErrorDetails } from "@/lib/provider-errors";
 import { GUIDANCE } from "@/lib/rules";
 import { storyFacts, storyFactsBriefing } from "@/lib/story-facts";
-import { TEST_HOUSEHOLDS } from "@/lib/test-households";
 import type { TurnOutput } from "@/lib/ttx";
 
 import type { Batch, Household, NoteCheck } from "./cases";
@@ -143,7 +141,7 @@ interface HouseholdEvidence {
 
 const EVIDENCE: Record<Household, () => HouseholdEvidence> = {
   alex: () => ({
-    baseline: engineBaseline(TEST_HOUSEHOLDS.find((household) => household.id === "alex")!.profile).split(/\nOfficial guidance/)[0],
+    baseline: alexReplay.baseline.split(/\nOfficial guidance/)[0],
     turns: alexReplay.turns as TurnOutput[],
     responses: alexReplay.responses,
   }),

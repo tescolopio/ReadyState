@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { emptyProfile, type HouseholdProfile } from "@/lib/household";
+import { emptyProfile, migrateHousehold, type HouseholdProfile } from "@/lib/household";
 
 /**
  * The household profile from the setup wizard. Persisted to this browser's
@@ -23,6 +23,11 @@ export const useHouseholdStore = create<HouseholdState>()(
     }),
     {
       name: "readystate-household",
+      version: 1,
+      migrate: (persisted) => {
+        const state = persisted as { profile: HouseholdProfile };
+        return { profile: migrateHousehold(state.profile) };
+      },
       storage: createJSONStorage(() => localStorage),
     },
   ),

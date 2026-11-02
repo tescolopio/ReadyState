@@ -17,10 +17,14 @@ import {
   SETTINGS,
   SUPPLY_ITEMS,
   WATER_SOURCE,
+  UNASSESSED_ANSWERS,
   backupRatings,
   hasProfile,
   newId,
   privateTerms,
+  setSupplyAnswer,
+  withAnswer,
+  withoutAnswers,
   type AgeRange,
   type HouseholdProfile,
   type Need,
@@ -29,9 +33,11 @@ import {
   type Pet,
   type PetKind,
   type SupplyId,
+  type UnassessedAnswer,
 } from "@/lib/household";
 import { assessInventory, engineBaseline, type Finding, type FindingStatus } from "@/lib/inventory";
-import { GUIDANCE } from "@/lib/rules";
+import { GUIDANCE, INVENTORY_RULES, SOURCES } from "@/lib/rules";
+import { usePlanStore } from "@/store/usePlanStore";
 import { TEST_HOUSEHOLDS } from "@/lib/test-households";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
@@ -75,12 +81,18 @@ function Choice<K extends string>({
   value,
   onChange,
   blank = "Not sure / skip",
+  answerState,
+  onAnswerState,
+  why,
 }: {
   label: string;
-  options: Record<K, string>;
+  options: Partial<Record<K, string>>;
   value?: K;
   onChange: (value: K | undefined) => void;
   blank?: string;
+  answerState?: UnassessedAnswer;
+  onAnswerState?: (state: UnassessedAnswer) => void;
+  why?: string;
 }) {
   const id = useId();
   return (
@@ -90,17 +102,26 @@ function Choice<K extends string>({
       </label>
       <select
         id={id}
-        value={value ?? ""}
-        onChange={(event) => onChange((event.target.value || undefined) as K | undefined)}
+        value={value ?? answerState ?? ""}
+        onChange={(event) => {
+          const value = event.target.value;
+          if (onAnswerState && (value === "" || value in UNASSESSED_ANSWERS)) {
+            onAnswerState((value || "skipped") as UnassessedAnswer);
+          } else onChange((value || undefined) as K | undefined);
+        }}
         className={fieldClass}
       >
         <option value="">{blank}</option>
+        {onAnswerState && <option value="skipped">Skipped / clear answer</option>}
+        {onAnswerState && <option value="unknown">Unknown</option>}
+        {onAnswerState && <option value="withheld">Prefer not to say</option>}
         {(Object.entries(options) as [K, string][]).map(([key, text]) => (
           <option key={key} value={key}>
             {text}
           </option>
         ))}
       </select>
+      {why && <p className="text-xs text-ink-3">{why}</p>}
     </div>
   );
 }
@@ -122,15 +143,20 @@ function NumberField({
   value,
   onChange,
   placeholder,
+  answerState,
+  onAnswerState,
 }: {
   label: string;
   value?: number;
   onChange: (value: number | undefined) => void;
   placeholder?: string;
+  answerState?: UnassessedAnswer;
+  onAnswerState?: (state: UnassessedAnswer) => void;
 }) {
   return (
     <Field label={label}>
       {(id) => (
+        <div className="space-y-1">
         <Input
           id={id}
           type="number"
@@ -140,6 +166,19 @@ function NumberField({
           placeholder={placeholder ?? "Not sure"}
           onChange={(event) => onChange(toNumber(event.target.value))}
         />
+        {onAnswerState && (
+          <select aria-label={`${label}: answer status`} className={fieldClass}
+            value={value !== undefined ? "answered" : answerState ?? "skipped"}
+            onChange={event => {
+              if (event.target.value !== "answered") onAnswerState(event.target.value as UnassessedAnswer);
+            }}>
+            {value !== undefined && <option value="answered">Answered (zero means none)</option>}
+            <option value="skipped">Not answered / clear</option>
+            <option value="unknown">Unknown</option>
+            <option value="withheld">Prefer not to say</option>
+          </select>
+        )}
+        </div>
       )}
     </Field>
   );
@@ -153,21 +192,28 @@ const STATUS_LABELS: Record<FindingStatus, { text: string; className: string }> 
   missing: { text: "Missing", className: "border-error text-error" },
   short: { text: "Short", className: "border-attention-accent text-attention" },
   partial: { text: "Partly covered", className: "border-attention-accent text-attention" },
-  unknown: { text: "To check", className: "border-line-strong text-ink-2" },
-  ok: { text: "Covered", className: "border-success text-success" },
+  unknown: { text: "Unassessed", className: "border-line-strong text-ink-2" },
+  ok: { text: "Recorded", className: "border-success text-success" },
 };
 
 /** The inventory check's findings, gaps first, each with what to do about it. */
 export function InventoryCheck({ findings }: { findings: Finding[] }) {
-  const open = findings.filter((finding) => finding.status !== "ok");
-  const covered = findings.length - open.length;
+  const items = usePlanStore(state => state.items);
+  const add = usePlanStore(state => state.add);
+  const groups = [
+    ["gap", "Confirmed gaps"], ["unassessed", "Unassessed answers"],
+    ["planning", "Planning actions and guidance"], ["scenario", "Scenario-specific concerns"],
+    ["recorded", "Recorded resources"],
+  ] as const;
   return (
     <section aria-label="Inventory check" className="space-y-2">
-      <p className={labelClass}>
-        Inventory check · {open.length} to work on, {covered} covered
-      </p>
+      <p className="text-sm text-ink-2">Local, rules-based assessment. Unanswered questions are not deficiencies. No preparedness score or AI is used. Rules remain drafts pending content review; recorded resources are not a certification of safety.</p>
+      {groups.map(([category, title]) => (
+      <section key={category} aria-label={title} className="space-y-2">
+      <h3 className={labelClass}>{title}</h3>
+      {!findings.some(finding => finding.category === category) && <p className="text-sm text-ink-3">None identified from recorded answers.</p>}
       <ul className="space-y-2">
-        {findings.map((finding, index) => {
+        {findings.filter(finding => finding.category === category).map((finding, index) => {
           const status = STATUS_LABELS[finding.status];
           return (
             // Rules can share a finding id (one per person, several needs), so the position keeps keys unique.
@@ -186,11 +232,34 @@ export function InventoryCheck({ findings }: { findings: Finding[] }) {
                     {finding.action}
                   </span>
                 )}
+                <details className="mt-2 text-xs">
+                  <summary>Based on your answers</summary>
+                  <ul>
+                    {finding.evidence.map(item => (
+                      <li key={item.fact}>{item.label}: {item.value === undefined ? "Unassessed" :
+                        Array.isArray(item.value) ? item.value.join(", ") || "No positive answers recorded; unlisted items are not assumed absent" : String(item.value)}</li>
+                    ))}
+                  </ul>
+                  <p>Rule: {finding.rule}. General guidance, not a certification of safety.</p>
+                  {INVENTORY_RULES.find(rule => rule.id === finding.rule)?.sources.map(id => {
+                    const source = SOURCES.find(source => source.id === id);
+                    return source && <a key={id} href={source.url} className="mr-2 underline">{source.publisher}: {source.title}</a>;
+                  })}
+                </details>
+                {finding.action && finding.category !== "unassessed" && finding.status !== "ok" && (
+                  <Button type="button" variant="outline" size="sm" className="mt-2"
+                    disabled={items.some(item => item.text === finding.action)}
+                    onClick={() => add({ text: finding.action!, source: `Household assessment: ${finding.rule}`, kind: finding.kind })}>
+                    {items.some(item => item.text === finding.action) ? "Saved to plan" : "Save to my plan"}
+                  </Button>
+                )}
               </span>
             </li>
           );
         })}
       </ul>
+      </section>
+      ))}
       <p className="text-xs text-ink-3">
         Guidance: Ready.gov (water, food, pets, basic kit) and CDC (medication, carbon monoxide). This check
         compares supplies with general guidance; it isn&apos;t a readiness score.
@@ -264,15 +333,19 @@ const personTitle = (person: Person, index: number) =>
 export function HouseholdWizard({
   onStart,
   onClose,
+  purpose = "exercise",
+  initialStep = 0,
 }: {
   onStart: (profile: HouseholdProfile) => void;
   onClose: () => void;
+  purpose?: "exercise" | "assessment";
+  initialStep?: number;
 }) {
   const saved = useHouseholdStore((state) => state.profile);
   const setProfile = useHouseholdStore((state) => state.setProfile);
   const clearProfile = useHouseholdStore((state) => state.clearProfile);
   const [profile, setDraft] = useState<HouseholdProfile>(saved);
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(initialStep);
 
   // Save as the person goes, so an interruption never loses their answers.
   const update = (next: HouseholdProfile) => {
@@ -284,7 +357,7 @@ export function HouseholdWizard({
   const current = STEPS[step];
   const preview = useMemo(
     () =>
-      current === "Review"
+      current === "Review" && purpose === "exercise"
         ? engineBaseline(profile, (text) =>
             maskInput(text, {
               alwaysMask: [...usePrivacyStore.getState().alwaysMask, ...privateTerms(profile)],
@@ -292,26 +365,72 @@ export function HouseholdWizard({
             }),
           )
         : "",
-    [current, profile],
+    [current, profile, purpose],
   );
 
-  const setPerson = (id: string, patch: Partial<Person>) =>
-    update({ ...profile, people: profile.people.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
-  const setPet = (id: string, patch: Partial<Pet>) =>
-    update({ ...profile, pets: profile.pets.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
+  const setPerson = (id: string, patch: Partial<Person>) => {
+    let next = { ...profile, people: profile.people.map((p) => (p.id === id ? { ...p, ...patch } : p)) };
+    if ("ageRange" in patch) next = withAnswer(next, `person.${id}.ageRange`, patch.ageRange === undefined ? "skipped" : undefined);
+    update(next);
+  };
+  const personAgeAnswer = (person: Person) => ({
+    answerState: profile.answers?.[`person.${person.id}.ageRange`],
+    onAnswerState: (state: UnassessedAnswer) => update(withAnswer({
+      ...profile, people: profile.people.map(p => p.id === person.id ? { ...p, ageRange: undefined } : p),
+    }, `person.${person.id}.ageRange`, state)),
+  });
+  const setPet = (id: string, patch: Partial<Pet>) => {
+    let next = { ...profile, pets: profile.pets.map((p) => (p.id === id ? { ...p, ...patch } : p)) };
+    for (const key of ["size", "weightLb"] as const) {
+      if (key in patch) next = withAnswer(next, `pet.${id}.${key}`, patch[key] === undefined ? "skipped" : undefined);
+    }
+    update(next);
+  };
+  const petAnswer = (pet: Pet, key: "size" | "weightLb") => ({
+    answerState: profile.answers?.[`pet.${pet.id}.${key}`],
+    onAnswerState: (state: UnassessedAnswer) => update(withAnswer({
+      ...profile, pets: profile.pets.map(p => p.id === pet.id ? { ...p, [key]: undefined } : p),
+    }, `pet.${pet.id}.${key}`, state)),
+  });
+  const locationAnswer = (key: "region" | "setting") => ({
+    answerState: profile.answers?.[`location.${key}`],
+    onAnswerState: (state: UnassessedAnswer) => update(withAnswer({
+      ...profile, location: { ...profile.location, [key]: undefined },
+    }, `location.${key}`, state)),
+  });
   const setNeed = (person: Person, kind: NeedKind, patch: Partial<Need> | null) => {
     const others = person.needs.filter((need) => need.kind !== kind);
     const existing = person.needs.find((need) => need.kind === kind) ?? { kind };
-    setPerson(person.id, { needs: patch === null ? others : [...others, { ...existing, ...patch }] });
+    let next = { ...profile, people: profile.people.map(p => p.id === person.id
+      ? { ...p, needs: patch === null ? others : [...others, { ...existing, ...patch }] } : p) };
+    for (const key of Object.keys(patch ?? {})) {
+      next = withAnswer(next, `need.${person.id}.${kind}.${key}`);
+    }
+    update(next);
   };
-  const toggleSupply = (id: SupplyId, on: boolean) =>
-    update({
-      ...profile,
-      supplies: {
-        ...profile.supplies,
-        have: on ? [...profile.supplies.have, id] : profile.supplies.have.filter((item) => item !== id),
-      },
-    });
+  const needAnswer = (person: Person, need: Need, key: "watts" | "daysSupply") => ({
+    answerState: profile.answers?.[`need.${person.id}.${need.kind}.${key}`],
+    onAnswerState: (state: UnassessedAnswer) => update(withAnswer({
+      ...profile, people: profile.people.map(p => p.id === person.id
+        ? { ...p, needs: p.needs.map(n => n.kind === need.kind ? { ...n, [key]: undefined } : n) } : p),
+    }, `need.${person.id}.${need.kind}.${key}`, state)),
+  });
+  const homeAnswer = <K extends keyof HouseholdProfile["home"]>(key: K) => ({
+    answerState: profile.answers?.[`home.${key}`],
+    onAnswerState: (state: UnassessedAnswer) => update(withAnswer({
+      ...profile, home: { ...profile.home, [key]: undefined, ...(key === "backupPower" ? { backupWatts: undefined, backupWh: undefined } : {}) },
+    }, `home.${key}`, state)),
+  });
+  const supplyAnswer = (key: "waterGallons" | "foodDays" | "petFoodDays") => ({
+    answerState: profile.answers?.[`supplies.${key}`],
+    onAnswerState: (state: UnassessedAnswer) => update(withAnswer({
+      ...profile, supplies: { ...profile.supplies, [key]: undefined },
+    }, `supplies.${key}`, state)),
+  });
+  const setHome = <K extends keyof HouseholdProfile["home"]>(key: K, value: HouseholdProfile["home"][K]) =>
+    update(withAnswer({ ...profile, home: { ...profile.home, [key]: value } }, `home.${key}`, value === undefined ? "skipped" : undefined));
+  const setStock = (key: "waterGallons" | "foodDays" | "petFoodDays", value?: number) =>
+    update(withAnswer({ ...profile, supplies: { ...profile.supplies, [key]: value } }, `supplies.${key}`, value === undefined ? "skipped" : undefined));
 
   return (
     <section aria-label="Household setup" className="space-y-4 rounded-panel border border-line bg-surface p-4">
@@ -355,7 +474,11 @@ export function HouseholdWizard({
         }}
       />
 
-      <p className="text-sm text-ink-2">{WHY[current]}</p>
+      <p className="text-sm text-ink-2">{purpose === "assessment" && current === "Review"
+        ? "Review local findings and their supporting answers, then save useful actions to your shared plan. Nothing here is sent to a provider."
+        : WHY[current]}</p>
+      <p className="text-xs text-ink-3">All topics are optional. Zero and “I don&apos;t have this” are explicit answers; unknown, skipped and withheld answers are not gaps.</p>
+      {purpose === "assessment" && <Button type="button" onClick={() => onStart(profile)}>See assessment</Button>}
 
       {current === "People" && (
         <div className="space-y-3">
@@ -373,6 +496,8 @@ export function HouseholdWizard({
               </Field>
               <Choice
                 label="Age range"
+                {...personAgeAnswer(person)}
+                why="Used for age-relevant checks and rough calorie estimates. An unanswered age is not a deficiency."
                 options={AGE_RANGES}
                 value={person.ageRange}
                 onChange={(ageRange) => setPerson(person.id, { ageRange })}
@@ -383,7 +508,8 @@ export function HouseholdWizard({
                 size="sm"
                 className="self-end"
                 aria-label={`Remove ${personTitle(person, index)}`}
-                onClick={() => update({ ...profile, people: profile.people.filter((p) => p.id !== person.id) })}
+                onClick={() => update(withoutAnswers({ ...profile, people: profile.people.filter((p) => p.id !== person.id) },
+                  `person.${person.id}`, `need.${person.id}`))}
               >
                 <Trash2 className="h-4 w-4" aria-hidden />
               </Button>
@@ -431,6 +557,7 @@ export function HouseholdWizard({
               />
               <Choice
                 label="Size"
+                {...petAnswer(pet, "size")}
                 options={{ small: "small", medium: "medium", large: "large" }}
                 value={pet.size}
                 onChange={(size) => setPet(pet.id, { size })}
@@ -438,6 +565,7 @@ export function HouseholdWizard({
               {(pet.kind === "dog" || pet.kind === "cat") && (
                 <NumberField
                   label="Weight (lb), for food and water math"
+                  {...petAnswer(pet, "weightLb")}
                   value={pet.weightLb}
                   onChange={(weightLb) => setPet(pet.id, { weightLb })}
                 />
@@ -457,7 +585,7 @@ export function HouseholdWizard({
                 variant="outline"
                 size="sm"
                 className="justify-self-start"
-                onClick={() => update({ ...profile, pets: profile.pets.filter((p) => p.id !== pet.id) })}
+                onClick={() => update(withoutAnswers({ ...profile, pets: profile.pets.filter((p) => p.id !== pet.id) }, `pet.${pet.id}`))}
               >
                 <Trash2 className="h-4 w-4" aria-hidden />
                 Remove pet
@@ -489,75 +617,98 @@ export function HouseholdWizard({
                 id={id}
                 value={profile.location.region ?? ""}
                 placeholder="e.g. Colorado"
-                onChange={(event) => update({ ...profile, location: { ...profile.location, region: event.target.value } })}
+                onChange={(event) => update(withAnswer({ ...profile, location: { ...profile.location, region: event.target.value } },
+                  "location.region", event.target.value.trim() ? undefined : "skipped"))}
               />
             )}
           </Field>
+          <Choice label="Region: answer status"
+            {...locationAnswer("region")}
+            options={profile.location.region ? { answered: "Answered" } : {}}
+            value={profile.location.region ? "answered" : undefined}
+            blank="Not answered" onChange={() => {}} />
           <Choice
             label="Area"
+            {...locationAnswer("setting")}
             options={SETTINGS}
             value={profile.location.setting}
-            onChange={(setting) => update({ ...profile, location: { ...profile.location, setting } })}
+            onChange={(setting) => update(withAnswer({ ...profile, location: { ...profile.location, setting } },
+              "location.setting", setting === undefined ? "skipped" : undefined))}
           />
           <Choice
             label="Home type"
+            {...homeAnswer("type")}
+            why="Used by relevant shelter and household-context guidance."
             options={HOME_TYPES}
             value={profile.home.type}
-            onChange={(type) => update({ ...profile, home: { ...profile.home, type } })}
+            onChange={(type) => setHome("type", type)}
           />
           <NumberField
             label="Floors"
+            {...homeAnswer("floors")}
             value={profile.home.floors}
-            onChange={(floors) => update({ ...profile, home: { ...profile.home, floors } })}
+            onChange={(floors) => setHome("floors", floors)}
           />
           <Choice
             label="Basement"
+            why="Records available shelter context; no basement does not itself mean you lack a shelter plan."
+            {...homeAnswer("basement")}
             options={{ yes: "Yes", no: "No" }}
             value={profile.home.basement === undefined ? undefined : profile.home.basement ? "yes" : "no"}
             onChange={(answer) =>
-              update({ ...profile, home: { ...profile.home, basement: answer === undefined ? undefined : answer === "yes" } })
+              setHome("basement", answer === undefined ? undefined : answer === "yes")
             }
           />
           <Choice
             label="Heating"
+            why="Fuel-burning systems affect carbon monoxide checks and safe outage guidance."
+            {...homeAnswer("heating")}
             options={HEATING}
             value={profile.home.heating}
-            onChange={(heating) => update({ ...profile, home: { ...profile.home, heating } })}
+            onChange={(heating) => setHome("heating", heating)}
           />
           <Choice
             label="Cooking"
+            why="Fuel-burning cooking affects carbon monoxide checks."
+            {...homeAnswer("cooking")}
             options={COOKING}
             value={profile.home.cooking}
-            onChange={(cooking) => update({ ...profile, home: { ...profile.home, cooking } })}
+            onChange={(cooking) => setHome("cooking", cooking)}
           />
           <Choice
             label="Water"
+            why="A private well can depend on power; it changes the water-and-backup check."
+            {...homeAnswer("water")}
             options={WATER_SOURCE}
             value={profile.home.water}
-            onChange={(water) => update({ ...profile, home: { ...profile.home, water } })}
+            onChange={(water) => setHome("water", water)}
           />
           <Choice
             label="Backup power"
+            why="Used with well pumps and recorded powered devices. Unknown is not treated as no backup."
+            {...homeAnswer("backupPower")}
             options={BACKUP_POWER}
             value={profile.home.backupPower}
             onChange={(backupPower) => {
               // Drop ratings the new choice hides, so they can't reach the rules or the model.
               const home = { ...profile.home, backupPower };
-              update({ ...profile, home: { ...home, backupWatts: backupRatings(home).watts, backupWh: backupRatings(home).wh } });
+              update(withAnswer({ ...profile, home: { ...home, backupWatts: backupRatings(home).watts, backupWh: backupRatings(home).wh } }, "home.backupPower", backupPower === undefined ? "skipped" : undefined));
             }}
           />
           {profile.home.backupPower && profile.home.backupPower !== "none" && (
             <NumberField
               label="Backup output (watts)"
+              {...homeAnswer("backupWatts")}
               value={profile.home.backupWatts}
-              onChange={(backupWatts) => update({ ...profile, home: { ...profile.home, backupWatts } })}
+              onChange={(backupWatts) => setHome("backupWatts", backupWatts)}
             />
           )}
           {(profile.home.backupPower === "battery" || profile.home.backupPower === "solar") && (
             <NumberField
               label="Battery capacity (Wh), for runtime math"
+              {...homeAnswer("backupWh")}
               value={profile.home.backupWh}
-              onChange={(backupWh) => update({ ...profile, home: { ...profile.home, backupWh } })}
+              onChange={(backupWh) => setHome("backupWh", backupWh)}
             />
           )}
           <div className="sm:col-span-2">
@@ -589,18 +740,20 @@ export function HouseholdWizard({
                 const need = person.needs.find((n) => n.kind === kind);
                 return (
                   <div key={kind} className="space-y-2">
-                    <label className="flex items-start gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={Boolean(need)}
-                        onChange={(event) => setNeed(person, kind, event.target.checked ? {} : null)}
-                      />
-                      <span>
-                        {info.label}
-                        {info.hint && <span className="block text-xs text-ink-3">{info.hint}</span>}
-                      </span>
-                    </label>
+                    <Choice label={info.label} blank="Not answered"
+                      why="Only a need you explicitly record is used to tailor checks. Describe the practical constraint, not a diagnosis."
+                      options={{ present: "Applies", absent: "Does not apply", unknown: "Unknown", skipped: "Skipped", withheld: "Prefer not to say" }}
+                      value={need ? "present" : person.absentNeeds?.includes(kind) ? "absent" : profile.answers?.[`need.${person.id}.${kind}`]}
+                      onChange={answer => {
+                        const nextPerson = { ...person,
+                          needs: answer === "present" ? [...person.needs.filter(n => n.kind !== kind), need ?? { kind }] : person.needs.filter(n => n.kind !== kind),
+                          absentNeeds: answer === "absent" ? [...(person.absentNeeds ?? []).filter(k => k !== kind), kind] : (person.absentNeeds ?? []).filter(k => k !== kind),
+                        };
+                        const next = { ...profile, people: profile.people.map(p => p.id === person.id ? nextPerson : p) };
+                        update(withAnswer(answer === "present" ? next : withoutAnswers(next, `need.${person.id}.${kind}`),
+                          `need.${person.id}.${kind}`, answer === "present" || answer === "absent" ? undefined : answer ?? "skipped"));
+                      }} />
+                    {info.hint && <p className="text-xs text-ink-3">{info.hint}</p>}
                     {need && info.asks && (
                       <div className="ml-6 grid gap-2 sm:grid-cols-2">
                         <Field label={info.asks === "days" ? "Medication name (this device only)" : "Device (this device only)"}>
@@ -616,6 +769,7 @@ export function HouseholdWizard({
                         {info.asks === "days" ? (
                           <NumberField
                             label="Days of supply on hand"
+                            {...needAnswer(person, need, "daysSupply")}
                             value={need.daysSupply}
                             onChange={(daysSupply) => setNeed(person, kind, { daysSupply })}
                           />
@@ -623,6 +777,7 @@ export function HouseholdWizard({
                           <div className="space-y-1">
                             <NumberField
                               label="Power draw (watts, from the label)"
+                              {...needAnswer(person, need, "watts")}
                               value={need.watts}
                               onChange={(watts) => setNeed(person, kind, { watts })}
                             />
@@ -658,19 +813,22 @@ export function HouseholdWizard({
           <div className="grid gap-3 sm:grid-cols-3">
             <NumberField
               label="Stored water (gallons)"
+              {...supplyAnswer("waterGallons")}
               value={profile.supplies.waterGallons}
-              onChange={(waterGallons) => update({ ...profile, supplies: { ...profile.supplies, waterGallons } })}
+              onChange={(waterGallons) => setStock("waterGallons", waterGallons)}
             />
             <NumberField
               label="Food (days)"
+              {...supplyAnswer("foodDays")}
               value={profile.supplies.foodDays}
-              onChange={(foodDays) => update({ ...profile, supplies: { ...profile.supplies, foodDays } })}
+              onChange={(foodDays) => setStock("foodDays", foodDays)}
             />
             {profile.pets.length > 0 && (
               <NumberField
                 label="Pet food (days)"
+                {...supplyAnswer("petFoodDays")}
                 value={profile.supplies.petFoodDays}
-                onChange={(petFoodDays) => update({ ...profile, supplies: { ...profile.supplies, petFoodDays } })}
+                onChange={(petFoodDays) => setStock("petFoodDays", petFoodDays)}
               />
             )}
           </div>
@@ -679,14 +837,14 @@ export function HouseholdWizard({
               <fieldset key={group} className="space-y-1">
                 <legend className={labelClass}>{group}</legend>
                 {(Object.entries(items) as [SupplyId, string][]).map(([id, text]) => (
-                  <label key={id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={profile.supplies.have.includes(id)}
-                      onChange={(event) => toggleSupply(id, event.target.checked)}
-                    />
-                    {text}
-                  </label>
+                  <Choice key={id} label={text}
+                    blank="Not answered"
+                    why="Used to tailor relevant supply checks and household context. An unchecked or skipped answer is not evidence that you lack this item."
+                    options={{ present: "I have this", absent: "I don't have this", unknown: "Unknown", skipped: "Skipped", withheld: "Prefer not to say",
+                      ...(id === "formula" ? { "not-applicable": "Not applicable: no formula feeding" } : {}) }}
+                    value={profile.supplies.have.includes(id) ? "present" : profile.supplies.absent?.includes(id) ? "absent" : profile.answers?.[`supplies.${id}`]}
+                    onChange={answer => update(setSupplyAnswer(profile, id, answer ?? "skipped"))}
+                  />
                 ))}
               </fieldset>
             ))}
@@ -708,20 +866,20 @@ export function HouseholdWizard({
 
       {current === "Review" && (
         <div className="space-y-3">
-          <Choice
+          {purpose === "exercise" && <Choice
             label="Emergency to practice"
             options={SCENARIOS}
             value={profile.scenario}
             blank="Surprise me"
             onChange={(scenario) => update({ ...profile, scenario: scenario ?? "surprise" })}
-          />
-          <InventoryCheck findings={assessInventory(profile)} />
-          <div>
+          />}
+          <InventoryCheck findings={assessInventory(profile, { scenario: purpose === "exercise" })} />
+          {purpose === "exercise" && <div>
             <p className={labelClass}>What the scenario engine sees</p>
             <pre className="mt-1 whitespace-pre-wrap rounded-control border border-line bg-field p-3 font-mono text-xs text-ink-2">
               {preview}
             </pre>
-          </div>
+          </div>}
           <p className="text-xs text-ink-3">
             Your profile is saved in this browser only.{" "}
             <button
@@ -748,11 +906,11 @@ export function HouseholdWizard({
           <Button
             type="button"
             size="sm"
-            disabled={!hasProfile(profile)}
+            disabled={purpose === "exercise" && !hasProfile(profile)}
             onClick={() => onStart(profile)}
           >
             <Play className="h-4 w-4" aria-hidden />
-            Start exercise
+            {purpose === "assessment" ? "See assessment" : "Start exercise"}
           </Button>
         ) : (
           <Button type="button" size="sm" onClick={() => go(1)}>

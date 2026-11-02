@@ -7,10 +7,14 @@
 import {
   AGE_RANGES,
   NEED_INFO,
+  SUPPLY_LABELS,
+  UNASSESSED_ANSWERS,
   backupRatings,
   type HouseholdProfile,
   type Need,
   type Person,
+  type SupplyId,
+  type UnassessedAnswer,
 } from "@/lib/household";
 import guidanceJson from "@/data/rules/guidance.json";
 import type { Condition, InventoryRule } from "@/lib/rules/schema";
@@ -30,14 +34,17 @@ export const PROFILE_FACTS: Record<string, string> = {
   "home.cooking": "Cooking id (gas, electric, both)",
   "home.water": "Water source id (municipal, well)",
   "home.backupPower": "Backup power id (none, generator, …)",
+  "home.backupWh": "Recorded applicable battery capacity in watt-hours",
   "home.burnsFuel": "True when heating, cooking or backup power burns fuel",
   hasBackupPower: "True when backup power other than none is recorded",
   scenario: "The chosen emergency id",
   "supplies.have": "Ids of the supply items checked",
+  "supplies.absent": "Supply items explicitly reported absent",
+  "water.gallons": "Stored water recorded, in gallons",
   "water.daysPerPerson": "Stored gallons divided by headcount",
-  "water.gallonsPerDay": "Daily water need: 1 gallon per person plus pets' drinking water",
-  "water.days": "Stored gallons divided by the daily need, pets included",
-  "pets.waterGallonsPerDay": 'Pets\' daily drinking water in gallons, formatted ("2.1"), when their weights are known',
+  "water.gallonsPerDay": "Estimated daily gallons for recorded people and weighed dogs/cats",
+  "water.days": "Stored gallons divided by that estimated daily need",
+  "pets.waterGallonsPerDay": 'Drinking-water estimate for weighed dogs/cats in gallons, formatted ("2.1")',
   "pets.kcalPerDay": 'Pets\' daily calories, formatted ("5,040"), when their weights are known',
   "pets.weightsMissing": "True when a dog or cat has no weight recorded",
   "household.kcalPerDay": 'People\'s estimated daily calories, formatted ("4,400"); infants excluded',
@@ -110,26 +117,30 @@ export function profileFacts(profile: HouseholdProfile): Facts {
     "home.cooking": home.cooking,
     "home.water": home.water,
     "home.backupPower": home.backupPower,
-    "home.burnsFuel":
+    "home.backupWh": backupRatings(home).wh,
+    "home.burnsFuel": (
       fuelHeating.includes(home.heating ?? "") ||
       ["gas", "both"].includes(home.cooking ?? "") ||
-      ["generator", "standby"].includes(home.backupPower ?? ""),
-    hasBackupPower: Boolean(home.backupPower && home.backupPower !== "none"),
+      ["generator", "standby"].includes(home.backupPower ?? "")) ? true :
+        home.heating !== undefined && home.cooking !== undefined && home.backupPower !== undefined ? false : undefined,
+    hasBackupPower: home.backupPower === undefined ? undefined : home.backupPower !== "none",
     scenario: profile.scenario,
     "supplies.have": supplies.have,
-    "water.daysPerPerson": supplies.waterGallons === undefined ? undefined : supplies.waterGallons / headcount,
-    "water.gallonsPerDay": Math.round(waterPerDay * 10) / 10,
-    "water.days": supplies.waterGallons === undefined ? undefined : supplies.waterGallons / waterPerDay,
+    "supplies.absent": supplies.absent ?? [],
+    "water.gallons": supplies.waterGallons,
+    "water.daysPerPerson": supplies.waterGallons === undefined || !people.length ? undefined : supplies.waterGallons / headcount,
+    "water.gallonsPerDay": people.length ? Math.round(waterPerDay * 10) / 10 : undefined,
+    "water.days": supplies.waterGallons === undefined || !people.length ? undefined : supplies.waterGallons / waterPerDay,
     "pets.waterGallonsPerDay": weighed.length ? (Math.round(petWater * 10) / 10).toFixed(1) : undefined,
     "pets.kcalPerDay": weighed.length ? thousands(petKcal) : undefined,
-    "pets.weightsMissing": counted.length > weighed.length || undefined,
+    "pets.weightsMissing": counted.length > weighed.length,
     "household.kcalPerDay": peopleKcal ? thousands(peopleKcal) : undefined,
     "household.kcal3Days": peopleKcal ? thousands(peopleKcal * 3) : undefined,
     "household.kcal14Days": peopleKcal ? thousands(peopleKcal * 14) : undefined,
     "food.days": supplies.foodDays,
     "petFood.days": supplies.petFoodDays,
     "water.daysHotWeather":
-      supplies.waterGallons === undefined ? undefined : days(Math.round((supplies.waterGallons / headcount / 2) * 10) / 10),
+      supplies.waterGallons === undefined || !people.length ? undefined : days(Math.round((supplies.waterGallons / headcount / 2) * 10) / 10),
     "needs.kinds": [...new Set(people.flatMap((person) => person.needs.map((need) => need.kind)))],
     "people.ageRanges": [...new Set(people.flatMap((person) => (person.ageRange ? [person.ageRange] : [])))],
   };
@@ -157,12 +168,29 @@ export function needHomeFacts(profile: HouseholdProfile, need: Need): Facts {
   return { "need.backupHours": Math.round(((backupWh * 0.85) / need.watts) * 10) / 10 };
 }
 
-export function evaluate(condition: Condition, facts: Facts): boolean {
-  if ("all" in condition) return condition.all.every((c) => evaluate(c, facts));
-  if ("any" in condition) return condition.any.some((c) => evaluate(c, facts));
-  if ("not" in condition) return !evaluate(condition.not, facts);
+function truth(condition: Condition, facts: Facts): boolean | undefined {
+  if ("all" in condition || "any" in condition) {
+    const all = "all" in condition;
+    const values = (all ? condition.all : condition.any).map(c => truth(c, facts));
+    if (values.includes(!all)) return !all;
+    return values.includes(undefined) ? undefined : all;
+  }
+  if ("not" in condition) {
+    const value = truth(condition.not, facts);
+    return value === undefined ? undefined : !value;
+  }
   const value = facts[condition.fact];
+  if ("exists" in condition) return (value !== undefined && value !== false) === condition.exists;
+  if (value === undefined) return undefined;
   const list = Array.isArray(value) ? value : [];
+  if (condition.fact === "supplies.have") {
+    const absent = facts["supplies.absent"];
+    const item = (id: string) => list.includes(id) ? true : Array.isArray(absent) && absent.includes(id) ? false : undefined;
+    if ("includes" in condition) return item(condition.includes);
+    const values = ("includesAll" in condition ? condition.includesAll : "includesAny" in condition ? condition.includesAny : []).map(item);
+    if ("includesAll" in condition) return values.includes(false) ? false : values.includes(undefined) ? undefined : true;
+    if ("includesAny" in condition) return values.includes(true) ? true : values.includes(undefined) ? undefined : false;
+  }
   if ("equals" in condition) return value === condition.equals;
   if ("in" in condition) return condition.in.includes(value as string | number);
   if ("includes" in condition) return list.includes(condition.includes);
@@ -170,7 +198,11 @@ export function evaluate(condition: Condition, facts: Facts): boolean {
   if ("includesAny" in condition) return condition.includesAny.some((item) => list.includes(item));
   if ("gt" in condition) return typeof value === "number" && value > condition.gt;
   if ("lt" in condition) return typeof value === "number" && value < condition.lt;
-  return (value !== undefined && value !== false) === condition.exists;
+  return undefined;
+}
+
+export function evaluate(condition: Condition, facts: Facts): boolean {
+  return truth(condition, facts) === true;
 }
 
 /** Every fact name a condition refers to, for validation. */
@@ -179,6 +211,22 @@ export function conditionFacts(condition: Condition): string[] {
   if ("any" in condition) return condition.any.flatMap(conditionFacts);
   if ("not" in condition) return conditionFacts(condition.not);
   return [condition.fact];
+}
+
+function checksMissingAnswer(condition: Condition): boolean {
+  if ("all" in condition) return condition.all.some(checksMissingAnswer);
+  if ("any" in condition) return condition.any.some(checksMissingAnswer);
+  if ("not" in condition) return false;
+  return "exists" in condition && !condition.exists;
+}
+
+function conditionItems(condition: Condition): string[] {
+  if ("all" in condition) return condition.all.flatMap(conditionItems);
+  if ("any" in condition) return condition.any.flatMap(conditionItems);
+  if ("not" in condition) return conditionItems(condition.not);
+  if (condition.fact !== "supplies.have") return [];
+  return "includes" in condition ? [condition.includes] :
+    "includesAll" in condition ? condition.includesAll : "includesAny" in condition ? condition.includesAny : [];
 }
 
 const days = (value: number) => `${Number.isInteger(value) ? value : value.toFixed(1)} day${value === 1 ? "" : "s"}`;
@@ -214,16 +262,61 @@ export interface Finding {
   kind: InventoryRule["kind"];
   /** The rule that produced it, for tracing back to its sources. */
   rule: string;
+  category: "gap" | "unassessed" | "planning" | "scenario" | "recorded";
+  evidence: { fact: string; label: string; value: FactValue }[];
 }
 
-function applyRule(rule: InventoryRule, facts: Facts): Finding | undefined {
-  if (rule.when && !evaluate(rule.when, facts)) return undefined;
-  const base = { id: render(rule.findingId ?? rule.id, facts), area: rule.area, kind: rule.kind, rule: rule.id };
+function applyRule(rule: InventoryRule, facts: Facts, answers: Record<string, UnassessedAnswer> = {}): Finding | undefined {
+  const applicability = rule.when ? truth(rule.when, facts) : true;
+  if (applicability === false) return undefined;
+  const used = [...new Set([
+    ...(rule.when ? conditionFacts(rule.when) : []),
+    ...(rule.type === "supply" ? [rule.metric, ...templateFacts(JSON.stringify(rule.messages)), ...templateFacts(JSON.stringify(rule.actions))] :
+      rule.type === "kit" ? ["supplies.have", "supplies.absent"] :
+        [...(rule.pass ? conditionFacts(rule.pass) : []), ...templateFacts(rule.finding), ...templateFacts(rule.action)]),
+  ])];
+  if (rule.type === "supply" && rule.metric === "water.days") {
+    used.push("water.gallons", "people.count", "water.gallonsPerDay", "pets.waterGallonsPerDay", "pets.weightsMissing");
+  }
+  if (used.includes("need.backupHours")) used.push("need.watts", "home.backupWh");
+  if (used.includes("need.kwhPerDay")) used.push("need.watts");
+  if (used.includes("pets.any")) used.push("pets.count");
+  if (used.includes("hasBackupPower")) used.push("home.backupPower");
+  if (used.includes("home.burnsFuel")) used.push("home.heating", "home.cooking", "home.backupPower");
+  const answerKey = (fact: string) => {
+    if (fact.startsWith("need.")) return `need.${facts["person.id"]}.${facts["need.kind"]}.${fact.slice(5)}`;
+    return ({ "food.days": "supplies.foodDays", "petFood.days": "supplies.petFoodDays", "water.gallons": "supplies.waterGallons" } as Record<string, string>)[fact] ?? fact;
+  };
+  const evidence = [...new Set(used)].filter(fact => (fact in PROFILE_FACTS || fact in NEED_FACTS) &&
+    fact !== "supplies.have" && fact !== "supplies.absent" && !(fact === "scenario" && facts.scenario === "not-selected")).map(fact => ({
+    fact, label: PROFILE_FACTS[fact] ?? NEED_FACTS[fact],
+    value: facts[fact] ?? (answers[answerKey(fact)] ? UNASSESSED_ANSWERS[answers[answerKey(fact)]] : undefined),
+  }));
+  const items = [...new Set(rule.type === "kit" ? Object.keys(rule.items) : [
+    ...(rule.when ? conditionItems(rule.when) : []),
+    ...(rule.type === "check" && rule.pass ? conditionItems(rule.pass) : []),
+  ])];
+  for (const id of items) {
+    const present = facts["supplies.have"];
+    const absent = facts["supplies.absent"];
+    evidence.push({
+      fact: `supplies.${id}`, label: SUPPLY_LABELS[id],
+      value: Array.isArray(present) && present.includes(id) ? "Present" :
+        Array.isArray(absent) && absent.includes(id) ? "Explicitly absent" :
+          answers[`supplies.${id}`] ? UNASSESSED_ANSWERS[answers[`supplies.${id}`]] : "Not answered",
+    });
+  }
+  const base = { id: render(rule.findingId ?? rule.id, facts), area: rule.area, kind: rule.kind, rule: rule.id, evidence };
+  const unassessed = (): Finding => ({
+    ...base, status: "unknown", category: "unassessed",
+    finding: `${rule.area}: this check is unassessed because an answer it needs has not been provided.`,
+  });
+  if (applicability === undefined) return unassessed();
 
   if (rule.type === "supply") {
     const value = facts[rule.metric];
     if (typeof value !== "number") {
-      return { ...base, status: "unknown", finding: render(rule.messages.unknown, facts), action: render(rule.actions.unknown, facts) };
+      return unassessed();
     }
     const graded = (status: FindingStatus, target: number) => {
       const shortBy = Math.ceil(target - value);
@@ -235,49 +328,70 @@ function applyRule(rule: InventoryRule, facts: Facts): Finding | undefined {
       };
       const message = status === "short" ? rule.messages.short : rule.messages.partial!;
       const action = status === "short" ? rule.actions.short : rule.actions.partial!;
-      return { ...base, status, finding: render(message, local), action: render(action, local) };
+      return { ...base, category: "gap" as const, status, finding: render(message, local), action: render(action, local) };
     };
     if (value < rule.minimum) return graded("short", rule.minimum);
     if (rule.goal !== undefined && value < rule.goal) return graded("partial", rule.goal);
-    return { ...base, status: "ok", finding: render(rule.messages.ok, { ...facts, days: days(value) }) };
+    return { ...base, category: "recorded", status: "ok", finding: render(rule.messages.ok, { ...facts, days: days(value) }) };
   }
 
   if (rule.type === "kit") {
     const have = (facts["supplies.have"] as string[] | undefined) ?? [];
-    const missing = Object.entries(rule.items).filter(([id]) => !have.includes(id)).map(([, label]) => label);
-    if (!missing.length) return { ...base, status: "ok", finding: render(rule.okFinding, facts) };
+    const absent = (facts["supplies.absent"] as string[] | undefined) ?? [];
+    const missing = Object.entries(rule.items).filter(([id]) => absent.includes(id) && !have.includes(id)).map(([, label]) => label);
+    if (!missing.length) return Object.keys(rule.items).every(id => have.includes(id))
+      ? { ...base, category: "recorded", status: "ok", finding: render(rule.okFinding, facts) } : unassessed();
     const local = { ...facts, missingCount: missing.length, total: Object.keys(rule.items).length, missingList: missing.join(", ") };
     return {
       ...base,
+      category: "gap",
       status: missing.length > rule.shortAbove ? "short" : "partial",
       finding: render(rule.finding, local),
       action: render(rule.action, local),
     };
   }
 
-  const passed = rule.pass ? evaluate(rule.pass, facts) : false;
-  if (passed) return rule.reportOk ? { ...base, status: "ok", finding: render(rule.finding, facts) } : undefined;
-  return { ...base, status: rule.failStatus, finding: render(rule.finding, facts), action: render(rule.action, facts) };
+  const passed = rule.pass ? truth(rule.pass, facts) : false;
+  if (passed === undefined) return unassessed();
+  if (passed) return rule.reportOk ? { ...base, category: "recorded", status: "ok", finding: "Recorded answers meet this check." } : undefined;
+  const missingInput = rule.when && checksMissingAnswer(rule.when);
+  if (missingInput) return unassessed();
+  const category = used.includes("scenario") && facts.scenario !== "not-selected" ? "scenario" :
+    rule.failStatus === "unknown" ? "planning" : "gap";
+  return { ...base, category, status: rule.failStatus, finding: render(rule.finding, facts), action: render(rule.action, facts) };
 }
 
 const STATUS_ORDER: Record<FindingStatus, number> = { missing: 0, short: 1, partial: 2, unknown: 3, ok: 4 };
 
 /** Runs inventory rules over a profile, worst findings first. */
-export function runInventoryRules(rules: InventoryRule[], profile: HouseholdProfile): Finding[] {
+export function runInventoryRules(rules: InventoryRule[], profile: HouseholdProfile, options: { scenario?: boolean } = {}): Finding[] {
   const facts = profileFacts(profile);
+  if (options.scenario === false) facts.scenario = "not-selected";
   const findings: Finding[] = [];
   for (const rule of rules) {
+    if (rule.id === "infant-formula" && profile.answers?.["supplies.formula"] === "not-applicable") continue;
     if (rule.forEach === "need") {
       profile.people.forEach((person, index) => {
         for (const need of person.needs) {
-          const finding = applyRule(rule, { ...facts, ...needFacts(person, index, need), ...needHomeFacts(profile, need) });
+          const finding = applyRule(rule, { ...facts, ...needFacts(person, index, need), ...needHomeFacts(profile, need) }, profile.answers);
           if (finding) findings.push(finding);
         }
       });
     } else {
-      const finding = applyRule(rule, facts);
+      const finding = applyRule(rule, facts, profile.answers);
       if (finding) findings.push(finding);
     }
   }
+  const unassessedItems = Object.keys(SUPPLY_LABELS).filter(id =>
+    !profile.supplies.have.includes(id as SupplyId) && !(profile.supplies.absent ?? []).includes(id as SupplyId) &&
+    profile.answers?.[`supplies.${id}`] !== "not-applicable");
+  if (unassessedItems.length) findings.push({
+    id: "unassessed-items", rule: "basic-kit", area: "Kit", kind: "plan", category: "unassessed", status: "unknown",
+    finding: `${unassessedItems.length} supply items are unassessed, not confirmed absent.`,
+    evidence: unassessedItems.map(id => ({
+      fact: `supplies.${id}`, label: SUPPLY_LABELS[id],
+      value: profile.answers?.[`supplies.${id}`] ? UNASSESSED_ANSWERS[profile.answers[`supplies.${id}`]] : "Not answered",
+    })),
+  });
   return findings.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
 }
