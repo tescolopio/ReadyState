@@ -52,7 +52,9 @@ export function openExercise(record: ExerciseRecord) {
     activeProfile: parsed.profile, sampleId: parsed.sampleId, draft: parsed.draft, restored: true,
     baselinePending: incompleteBaseline, baselineNeedsReview: incompleteBaseline,
   });
-  usePrivacyStore.setState(parsed.privacy);
+  const privacy = usePrivacyStore.getState();
+  privacy.setAlwaysMask([...privacy.alwaysMask, ...parsed.privacy.alwaysMask]);
+  usePrivacyStore.setState({ entityMap: parsed.privacy.entityMap });
 }
 
 export function saveExerciseLocally() {
