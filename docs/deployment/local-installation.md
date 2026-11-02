@@ -29,13 +29,6 @@ instructions below until release artifacts and their matching source are
 published. Validate artifacts on their own operating system; never copy the
 Windows `.next` output into Linux or vice versa.
 
-Maintainers can explicitly request tester archive uploads through the **Local
-packages** workflow on `main`, setting `upload_preview_archives` to true after
-review/CI clearance. That makes validated archives publicly downloadable; normal
-PR/push builds still upload evidence only. Uploading artifacts does not create a
-GitHub release. Retain the exact source revision, checksums and matching source
-archive when publishing the separately authorized tester pre-release.
-
 ## Native Node installation from source
 
 Install [Node 24 LTS](https://nodejs.org/en/download), download/clone ReadyState,

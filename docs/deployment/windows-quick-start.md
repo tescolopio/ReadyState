@@ -201,8 +201,15 @@ remain limitations distinct from installation success.
 
 Before updating, record the source revision in `release.json` and export a backup.
 If full encrypted backup is available, use it to preserve browser settings/keys,
-records and household data. Otherwise use the available household/plan export;
-it is not a complete backup of settings/history.
+records and household data. If a household/plan export is available instead, use
+that, but it does not back up settings/history. Both export features require a
+build containing #33; earlier main builds have neither.
+
+If neither export exists, do not assume there is a backup or clear browser data.
+Keep the old installation and browser profile intact, and postpone the update
+if you need a recoverable copy. Ask the maintainer for a supported data-preservation
+path. Keeping the same browser origin normally retains working data, but it is
+not an independent backup and does not guarantee rollback.
 
 1. Stop ReadyState with Ctrl+C.
 2. In the **old installation** folder, run `.\uninstall.ps1` to remove its owned
