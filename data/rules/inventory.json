@@ -193,16 +193,8 @@
     "area": "Medical",
     "kind": "get",
     "when": {
-      "all": [
-        {
-          "fact": "need.kind",
-          "equals": "refrigerated-medication"
-        },
-        {
-          "fact": "supplies.have",
-          "includes": "cooler"
-        }
-      ]
+      "fact": "need.kind",
+      "equals": "refrigerated-medication"
     },
     "pass": {
       "fact": "supplies.have",

@@ -120,6 +120,13 @@ h3 {
   outline-offset: 2px;
 }
 
+@media (width < 64rem) {
+  /* Keep keyboard-focused controls clear of the app's fixed mobile chrome. */
+  [data-app-shell] main :is(button, input, select, textarea, a, summary) {
+    scroll-margin-block: 6rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -18,8 +18,9 @@ import { useHouseholdStore } from "@/store/useHouseholdStore";
  */
 const DESTINATIONS: { href: string; label: string; short: string; icon: LucideIcon; also?: string }[] = [
   { href: "/journal", label: "Journal", short: "Journal", icon: BookOpen },
-  { href: "/exercises", label: "Exercises", short: "Exercises", icon: Compass, also: "/exercise" },
-  { href: "/household", label: "My household", short: "Household", icon: Home },
+  { href: "/exercises", label: "Exercises", short: "Practice", icon: Compass, also: "/exercise" },
+  { href: "/household", label: "My household", short: "Home", icon: Home },
+  { href: "/assessment", label: "Assessment", short: "Assess", icon: ListChecks },
   { href: "/plan", label: "Action plan", short: "Plan", icon: ListChecks },
   { href: "/settings", label: "Settings", short: "Settings", icon: Settings },
 ];
@@ -47,7 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     pathname === href || pathname.startsWith(`${href}/`) || (also !== undefined && pathname === also);
 
   return (
-    <div className="flex min-h-screen bg-canvas">
+    <div data-app-shell className="flex min-h-screen bg-canvas">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface lg:flex">
         <div className="px-5 py-4">
           <Wordmark />
@@ -90,7 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <nav aria-label="App" className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface lg:hidden">
-        <ul className="grid grid-cols-5">
+        <ul className="grid grid-cols-6">
           {DESTINATIONS.map(({ href, short, icon: Icon, also }) => {
             const active = isActive(href, also);
             return (

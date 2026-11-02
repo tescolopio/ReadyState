@@ -18,13 +18,11 @@ import d1135 from "@/lib/fixtures/alex-2026-10-31-1135-drafts.json";
 import d1142 from "@/lib/fixtures/alex-2026-10-31-1142-drafts.json";
 import d1204 from "@/lib/fixtures/alex-2026-10-31-1204-drafts.json";
 import replay from "@/lib/fixtures/alex-replay-turns.json";
-import { engineBaseline } from "@/lib/inventory";
 import { storyFacts, storyFactsBriefing } from "@/lib/story-facts";
-import { TEST_HOUSEHOLDS } from "@/lib/test-households";
 import type { AfterActionReport, TurnOutput } from "@/lib/ttx";
 
 const turns = replay.turns as TurnOutput[];
-const baseline = engineBaseline(TEST_HOUSEHOLDS.find((household) => household.id === "alex")!.profile);
+const baseline = replay.baseline;
 const context = { baseline, participantText: replay.responses };
 const failures = (report: AfterActionReport) => checkDebrief(report, turns, context).map((p) => `${p.check} ${p.field}`);
 

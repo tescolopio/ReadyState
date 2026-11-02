@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { emptyProfile } from "@/lib/household";
+import { emptyProfile, setSupplyAnswer, SUPPLY_ITEMS, type SupplyId } from "@/lib/household";
 import { assessInventory, describeGaps, engineBaseline, gaps, type Finding } from "@/lib/inventory";
 import { TEST_HOUSEHOLDS } from "@/lib/test-households";
 
@@ -28,14 +28,16 @@ describe("assessInventory", () => {
       finding: "Person 3 (older adult (65+)): daily medication they can't skip: about 6 days on hand, below the recommended 7 to 10.",
     });
     // Priya has a power station, so the device check asks about runtime.
-    expect(byId(priya, "priya-3-device-power")).toMatchObject({ status: "partial" });
-    expect(byId(priya, "priya-3-device-power")?.finding).toContain("about 7.2 kWh a day");
+    expect(byId(priya, "priya-3-device-power")).toMatchObject({ status: "unknown", category: "unassessed" });
+    expect(byId(priya, "priya-3-device-power")?.evidence).toContainEqual({
+      fact: "need.kwhPerDay", label: "Device energy per day in kWh, from its watts", value: "7.2",
+    });
     expect(byId(priya, "priya-3-stairs")?.kind).toBe("plan");
   });
 
   it("needs a CO detector only where something burns fuel", () => {
     const withoutDetector = (heating: "gas-furnace" | "electric") =>
-      byId(assessInventory({ ...emptyProfile(), home: { heating }, supplies: { have: [] } }), "co-detector");
+      byId(assessInventory({ ...emptyProfile(), home: { heating, cooking: "electric", backupPower: "none" }, supplies: { have: [], absent: ["co-detector"] } }), "co-detector");
     expect(withoutDetector("gas-furnace")?.status).toBe("missing");
     expect(withoutDetector("electric")).toBeUndefined();
     // Sam has a gas furnace and a CO detector.
@@ -43,7 +45,7 @@ describe("assessInventory", () => {
   });
 
   it("checks the cold chain for refrigerated medication", () => {
-    expect(byId(assessInventory(household("privacy")), "privacy-2-cold-chain")).toMatchObject({
+    expect(byId(assessInventory(setSupplyAnswer(household("privacy"), "ice-packs", "absent")), "privacy-2-cold-chain")).toMatchObject({
       status: "missing",
       finding: "Person 2 (older adult (65+)): medication that must stay refrigerated: no ice packs recorded to keep it cold without power.",
     });
@@ -53,18 +55,23 @@ describe("assessInventory", () => {
     const jordan = assessInventory(household("jordan"));
     expect(byId(jordan, "well-pump")?.status).toBe("ok");
     expect(byId(jordan, "pet-shelter")?.kind).toBe("plan");
-    expect(byId(assessInventory(household("alex")), "warmth")?.status).toBe("missing");
+    const cold = setSupplyAnswer(setSupplyAnswer(household("alex"), "blankets", "absent"), "sleeping-bags", "absent");
+    expect(byId(assessInventory(cold), "warmth")?.status).toBe("missing");
   });
 
   it("lists the basic kit items that are missing", () => {
-    expect(byId(assessInventory(household("alex")), "basic-kit")?.finding).toBe(
+    let profile = household("alex");
+    for (const id of Object.keys(Object.assign({}, ...Object.values(SUPPLY_ITEMS))) as SupplyId[]) {
+      if (!profile.supplies.have.includes(id)) profile = setSupplyAnswer(profile, id, "absent");
+    }
+    expect(byId(assessInventory(profile), "basic-kit")?.finding).toBe(
       "Missing 10 of 12 basic kit items: a battery or hand-crank radio with NOAA weather alerts, a first aid kit, extra batteries, a whistle, dust masks, plastic sheeting and duct tape, moist towelettes, garbage bags and ties, a wrench or pliers to turn off utilities, a manual can opener, local maps.",
     );
   });
 
   it("puts the worst gaps first and marks unrecorded supplies to check", () => {
     const findings = assessInventory(household("minimal"));
-    expect(findings[0].status).toBe("missing");
+    expect(findings.every(finding => finding.category !== "gap")).toBe(true);
     expect(byId(findings, "water")?.status).toBe("unknown");
     expect(gaps(findings).every((finding) => finding.status !== "ok")).toBe(true);
   });
@@ -74,7 +81,7 @@ describe("engineBaseline", () => {
   it("adds the inventory gaps, but not unrecorded items, to what the engine sees", () => {
     const text = engineBaseline(household("sam"));
     expect(text).toContain("Gaps found by the inventory check (test these in the exercise): Stored water covers about 2 days");
-    expect(describeGaps(assessInventory(household("minimal")))).not.toContain("not recorded");
+    expect(describeGaps(assessInventory(household("minimal")))).toBeUndefined();
   });
 });
 
@@ -107,7 +114,8 @@ describe("inventory math", () => {
   });
 
   it("plans for toilets, tornadoes and inland flooding in a hurricane", () => {
-    expect(byId(charlotte, "toilet-plan")?.status).toBe("partial");
+    expect(byId(charlotte, "toilet-plan")?.category).toBe("unassessed");
+    expect(byId(assessInventory(setSupplyAnswer(household("charlotte"), "toilet-kit", "absent")), "toilet-plan")?.status).toBe("partial");
     expect(byId(charlotte, "tornado-plan")?.kind).toBe("plan");
     expect(byId(charlotte, "hurricane-plan")?.finding).toContain("rain flooding now causes most US hurricane deaths");
   });

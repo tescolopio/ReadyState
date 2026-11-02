@@ -2,6 +2,7 @@
 
 import { Pencil, Play } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { PageHeader } from "@/components/app-shell";
@@ -70,6 +71,7 @@ function HouseholdContent() {
           </div>
         )}
       </PageHeader>
+      <Link href="/assessment" className="inline-block font-semibold underline">Assess this household without AI or an exercise</Link>
 
       {editing ? (
         <HouseholdWizard

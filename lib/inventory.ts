@@ -13,10 +13,12 @@ import { runInventoryRules, type Finding } from "@/lib/rules/engine";
 
 export type { Finding, FindingStatus } from "@/lib/rules/engine";
 
-export const assessInventory = (profile: HouseholdProfile): Finding[] => runInventoryRules(INVENTORY_RULES, profile);
+export const assessInventory = (profile: HouseholdProfile, options: { scenario?: boolean } = {}): Finding[] =>
+  runInventoryRules(INVENTORY_RULES, profile, options);
 
-/** Findings that need action: everything except "ok". */
-export const gaps = (findings: Finding[]) => findings.filter((finding) => finding.status !== "ok");
+/** Only supported actions, never unanswered questions presented as deficiencies. */
+export const gaps = (findings: Finding[]) => findings.filter((finding) =>
+  finding.status !== "ok" && finding.category !== "unassessed");
 
 /** One line for the scenario engine, so injects can test the household's real gaps. */
 export function describeGaps(findings: Finding[]): string | undefined {

@@ -29,7 +29,37 @@ cp .env.example .env.local            # optional: set provider keys here
 npm run dev                           # or: npm run build && npm start
 ```
 
-Open http://localhost:3000 for the website, or http://localhost:3000/journal for the app. Then pick a provider and paste your API key in the app's **Settings**, or set keys in `.env.local`. Supported providers are Groq (default), Google Gemini, Cerebras, OpenRouter, Ollama (local, no key) and any OpenAI-compatible endpoint. Keep self-hosted instances on localhost or a trusted network; see the [security notes](docs/architecture/deployment-modes.md#security-notes).
+Open http://localhost:3000 for the website, or http://localhost:3000/journal for the app. **Household assessment needs no provider or API key.** For optional AI exercises, pick a provider and paste your API key in the app's **Settings**, or set keys in `.env.local`. Supported providers are Groq (default), Google Gemini, Cerebras, OpenRouter, Ollama (local, no key) and any OpenAI-compatible endpoint. Keep self-hosted instances on localhost or a trusted network; see the [security notes](docs/architecture/deployment-modes.md#security-notes).
+
+## Local household assessment
+
+Open **Assessment** (`/assessment`), add a short household profile, and choose
+**See assessment** whenever you are ready. Add optional People, Pets, Home,
+Health needs and Supplies details later. Results distinguish confirmed gaps,
+unassessed answers, planning guidance, scenario concerns and recorded resources.
+Expand **Based on your answers** for the facts, rule and sources, and save useful
+actions to the shared **Action plan**. Return to update answers or mark actions
+in progress/done. Saved actions show their source/date and remain earlier
+choices, not live deficiencies: changing answers does not silently rewrite,
+remove or complete them. Review your current assessment before deciding which
+to keep or remove. **Practice with this household** is optional.
+
+Zero and **I don't have this** are explicit answers, not the same as unknown,
+skipped or **Prefer not to say**. Old unchecked items become unassessed, not
+missing. **Not applicable** is offered only for formula when there is no formula
+feeding. A partial profile can produce useful results; there is no overall
+preparedness score. Rules remain drafts pending content review.
+
+The assessment uses the existing household, rules and plan, entirely in the
+browser. It makes no model calls. Local storage is not encrypted; use the
+household Review step's **Delete it** to clear the profile, and manage saved
+actions separately in the plan. Optional exercises retain review-before-send;
+explicitly reported supply absences are included as labeled household facts
+in the reviewable briefing, even when no rule checks that item. Local
+answer-status metadata and negative health-need answers are not added to
+provider summaries. Dedicated
+communication and evacuation planning questions are deferred to a separate
+increment.
 
 Scripts: `npm run dev`, `npm run build`, `npm start` (loopback standalone production launcher), `npm run package:local`, `npm run lint`, `npm run typecheck`, `npm test` (Vitest). CI (`.github/workflows/ci.yml`) runs application checks and Docker smoke tests on every PR.
 
@@ -47,7 +77,7 @@ Scripts: `npm run dev`, `npm run build`, `npm start` (loopback standalone produc
 | `app/api/ttx/route.ts` | `streamText` route that **forces** the tool matching the current phase, so every response is structured JSON. |
 | `app/api/config/route.ts` | Key-free description of the server's setup (mode, providers) for the UI. |
 | `app/page.tsx` | The public website. |
-| `app/(app)/` | The app, inside a shared navigation shell (`components/app-shell.tsx`): Journal, Exercises, the active exercise (`exercise/page.tsx`: response options, feedback, keeping steps in your plan, the decision path and the debrief), My household, Action plan and Settings. |
+| `app/(app)/` | The app, inside a shared navigation shell (`components/app-shell.tsx`): Journal, Exercises, the active exercise (`exercise/page.tsx`: response options, feedback, keeping steps in your plan, the decision path and the debrief), My household, local Assessment, Action plan and Settings. |
 | `components/ui/*` | Minimal shadcn/ui-compatible `Button`, `Input`, `Card`, `ScrollArea`, `Badge`. Replace with the real ones via `npx shadcn@latest add button input scroll-area card badge --overwrite`. |
 | `supabase/migrations/*` | `sim_logs`, `subscriptions` and `usage_events` with Row Level Security. |
 
