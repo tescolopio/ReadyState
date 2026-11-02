@@ -7,10 +7,16 @@ import {
   FULL_BACKUPS_KEY, decryptFullBackup, encryptFullBackup, fullBackupSchema,
   parseEncryptedBackup, readFullBackups, writeFullBackups,
 } from "@/lib/full-backups";
-import { exerciseChat, resetExercise, resendLast, useExerciseSession } from "@/lib/exercise-session";
+import {
+  exerciseChat, isCurrentExerciseGeneration, resetExercise, resendLast, useExerciseSession,
+} from "@/lib/exercise-session";
 import { emptyProfile, setSupplyAnswer } from "@/lib/household";
-import { createAssessmentRecord, RECORDS_KEY, emptyLocalRecords, savedMessages } from "@/lib/local-records";
-import { captureExercise, openExercise, saveExerciseLocally } from "@/lib/saved-exercises";
+import {
+  assessmentRecordSchema, createAssessmentRecord, exerciseRecordSchema, RECORDS_KEY, emptyLocalRecords, savedMessages,
+} from "@/lib/local-records";
+import {
+  captureExercise, openExercise, recoverActiveExerciseOnce, saveExerciseLocally,
+} from "@/lib/saved-exercises";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
 import { usePlanStore } from "@/store/usePlanStore";
@@ -18,6 +24,7 @@ import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { deriveTtxState } from "@/lib/ttx";
 import { emptyGuidedAssessment } from "@/lib/guided-water";
+import { engineBaseline } from "@/lib/inventory";
 
 const password = "synthetic-backup-password";
 beforeEach(() => {
@@ -50,8 +57,8 @@ describe("complete password-encrypted backups", () => {
     expect(await decryptFullBackup(parseEncryptedBackup(json), password)).toEqual(saved);
     expect(saved.records.progress).toBe(3);
     expect(saved.records.guidedAssessment).toEqual(guidedAssessment);
-    expect(saved.records.assessments[0].report).toContain("Explicitly absent");
-    expect(saved.records.assessments).toHaveLength(2);
+    expect(saved.records.currentAssessment?.report).toContain("Explicitly absent");
+    expect(saved.records.assessments).toHaveLength(1);
     expect(useLocalRecordsStore.getState().data.assessments).toHaveLength(1);
     expect(saved.settings?.apiKey).toBe("synthetic-current-key");
     expect(Object.keys(saved).sort()).toEqual(["appearance", "format", "householdAndPlan", "namedHouseholds", "privacy", "records", "savedAt", "settings", "version"]);
@@ -159,6 +166,30 @@ describe("dated local records and safe exercise recovery", () => {
     expect(record.report).toContain("Source:");
   });
 
+  it("backs up current state separately at the full historical-record capacity", () => {
+    const savedAt = new Date().toISOString();
+    const profile = useHouseholdStore.getState().profile;
+    const assessment = createAssessmentRecord(profile);
+    const assessments = Array.from({ length: 1000 }, (_, index) =>
+      assessmentRecordSchema.parse({ ...assessment, id: `assessment-${index}` }));
+    const exercises = Array.from({ length: 1000 }, (_, index) => exerciseRecordSchema.parse({
+      id: `exercise-${index}`, savedAt, profile: null, sampleId: null, draft: "", messages: [],
+      privacy: { entityMap: {}, alwaysMask: [] },
+    }));
+    useLocalRecordsStore.setState({
+      data: { ...emptyLocalRecords(), assessments, exercises, progress: 3 }, error: null,
+    });
+    useExerciseSession.getState().begin(profile);
+    exerciseChat.messages = [{ id: "active", role: "user", parts: [{ type: "text", text: "Synthetic active exercise" }] }];
+
+    const saved = captureFullBackup(localStorage);
+    expect(saved.records.assessments).toHaveLength(1000);
+    expect(saved.records.exercises).toHaveLength(1000);
+    expect(saved.records.currentAssessment).not.toBeNull();
+    expect(saved.records.activeExercise?.messages).toHaveLength(1);
+    expect(fullBackupSchema.parse(saved)).toEqual(saved);
+  });
+
   it("keeps exercise content/drafts/mappings, not metadata eval captures or retry settings; restoration cannot resend approval", () => {
     exerciseChat.messages = [{
       id: "reviewed-user", role: "user", parts: [{ type: "text", text: "[Person 1] checks supplies." }],
@@ -177,6 +208,46 @@ describe("dated local records and safe exercise recovery", () => {
     expect(useExerciseSession.getState().draft).toBe(record.draft);
     expect(exerciseChat.messages).toEqual(record.messages);
     expect(usePrivacyStore.getState().entityMap["[Person 1]"]).toBe("Synthetic Person");
+    expect(() => resendLast()).toThrow(/no retry approval/);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("recovers an active exercise only once per runtime, leaving later live session changes untouched", () => {
+    const profile = emptyProfile();
+    useExerciseSession.getState().begin(profile);
+    exerciseChat.messages = [{ id: "saved", role: "user", parts: [{ type: "text", text: "Saved snapshot" }] }];
+    const saved = captureExercise()!;
+    useLocalRecordsStore.setState({ data: { ...emptyLocalRecords(), activeExercise: saved }, error: null });
+    expect(recoverActiveExerciseOnce()).toBe(true);
+    expect(exerciseChat.messages).toEqual(saved.messages);
+
+    const liveMessage = { id: "live", role: "user" as const, parts: [{ type: "text" as const, text: "Newer live state" }] };
+    exerciseChat.messages = [liveMessage];
+    expect(recoverActiveExerciseOnce()).toBe(false);
+    expect(exerciseChat.messages).toEqual([liveMessage]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("turns an incomplete failed baseline snapshot into a fresh review without restoring retry approval", () => {
+    const profile = useHouseholdStore.getState().profile;
+    const baseline = engineBaseline(profile, text => text);
+    const record = exerciseRecordSchema.parse({
+      id: "incomplete-baseline", savedAt: new Date().toISOString(), profile, sampleId: null, draft: "",
+      messages: [
+        { id: "failed-baseline", role: "user", parts: [{ type: "text", text: baseline }] },
+        { id: "cancelled-response", role: "assistant", parts: [{ type: "text", text: "" }] },
+      ],
+      privacy: { entityMap: {}, alwaysMask: [] },
+    });
+    const oldGeneration = useExerciseSession.getState().generation;
+
+    openExercise(record);
+
+    expect(exerciseChat.messages).toEqual([]);
+    expect(useExerciseSession.getState()).toMatchObject({
+      activeProfile: profile, restored: true, baselineNeedsReview: true,
+    });
+    expect(isCurrentExerciseGeneration(oldGeneration)).toBe(false);
     expect(() => resendLast()).toThrow(/no retry approval/);
     expect(fetch).not.toHaveBeenCalled();
   });

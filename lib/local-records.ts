@@ -52,14 +52,24 @@ export const localRecordsSchema = z.strictObject({
   exercises: z.array(exerciseRecordSchema).max(1000),
   activeExercise: exerciseRecordSchema.nullable(),
   guidedAssessment: guidedAssessmentSchema.optional(),
+  currentAssessment: assessmentRecordSchema.nullable().default(null),
 }).refine(value =>
   new Set(value.assessments.map(record => record.id)).size === value.assessments.length &&
   new Set(value.exercises.map(record => record.id)).size === value.exercises.length, "Duplicate historical records");
 export type LocalRecords = z.infer<typeof localRecordsSchema>;
 export const RECORDS_KEY = "readystate-local-records";
 export const emptyLocalRecords = (): LocalRecords => ({
-  version: 1, progress: "auto", assessments: [], exercises: [], activeExercise: null,
+  version: 1, progress: "auto", assessments: [], exercises: [], activeExercise: null, currentAssessment: null,
 });
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+export function unmaskSavedText(text: string, entityMap: Record<string, string>) {
+  const tags = Object.keys(entityMap);
+  if (!text || tags.length === 0) return text;
+  const pattern = new RegExp(tags.sort((a, b) => b.length - a.length).map(escapeRegExp).join("|"), "g");
+  return text.replace(pattern, tag => entityMap[tag] ?? tag);
+}
 
 /** Only participant-visible content, never eval captures, transport options or retry credentials. */
 export function savedMessages(messages: TtxUIMessage[]): z.infer<typeof savedMessageSchema>[] {

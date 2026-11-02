@@ -42,6 +42,7 @@ import { usePlanStore } from "@/store/usePlanStore";
 import { TEST_HOUSEHOLDS } from "@/lib/test-households";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
+import { useHouseholdRestoreStore } from "@/lib/household-restore";
 import { maskInput } from "@/utils/obfuscator";
 
 const labelClass = "text-sm font-semibold text-ink-3";
@@ -345,6 +346,24 @@ const personTitle = (person: Person, index: number) =>
  * what the scenario engine will see.
  */
 export function HouseholdWizard({
+  onStart,
+  onClose,
+  purpose = "exercise",
+  initialStep = 0,
+  onStepChange,
+}: {
+  onStart: (profile: HouseholdProfile) => void;
+  onClose: () => void;
+  purpose?: "exercise" | "assessment";
+  initialStep?: number;
+  onStepChange?: (step: number) => void;
+}) {
+  const restoreVersion = useHouseholdRestoreStore(state => state.version);
+  return <HouseholdWizardForm key={restoreVersion} onStart={onStart} onClose={onClose}
+    purpose={purpose} initialStep={initialStep} onStepChange={onStepChange} />;
+}
+
+function HouseholdWizardForm({
   onStart,
   onClose,
   purpose = "exercise",

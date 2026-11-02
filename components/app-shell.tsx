@@ -12,7 +12,7 @@ import { useExerciseSession } from "@/lib/exercise-session";
 import { hasProfile } from "@/lib/household";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
-import { openExercise } from "@/lib/saved-exercises";
+import { recoverActiveExerciseOnce } from "@/lib/saved-exercises";
 import { privacySnapshotSchema } from "@/lib/local-records";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 
@@ -51,9 +51,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const recordsError = useLocalRecordsStore(state => state.error);
   useEffect(() => {
     try {
-      const records = useLocalRecordsStore.getState();
-      if (records.error) return;
-      if (records.data.activeExercise) openExercise(records.data.activeExercise);
+      if (useLocalRecordsStore.getState().error) return;
+      recoverActiveExerciseOnce();
       const privacy = localStorage.getItem("readystate-restored-privacy");
       if (privacy !== null) {
         usePrivacyStore.setState(privacySnapshotSchema.parse(JSON.parse(privacy)));

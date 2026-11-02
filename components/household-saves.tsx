@@ -8,6 +8,7 @@ import {
   MAX_SAVE_BYTES, createHouseholdSave, parseHouseholdSave, readNamedSaves,
   restoreHouseholdSave, writeNamedSaves, type HouseholdSave, type NamedHouseholdSave,
 } from "@/lib/household-saves";
+import { invalidateHouseholdWizards } from "@/lib/household-restore";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePlanStore } from "@/store/usePlanStore";
 
@@ -95,6 +96,7 @@ export function HouseholdSaves({ onRestore }: { onRestore: () => void }) {
       }
       setMessage(`Loaded "${pending.label}". Household and chosen actions replaced; settings and exercise history were not changed.`);
       setPending(null);
+      invalidateHouseholdWizards();
       onRestore();
       summary.current?.focus();
     } catch (error) {
