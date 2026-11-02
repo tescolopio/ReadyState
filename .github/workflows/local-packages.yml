@@ -48,13 +48,7 @@ jobs:
         env:
           SOURCE_REVISION: ${{ inputs.source_revision }}
           PREVIEW_TAG: ${{ inputs.preview_tag }}
-        run: |
-          if ($env:GITHUB_REF -cne 'refs/heads/main') { throw 'Preview uploads require exact lowercase main' }
-          if ($env:PREVIEW_TAG -cne 'v0.1.0-preview.1') { throw 'Only the exact authorized tester pre-release is supported' }
-          if ($env:SOURCE_REVISION -cnotmatch '^[0-9a-f]{40}$') { throw 'A full reviewed source SHA is required' }
-          $actual = git rev-parse HEAD
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if ($actual -cne $env:SOURCE_REVISION) { throw 'Main moved: review and verify the actual revision before uploading' }
+        run: ./scripts/local/authorize-preview.ps1
       - uses: actions/setup-node@v5
         with:
           node-version: 24.13.0
@@ -133,6 +127,13 @@ jobs:
             dist/SHA256SUMS.txt
             dist/BUILD-MANIFEST.json
           if-no-files-found: error
+      - name: Recheck live main before public upload
+        if: github.event_name == 'workflow_dispatch' && inputs.upload_preview_archives
+        shell: pwsh
+        env:
+          SOURCE_REVISION: ${{ inputs.source_revision }}
+          PREVIEW_TAG: ${{ inputs.preview_tag }}
+        run: ./scripts/local/authorize-preview.ps1
       - name: Upload explicitly authorized tester archives
         if: github.event_name == 'workflow_dispatch' && inputs.upload_preview_archives && github.ref == 'refs/heads/main' && inputs.preview_tag == 'v0.1.0-preview.1' && inputs.source_revision == github.sha
         uses: actions/upload-artifact@v4

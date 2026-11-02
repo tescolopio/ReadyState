@@ -23,6 +23,9 @@ Publication controls are reviewed separately from the #35 onboarding guide:
 - An explicit manual dispatch must opt in (default **false**), select
   `v0.1.0-preview.1`, and supply the full reviewed main SHA. A non-main ref,
   mismatched/moving revision or another tag fails before package assembly.
+  The checked-out SHA and live remote `refs/heads/main` are both verified,
+  including again immediately before public upload; an old dispatch rerun
+  cannot substitute its pinned commit for current main.
 - Each native archive is uploaded only after that platform's clean-source,
   exclusion/notice, extracted-package, key-free startup and installer checks
   succeed. A passing platform can upload while the other platform fails;
