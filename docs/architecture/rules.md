@@ -138,7 +138,9 @@ assessment. Updating a profile never silently deletes or completes a saved
 action; users decide whether to keep, complete or remove it.
 
 Outgoing briefings exclude unassessed findings and local answer-status metadata.
-They retain explicitly supported gaps and the existing masking/review boundary.
+They retain explicitly supported gaps and explicitly reported supply absences
+(including items without inventory rules), with the existing masking/review
+boundary. Negative health-need metadata stays local.
 Assessment results and plan saving require neither an API key nor a model call.
 Dedicated communication/evacuation questions are outside this first increment.
 

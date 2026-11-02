@@ -407,8 +407,10 @@ export function HouseholdWizard({
     const existing = person.needs.find((need) => need.kind === kind) ?? { kind };
     let next = { ...profile, people: profile.people.map(p => p.id === person.id
       ? { ...p, needs: patch === null ? others : [...others, { ...existing, ...patch }] } : p) };
-    for (const key of Object.keys(patch ?? {})) {
-      next = withAnswer(next, `need.${person.id}.${kind}.${key}`);
+    for (const key of ["daysSupply", "watts"] as const) {
+      if (patch && key in patch) {
+        next = withAnswer(next, `need.${person.id}.${kind}.${key}`, patch[key] === undefined ? "skipped" : undefined);
+      }
     }
     update(next);
   };

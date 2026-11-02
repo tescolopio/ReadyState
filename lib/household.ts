@@ -450,6 +450,10 @@ export function describeHousehold(profile: HouseholdProfile): string {
   if (supplies.have.length) {
     lines.push(`Has: ${supplies.have.map((id) => SUPPLY_LABELS[id]?.toLowerCase() ?? id).join(", ")}.`);
   }
+  const absent = (supplies.absent ?? []).filter(id => !supplies.have.includes(id));
+  if (absent.length) {
+    lines.push(`Explicitly reported absent: ${absent.map(id => SUPPLY_LABELS[id]?.toLowerCase() ?? id).join(", ")}.`);
+  }
   if (supplies.other?.trim()) lines.push(`Other supplies: ${supplies.other.trim()}`);
   if (!stock.length && !supplies.have.length && !supplies.other?.trim()) unknown.push("supplies");
 

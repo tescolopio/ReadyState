@@ -189,6 +189,30 @@ describe("offline assessment experience", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["Daily medication they can't skip", "Days of supply on hand", "daysSupply"],
+    ["Medical device that needs power", "Power draw (watts, from the label)", "watts"],
+  ])("keeps an explicit skipped state when %s's numeric input is cleared", async (needLabel, fieldLabel, key) => {
+    await act(async () => root.render(<AssessmentPage />));
+    await click("adult");
+    await click("Health needs");
+    await answer(needLabel, "present");
+    const input = [...container.querySelectorAll("input")].find(input => input.labels?.[0]?.textContent === fieldLabel)!;
+    const fill = async (value: string) => act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await fill("5");
+    await fill("");
+    const person = useHouseholdStore.getState().profile.people[0];
+    expect(useHouseholdStore.getState().profile.answers?.[`need.${person.id}.${person.needs[0].kind}.${key}`]).toBe("skipped");
+    expect(input.value).toBe("");
+    await fill("0");
+    expect(useHouseholdStore.getState().profile.answers?.[`need.${person.id}.${person.needs[0].kind}.${key}`]).toBeUndefined();
+    expect(input.value).toBe("0");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("migrates real version-zero storage and keeps positive facts while old unchecked items stay unassessed", async () => {
     const old = emptyProfile();
     old.people = [{ id: "adult", ageRange: "adult", needs: [] }];

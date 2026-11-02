@@ -163,7 +163,7 @@ export function needFacts(person: Person, index: number, need: Need): Facts {
 /** Per-need facts that also depend on the home, such as battery runtime for a device. */
 export function needHomeFacts(profile: HouseholdProfile, need: Need): Facts {
   const backupWh = backupRatings(profile.home).wh;
-  if (!need.watts || !backupWh) return {};
+  if (!need.watts || backupWh === undefined) return {};
   // Inverters lose some energy; 85% is a common planning figure.
   return { "need.backupHours": Math.round(((backupWh * 0.85) / need.watts) * 10) / 10 };
 }
@@ -217,7 +217,8 @@ function checksMissingAnswer(condition: Condition): boolean {
   if ("all" in condition) return condition.all.some(checksMissingAnswer);
   if ("any" in condition) return condition.any.some(checksMissingAnswer);
   if ("not" in condition) return false;
-  return "exists" in condition && !condition.exists;
+  return ("exists" in condition && !condition.exists) ||
+    (condition.fact === "pets.weightsMissing" && "equals" in condition && condition.equals === true);
 }
 
 function conditionItems(condition: Condition): string[] {

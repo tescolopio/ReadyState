@@ -72,6 +72,57 @@ describe("assessment answer semantics", () => {
     expect(finding()?.evidence).toContainEqual({ fact: "hasBackupPower", label: "True when backup power other than none is recorded", value: false });
   });
 
+  it("reports zero battery capacity as a confirmed zero-hour shortfall, not an unanswered capacity", () => {
+    const result = profile();
+    result.people[0].needs = [{ kind: "powered-device", watts: 50 }];
+    result.home = { backupPower: "battery", backupWh: 0 };
+    const runtimeRule = assessInventory(result).find(f => f.rule === "device-power-hours-short");
+    expect(runtimeRule).toMatchObject({ category: "gap", status: "short" });
+    expect(runtimeRule?.finding).toContain("0 hours");
+    delete result.home.backupWh;
+    expect(assessInventory(result).find(f => f.rule === "device-power-runtime")?.category).toBe("unassessed");
+    expect(assessInventory(result).some(f => f.category === "gap" && f.finding.includes("0 hours"))).toBe(false);
+  });
+
+  it("retains a confirmed cold-chain ice-pack gap regardless of cooler uncertainty", () => {
+    for (const cooler of ["skipped", "unknown", "withheld", "absent", "present"] as const) {
+      let result = setSupplyAnswer(setSupplyAnswer(profile(), "ice-packs", "absent"), "cooler", cooler);
+      result.people[0].needs = [{ kind: "refrigerated-medication" }];
+      const finding = assessInventory(result, { scenario: false }).find(f => f.rule === "cold-chain-ice");
+      expect(finding).toMatchObject({ category: "gap", status: "missing" });
+      expect(finding?.evidence).toContainEqual({ fact: "supplies.ice-packs", label: "Ice packs or frozen water bottles", value: "Explicitly absent" });
+      result = setSupplyAnswer(result, "ice-packs", "withheld");
+      const cleared = assessInventory(result).find(f => f.rule === "cold-chain-ice");
+      expect(cleared?.category).toBe("unassessed");
+      expect(cleared?.action).toBeUndefined();
+    }
+  });
+
+  it.each(["skipped", "unknown", "withheld"] as const)("keeps %s pet weights under unassessed information, never a saved planning deficiency", state => {
+    const result = profile();
+    result.pets = [{ id: "dog", kind: "dog" }];
+    result.answers = { "pet.dog.weightLb": state };
+    const findings = assessInventory(result, { scenario: false });
+    expect(findings.find(f => f.rule === "pet-weights")?.category).toBe("unassessed");
+    expect(findings.find(f => f.rule === "pet-weights")?.action).toBeUndefined();
+    expect(findings.find(f => f.rule === "pet-shelter")?.action).toBeTruthy();
+  });
+
+  it("deliberately includes explicit supply absences in reviewable briefings, including items without rules, but never local answer metadata", () => {
+    let result = profile();
+    result.people[0].absentNeeds = ["daily-medication"];
+    for (const id of ["fuel", "outdoor-stove", "fire-extinguisher"] as const) result = setSupplyAnswer(result, id, "absent");
+    result = setSupplyAnswer(result, "first-aid", "withheld");
+    const text = engineBaseline(result);
+    expect(text).toContain("Explicitly reported absent: spare fuel for stove or generator, camp stove or grill (outdoor use), fire extinguisher.");
+    expect(text).not.toContain("absentNeeds");
+    expect(text).not.toContain("daily-medication");
+    expect(text).not.toContain("withheld");
+    expect(text).not.toContain("first aid kit");
+    result = setSupplyAnswer(result, "fuel", "unknown");
+    expect(engineBaseline(result)).not.toContain("spare fuel for stove or generator");
+  });
+
   it("keeps a confirmed kit absence while the other kit items are unanswered", () => {
     const result = setSupplyAnswer(profile(), "first-aid", "absent");
     const findings = assessInventory(result, { scenario: false });

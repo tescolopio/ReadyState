@@ -54,7 +54,10 @@ The assessment uses the existing household, rules and plan, entirely in the
 browser. It makes no model calls. Local storage is not encrypted; use the
 household Review step's **Delete it** to clear the profile, and manage saved
 actions separately in the plan. Optional exercises retain review-before-send;
-local answer-status metadata is not added to provider summaries. Dedicated
+explicitly reported supply absences are included as labeled household facts
+in the reviewable briefing, even when no rule checks that item. Local
+answer-status metadata and negative health-need answers are not added to
+provider summaries. Dedicated
 communication and evacuation planning questions are deferred to a separate
 increment.
 
