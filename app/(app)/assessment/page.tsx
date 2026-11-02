@@ -6,9 +6,11 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { HouseholdWizard, InventoryCheck } from "@/components/household-wizard";
 import { HouseholdSaves } from "@/components/household-saves";
+import { GuidedWaterAssessment } from "@/components/guided-water-assessment";
 import { Button } from "@/components/ui/button";
 import { hasAssessmentAnswers } from "@/lib/household";
 import { createAssessmentRecord } from "@/lib/local-records";
+import { emptyGuidedAssessment, type GuidedAssessment } from "@/lib/guided-water";
 import { assessInventory } from "@/lib/inventory";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
@@ -24,6 +26,15 @@ export default function AssessmentPage() {
 function AssessmentContent() {
   const profile = useHouseholdStore(state => state.profile);
   const records = useLocalRecordsStore();
+  const guided = records.data.guidedAssessment ?? emptyGuidedAssessment();
+  const updateGuided = (patch: Partial<GuidedAssessment>) => {
+    try {
+      const current = useLocalRecordsStore.getState();
+      if (current.error) throw new Error(current.error);
+      current.commit({ ...current.data, guidedAssessment: { ...(current.data.guidedAssessment ?? emptyGuidedAssessment()), ...patch } });
+      return true;
+    } catch { setSaveError("Assessment experience could not be saved. Check browser storage; your household answers were not replaced."); return false; }
+  };
   const [topic, updateTopic] = useState<number | null>(() => records.data.progress === "auto"
     ? hasAssessmentAnswers(profile) ? null : 0 : records.data.progress);
   const [saveError, setSaveError] = useState("");
@@ -46,9 +57,20 @@ function AssessmentContent() {
       <Link href="/settings#backups" className="inline-block font-semibold underline">Full encrypted backups, including saved API keys and history</Link>
       {(saveError || records.error) && <p role="alert">{saveError || records.error}</p>}
       {saveNotice && <p role="status">{saveNotice}</p>}
-      {topic !== null ? (
+      <section aria-label="Assessment experience" className="space-y-2">
+        <div role="group" aria-label="Choose assessment experience" className="flex flex-wrap gap-2">
+          <Button variant={guided.mode === "simple" ? "default" : "outline"} aria-pressed={guided.mode === "simple"}
+            onClick={() => updateGuided({ mode: "simple" })}>Simple assessment</Button>
+          <Button variant={guided.mode === "guided" ? "default" : "outline"} aria-pressed={guided.mode === "guided"}
+            onClick={() => updateGuided({ mode: "guided" })}>Guided assessment</Button>
+        </div>
+        <p className="text-sm text-ink-2">Two ways to use one household and one local rules engine. Switch any time without losing answers or chosen actions. Guided currently prototypes water only.</p>
+      </section>
+      {guided.mode === "guided" ? <GuidedWaterAssessment state={guided} update={updateGuided}
+        openSimple={topic => { if (updateGuided({ mode: "simple" })) setTopic(topic); }} />
+      : topic !== null ? (
         <HouseholdWizard key={`${revision}-${topic}`} purpose="assessment" initialStep={topic}
-          onStepChange={progress}
+          onStepChange={next => { updateTopic(next); progress(next); }}
           onStart={() => setTopic(null)} onClose={() => setTopic(null)} />
       ) : (
         <>
@@ -61,6 +83,9 @@ function AssessmentContent() {
             <p className="text-sm text-ink-3">Dedicated communication and evacuation planning questions are a later increment. Existing related guidance is not proof that you lack a plan.</p>
           </section>
           <InventoryCheck findings={assessInventory(profile, { scenario: false })} />
+        </>
+      )}
+      {(guided.mode === "guided" || topic === null) && <>
           <div className="space-y-2">
             <Button variant="outline" onClick={() => {
               setSaveNotice(""); setSaveError("");
@@ -77,8 +102,7 @@ function AssessmentContent() {
             <Link href="/exercises" className="underline">Practice with this household (optional)</Link>
           </div>
           <p className="text-sm text-ink-3">Saved in this browser&apos;s local storage, not an encrypted vault. Shared-device users may be able to read it. Assessment answers and plan actions do not contact a provider. Exercises retain review-before-send.</p>
-        </>
-      )}
+        </>}
     </main>
   );
 }

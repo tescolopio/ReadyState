@@ -17,6 +17,7 @@ import { usePlanStore } from "@/store/usePlanStore";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { deriveTtxState } from "@/lib/ttx";
+import { emptyGuidedAssessment } from "@/lib/guided-water";
 
 const password = "synthetic-backup-password";
 beforeEach(() => {
@@ -36,7 +37,9 @@ afterEach(() => { resetExercise(); vi.restoreAllMocks(); vi.unstubAllGlobals(); 
 describe("complete password-encrypted backups", () => {
   it("round-trips saved browser keys, answers, plan, stage, reports and private mappings without putting them in the envelope", async () => {
     const records = useLocalRecordsStore.getState();
-    records.commit({ ...records.data, progress: 3, assessments: [createAssessmentRecord(useHouseholdStore.getState().profile)] });
+    const guidedAssessment = { ...emptyGuidedAssessment(), mode: "guided" as const, screen: "water" as const,
+      entry: "count" as const, counts: { ...emptyGuidedAssessment().counts, gallon1: "2" } };
+    records.commit({ ...records.data, progress: 3, guidedAssessment, assessments: [createAssessmentRecord(useHouseholdStore.getState().profile)] });
     const saved = captureFullBackup(localStorage);
     const encrypted = await encryptFullBackup(saved, password);
     const json = JSON.stringify(encrypted);
@@ -46,6 +49,7 @@ describe("complete password-encrypted backups", () => {
     expect(json).not.toContain(password);
     expect(await decryptFullBackup(parseEncryptedBackup(json), password)).toEqual(saved);
     expect(saved.records.progress).toBe(3);
+    expect(saved.records.guidedAssessment).toEqual(guidedAssessment);
     expect(saved.records.assessments[0].report).toContain("Explicitly absent");
     expect(saved.records.assessments).toHaveLength(2);
     expect(useLocalRecordsStore.getState().data.assessments).toHaveLength(1);

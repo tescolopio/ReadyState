@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { householdSaveSchema } from "@/lib/household-saves";
+import { guidedAssessmentSchema } from "@/lib/guided-water";
 import { assessInventory } from "@/lib/inventory";
 import { INVENTORY_RULES, SOURCES } from "@/lib/rules";
 import { afterActionReportSchema, turnSchema, type TtxUIMessage } from "@/lib/ttx";
@@ -50,6 +51,7 @@ export const localRecordsSchema = z.strictObject({
   assessments: z.array(assessmentRecordSchema).max(1000),
   exercises: z.array(exerciseRecordSchema).max(1000),
   activeExercise: exerciseRecordSchema.nullable(),
+  guidedAssessment: guidedAssessmentSchema.optional(),
 }).refine(value =>
   new Set(value.assessments.map(record => record.id)).size === value.assessments.length &&
   new Set(value.exercises.map(record => record.id)).size === value.exercises.length, "Duplicate historical records");

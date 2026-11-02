@@ -93,6 +93,30 @@ request intercepted before navigation on a dedicated key-free server.
   invalid-data errors. Physical phones, Safari and Firefox remain separate
   follow-ups unless actually tested.
 
+### Simple / Guided water prototype (no model calls)
+
+- [ ] Switch **Simple assessment / Guided assessment** while editing and
+  verify the same answers/action plan remain. Other topic cards explicitly
+  open Simple; communication/evacuation depth is not implemented here.
+- [ ] Enter mixed full-container counts; verify the visible multiplication,
+  sum, litre/US gallon conversion and the difference between counted supplies
+  and guidance targets. Switching/reloading preserves counts and helper
+  branch, but never applies them or restores the confirmation checkbox.
+- [ ] Confirm and apply a total; see existing-rule explanations and sources,
+  save one action, edit in Simple and confirm Guided updates while the old
+  chosen action remains historical. Three one-US-gallon containers for one
+  person must not report a below-three-day shortfall.
+- [ ] Try none/zero, not sure, skip, withheld and clearing. Unknowns never
+  become a water deficiency or remove independently supported other gaps.
+  Missing people/pet weights are disclosed, not guessed.
+- [ ] Review the topic with unknown answers; Reviewed does not imply prepared.
+  Relevant changes invalidate review, without a readiness score.
+- [ ] Encrypted full backup/restore preserves Guided state/counts/answer
+  semantics. Older records without Guided fields still open Simple.
+- [ ] Check 320/390px dashboard/helper/results, keyboard confirmation/apply
+  controls, focus visibility, reduced motion and text-only understanding.
+  Human usability, physical devices, Safari and Firefox remain separate checks.
+
 ### Privacy masking (S1)
 
 - [ ] Use made-up details, for example: _"My wife Priya and our kids Linh (8) and Bao (5), our dog Max. We live at 4512 Elm Ave, Denver CO 80203, phone 303-555-0142. Priya takes insulin."_
