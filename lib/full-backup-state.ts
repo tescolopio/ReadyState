@@ -17,12 +17,17 @@ export function captureFullBackup(storage: Storage): FullBackup {
   const activeExercise = captureExercise();
   const profile = useHouseholdStore.getState().profile;
   const currentAssessment = hasAssessmentAnswers(profile) ? createAssessmentRecord(profile) : null;
+  const previousCurrentAssessment = records.data.currentAssessment;
+  const assessments = previousCurrentAssessment
+    ? [...records.data.assessments.filter(record => record.id !== previousCurrentAssessment.id),
+      previousCurrentAssessment].slice(-1000)
+    : records.data.assessments;
   const privacy = usePrivacyStore.getState();
   return fullBackupSchema.parse({
     format: "readystate-full-data", version: 1, savedAt: new Date().toISOString(),
     householdAndPlan: createHouseholdSave(profile, usePlanStore.getState().items),
     settings: useSettingsStore.getState().settings,
-    records: { ...records.data, activeExercise, currentAssessment },
+    records: { ...records.data, assessments, activeExercise, currentAssessment },
     privacy: { entityMap: privacy.entityMap, alwaysMask: privacy.alwaysMask },
     appearance: storage.getItem("readystate-style"),
     namedHouseholds: { version: 1, saves: readNamedSaves(storage) },

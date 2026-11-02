@@ -6,6 +6,11 @@ import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
 
 let activeExerciseRecoveryAttempted = false;
 
+function hasCompletedOutput(messages: ExerciseRecord["messages"]) {
+  return messages.some(message => message.role === "assistant" &&
+    message.parts.some(part => part.type === "tool-generate_turn" || part.type === "tool-after_action_report"));
+}
+
 export function recoverActiveExerciseOnce() {
   if (activeExerciseRecoveryAttempted) return false;
   activeExerciseRecoveryAttempted = true;
@@ -22,10 +27,13 @@ export function captureExercise(): ExerciseRecord | null {
   const session = useExerciseSession.getState();
   if (!exerciseChat.messages.length && !session.draft && !session.activeProfile) return null;
   const privacy = usePrivacyStore.getState();
+  const messages = savedMessages(exerciseChat.messages);
+  const completedOutput = hasCompletedOutput(messages);
   return exerciseRecordSchema.parse({
     id: newId(), savedAt: new Date().toISOString(), profile: session.activeProfile,
-    sampleId: session.sampleId, draft: session.draft, baselinePending: session.baselinePending,
-    messages: savedMessages(exerciseChat.messages),
+    sampleId: session.sampleId, draft: session.draft,
+    baselinePending: session.baselinePending && !completedOutput,
+    messages,
     privacy: { entityMap: privacy.entityMap, alwaysMask: privacy.alwaysMask },
   });
 }
@@ -33,12 +41,11 @@ export function captureExercise(): ExerciseRecord | null {
 export function openExercise(record: ExerciseRecord) {
   if (exerciseChat.status === "submitted" || exerciseChat.status === "streaming") throw new Error("Cancel the active request before opening a saved exercise.");
   const parsed = exerciseRecordSchema.parse(record);
-  const hasCompletedOutput = parsed.messages.some(message => message.role === "assistant" &&
-    message.parts.some(part => part.type === "tool-generate_turn" || part.type === "tool-after_action_report"));
-  const isLegacyIncompleteBaseline = parsed.profile !== null && !hasCompletedOutput &&
+  const completedOutput = hasCompletedOutput(parsed.messages);
+  const isLegacyIncompleteBaseline = parsed.profile !== null && !completedOutput &&
     parsed.messages.filter(message => message.role === "user").length === 1 &&
     parsed.messages[0]?.role === "user";
-  const incompleteBaseline = parsed.baselinePending || isLegacyIncompleteBaseline;
+  const incompleteBaseline = !completedOutput && (parsed.baselinePending || isLegacyIncompleteBaseline);
   resetExercise();
   exerciseChat.messages = incompleteBaseline ? [] : parsed.messages;
   useExerciseSession.setState({

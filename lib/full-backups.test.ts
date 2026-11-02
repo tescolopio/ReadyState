@@ -165,6 +165,9 @@ describe("dated local records and safe exercise recovery", () => {
     const savedAt = new Date().toISOString();
     const profile = useHouseholdStore.getState().profile;
     const assessment = createAssessmentRecord(profile);
+    const restoredCurrentAssessment = assessmentRecordSchema.parse({
+      ...assessment, id: "restored-current-assessment", report: "Restored historical assessment",
+    });
     const assessments = Array.from({ length: 1000 }, (_, index) =>
       assessmentRecordSchema.parse({ ...assessment, id: `assessment-${index}` }));
     const exercises = Array.from({ length: 1000 }, (_, index) => exerciseRecordSchema.parse({
@@ -172,17 +175,27 @@ describe("dated local records and safe exercise recovery", () => {
       privacy: { entityMap: {}, alwaysMask: [] },
     }));
     useLocalRecordsStore.setState({
-      data: { ...emptyLocalRecords(), assessments, exercises, progress: 3 }, error: null,
+      data: { ...emptyLocalRecords(), assessments, exercises, progress: 3,
+        currentAssessment: restoredCurrentAssessment }, error: null,
     });
     useExerciseSession.getState().begin(profile);
     exerciseChat.messages = [{ id: "active", role: "user", parts: [{ type: "text", text: "Synthetic active exercise" }] }];
 
     const saved = captureFullBackup(localStorage);
     expect(saved.records.assessments).toHaveLength(1000);
+    expect(saved.records.assessments).toContainEqual(restoredCurrentAssessment);
+    expect(saved.records.assessments.some(record => record.id === "assessment-0")).toBe(false);
     expect(saved.records.exercises).toHaveLength(1000);
     expect(saved.records.currentAssessment).not.toBeNull();
+    expect(saved.records.currentAssessment?.id).not.toBe(restoredCurrentAssessment.id);
+    expect(saved.records.currentAssessment?.report).not.toBe(restoredCurrentAssessment.report);
     expect(saved.records.activeExercise?.messages).toHaveLength(1);
     expect(fullBackupSchema.parse(saved)).toEqual(saved);
+
+    useLocalRecordsStore.setState({ data: saved.records, error: null });
+    const recaptured = captureFullBackup(localStorage);
+    expect(recaptured.records.assessments).toContainEqual(restoredCurrentAssessment);
+    expect(recaptured.records.currentAssessment?.id).not.toBe(saved.records.currentAssessment?.id);
   });
 
   it("keeps exercise content/drafts/mappings, not metadata eval captures or retry settings; restoration cannot resend approval", () => {
@@ -271,6 +284,39 @@ describe("dated local records and safe exercise recovery", () => {
 
     expect(exerciseChat.messages).toEqual([]);
     expect(useExerciseSession.getState()).toMatchObject({ baselinePending: true, baselineNeedsReview: true });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("preserves completed baseline output when its pending flag was not cleared before navigation", () => {
+    const profile = useHouseholdStore.getState().profile;
+    const output = {
+      feedback: null, narrative_response: "Synthetic baseline result", time_elapsed: "Hour 0",
+      hours_elapsed: 0, new_inject: "Synthetic inject", critical_alerts: [], suggested_actions: [],
+      response_options: [], scenario_status: "ongoing" as const,
+    };
+    const completedBaseline = exerciseRecordSchema.parse({
+      id: "completed-pending-baseline", savedAt: new Date().toISOString(), profile, sampleId: null, draft: "",
+      baselinePending: true,
+      messages: [
+        { id: "baseline", role: "user", parts: [{ type: "text", text: "Synthetic reviewed baseline" }] },
+        { id: "completed-turn", role: "assistant", parts: [{
+          type: "tool-generate_turn", toolCallId: "turn", state: "output-available", input: output, output,
+        }] },
+      ],
+      privacy: { entityMap: {}, alwaysMask: [] },
+    });
+    useExerciseSession.getState().begin(profile, undefined, true);
+    exerciseChat.messages = completedBaseline.messages;
+
+    const recaptured = captureExercise()!;
+    expect(recaptured.baselinePending).toBe(false);
+
+    openExercise(completedBaseline);
+    expect(exerciseChat.messages).toEqual(completedBaseline.messages);
+    expect(deriveTtxState(exerciseChat.messages).turns).toEqual([output]);
+    expect(useExerciseSession.getState()).toMatchObject({
+      baselinePending: false, baselineNeedsReview: false, activeProfile: profile,
+    });
     expect(fetch).not.toHaveBeenCalled();
   });
 
