@@ -197,6 +197,21 @@ Masking ledgers and the active exercise are memory-only.
 
 ## Building and validating packages
 
+Simple and Guided assessment screens, rules and local illustrations ship in the
+same application build; they need no separate installer payload or asset download.
+For each tester update, build native packages from the intended reviewed source
+revision. The Windows/Ubuntu package CI rebuilds and checks extracted archives,
+including `/assessment` and its static assets. Keep the matching source manifest
+and checksums with test evidence; do not combine new screens with an old `app`
+directory. Binary uploads remain disabled pending an explicit publication decision.
+
+Use the update procedure above and the same browser origin to retain local data.
+Before replacing a test installation, export an encrypted full backup from
+Settings (available in builds containing #33). After restarting, hard-refresh or
+reopen existing tabs to load the new screens; verify `/assessment` in both modes.
+An older build may not understand newer saved-data fields: moving old files back
+is not a guaranteed data rollback. Keep the matching backup and source revision.
+
 The app serves static images as-is; Next's image optimizer is intentionally
 disabled. Supported build-trace exclusions omit its unused Sharp/native/WASM
 dependencies. Package inspection rejects their return, and smokes require

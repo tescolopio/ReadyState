@@ -92,7 +92,7 @@ describe("inventory math", () => {
     // 2 people × 1 gal + (140 + 120 lb) × 1 oz/lb ÷ 128 oz/gal ≈ 4.0 gal/day; 10 gal ≈ 2.5 days.
     expect(byId(charlotte, "water")).toMatchObject({
       status: "short",
-      finding: "Stored water covers about 2.5 days, below the 3-day minimum.",
+      finding: "Stored water covers about 2.4 days, below the 3-day minimum.",
       action: "Store about 3 more gallons: the household uses about 4 gallons a day (1 gallon per person, plus about 2.0 for pets).",
     });
   });

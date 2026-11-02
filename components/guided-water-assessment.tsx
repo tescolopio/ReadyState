@@ -13,6 +13,7 @@ import { UNASSESSED_ANSWERS, withAnswer, type UnassessedAnswer } from "@/lib/hou
 import { assessInventory } from "@/lib/inventory";
 import { guidanceValue, profileFacts } from "@/lib/rules/engine";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
+import { waterDisplay, waterInput } from "@/lib/water-display";
 
 function ContainerGraphic({ shape }: { shape: "bottle" | "jug" }) {
   return (
@@ -35,6 +36,7 @@ export function GuidedWaterAssessment({
   const [error, setError] = useState("");
   const [completeCount, setCompleteCount] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  const [amountDraft, setAmountDraft] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const id = useId();
   const findings = assessInventory(profile, { scenario: false });
@@ -68,7 +70,7 @@ export function GuidedWaterAssessment({
   };
   const recorded = numeric === undefined
     ? answer ? UNASSESSED_ANSWERS[answer] : "Not answered"
-    : `${numeric.toLocaleString("en-US", { maximumFractionDigits: 3 })} US gallons${numeric === 0 ? " (explicitly none)" : ""}`;
+    : `${numeric > 0 && numeric < 0.001 ? "less than 0.001" : waterDisplay(numeric)} US gallons${numeric === 0 ? " (explicitly none)" : ""}`;
   const availableTopics = [
     { title: "People", detail: "Who needs to be considered; names optional.", icon: Users, topic: 0 },
     { title: "Pets", detail: "Pet kind and optional weight for water estimates.", icon: PawPrint, topic: 1 },
@@ -82,7 +84,7 @@ export function GuidedWaterAssessment({
         <h2 ref={heading} tabIndex={-1} className="scroll-mt-24 text-2xl font-semibold">
           {state.screen === "topics" ? "Your household journey" : state.screen === "water" ? "Water you have set aside" : "Understand your water findings"}
         </h2>
-        <p className="mt-2 text-sm text-ink-2">Water is the first guided prototype. Other existing topics still open the Simple form. Nothing here requires AI.</p>
+        {state.screen === "topics" && <p className="mt-2 text-sm text-ink-2">Water is the first guided prototype. Other topics open Simple. No AI required.</p>}
       </div>
       {state.screen === "topics" ? <>
         <p className="text-sm text-ink-2">Topic labels describe your review, not preparedness. You can review a topic while leaving answers unknown. Changes to supporting answers make it need review again.</p>
@@ -104,7 +106,7 @@ export function GuidedWaterAssessment({
         <Button variant="outline" onClick={() => show("topics")}>Back to topics</Button>
         {state.screen === "water" ? <section aria-label="Water question" className="space-y-4 rounded-panel border border-line bg-surface p-4">
           <h3 className="text-xl font-semibold">Do you know how much drinking water you have stored?</h3>
-          <p>Count water already set aside for an emergency, not a suggested amount to buy. A measured amount helps explain how long that supply might last.</p>
+          <p>Count drinking water already set aside for an emergency, not water you plan to buy.</p>
           <p className="text-sm">Current answer: <strong>{recorded}</strong>. You can replace or clear it below.</p>
           <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Ways to answer water question">
             <Button variant="outline" aria-pressed={state.entry === "amount"} onClick={() => { update({ entry: "amount" }); setError(""); }}>Enter an amount</Button>
@@ -114,16 +116,18 @@ export function GuidedWaterAssessment({
             <Button variant="outline" onClick={() => unsure("withheld")}>Prefer not to say</Button>
             <Button variant="outline" onClick={() => { if (save(0)) show("results"); }}>I have none (zero)</Button>
           </div>
-          <p className="text-xs text-ink-3">Not sure, skip and prefer not to say replace the current amount with that answer state. None records zero; leaving the topic or switching experiences keeps your answer.</p>
+          <p className="text-xs text-ink-3">An uncertainty choice clears the amount; none records zero. Switching experiences keeps your answer.</p>
           <details className="rounded-control border border-line p-3">
             <summary className="cursor-pointer font-semibold">Show me an example</summary>
             <p className="mt-2 text-sm">Two full containers labeled 1 US gallon hold 2 US gallons. Do not count the same water twice. For partially filled or different-sized containers, use their actual amount rather than guessing.</p>
           </details>
           {state.entry === "amount" && <div className="space-y-2">
             <label htmlFor={`${id}-amount`} className="block font-semibold">Stored drinking water (US gallons)</label>
-            <Input id={`${id}-amount`} type="number" min={0} step="any" inputMode="decimal" value={numeric ?? ""}
+            <Input id={`${id}-amount`} type="number" min={0} step="any" inputMode="decimal" value={amountDraft ?? waterInput(numeric)}
+              onBlur={() => setAmountDraft(null)}
               onChange={event => {
                 const raw = event.target.value;
+                setAmountDraft(raw);
                 save(raw.trim() === "" ? undefined : Number(raw), raw.trim() === "" ? "skipped" : undefined);
               }} />
             <p className="text-sm">Saved as you edit. Blank means skipped, not zero.</p>
@@ -131,7 +135,7 @@ export function GuidedWaterAssessment({
           </div>}
           {state.entry === "count" && <section aria-label="Water container helper" className="space-y-3">
             <h4 className="font-semibold">Help me check: count your full containers</h4>
-            <p className="text-sm">Enter whole counts for full containers with these labeled capacities. These shapes are schematic, not to scale; check your own label. Unused rows contribute zero only to this draft calculation, not an answer of no water.</p>
+            <p className="text-sm">Count full containers by their labels. Leave unused rows blank. Counts stay a draft until you apply them.</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {WATER_CONTAINERS.map(container => <div key={container.id} className="flex items-center gap-3 rounded-control border border-line p-3">
                 <ContainerGraphic shape={container.shape} />
@@ -149,10 +153,14 @@ export function GuidedWaterAssessment({
             </div>
             <div role="status" className="space-y-2 rounded-control border border-line p-3 text-sm">
               <p>{WATER_CONTAINERS.map(container => `${state.counts[container.id] || 0} x ${container.label}`).join(" + ")}</p>
-              <p>Counted total: <strong>{count.litres.toLocaleString("en-US", { maximumFractionDigits: 3 })} litres / {count.gallons.toLocaleString("en-US", { maximumFractionDigits: 3 })} US gallons</strong>.</p>
-              <p>Conversion: 1 US gallon = 3.785411784 litres. Display rounded; saved calculation uses the full value.</p>
-              <p>This draft is not your recorded supply until you choose Use counted amount. It is not a storage recommendation.</p>
+              <p>Draft total: <strong>{waterDisplay(count.litres)} litres / {waterDisplay(count.gallons)} US gallons</strong>.</p>
+              <p>Not saved as your supply until you choose Use counted amount.</p>
             </div>
+            <details className="rounded-control border border-line p-3 text-sm">
+              <summary className="cursor-pointer font-semibold">Counting and conversion details</summary>
+              <p>Check capacity on your own label; drawings are not to scale. Do not count duplicates. For partial or different-size containers, enter their measured amount directly.</p>
+              <p>1 US gallon = 3.785411784 litres. Displays round down; calculations retain full precision. Blank rows contribute zero to this draft, not an answer of no water.</p>
+            </details>
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-1 h-5 w-5 shrink-0" checked={completeCount} onChange={event => setCompleteCount(event.target.checked)} />
               This count includes all the stored drinking water I want to record, without duplicates.
@@ -162,16 +170,22 @@ export function GuidedWaterAssessment({
           </section>}
           <Button variant="outline" className="max-w-full whitespace-normal" onClick={() => show("results")}>Keep current answer and see findings</Button>
         </section> : <>
-          <p className="text-sm">Your recorded answer: <strong>{recorded}</strong>. Uncertainty is not a deficiency. These are the same water findings as Simple, not a second assessment.</p>
+          <p className="text-sm">Your recorded answer: <strong>{recorded}</strong>. Uncertainty is not a deficiency.</p>
           <Button variant="outline" onClick={() => show("water")}>Edit water answer</Button>
           <section aria-label="Water calculation explained" className="space-y-2 rounded-panel border border-line p-4 text-sm">
             <h3 className="text-lg font-semibold">What this estimate uses</h3>
-            <p>{profile.people.length} {profile.people.length === 1 ? "person" : "people"} recorded. General guidance uses {guidanceValue("water.supply", "gallonsPerPersonPerDay")} US gallon per person per day for drinking and sanitation; at least {guidanceValue("water.supply", "minimumDays")} days, aiming for {guidanceValue("water.supply", "goalDays")} days if possible. These targets are not water you already have.</p>
+            <p>{profile.people.length} {profile.people.length === 1 ? "person" : "people"} recorded. Guidance: {guidanceValue("water.supply", "minimumDays")}-day minimum, {guidanceValue("water.supply", "goalDays")}-day goal.</p>
             {profile.people.length === 0 ? <p>No person count is recorded, so days of supply cannot be calculated. Add household members when you know who to include; no names are required.</p>
-              : <p>The existing engine estimates {String(facts["water.gallonsPerDay"])} US gallons per day from recorded people and weighed dogs/cats.
-                {typeof facts["water.days"] === "number" ? ` ${numeric} stored US gallons / daily estimate = about ${facts["water.days"].toLocaleString("en-US", { maximumFractionDigits: 2 })} days.` : " Stored quantity is unassessed, so no duration is asserted."} Displayed estimates are rounded; duration uses the engine&apos;s unrounded daily estimate.</p>}
-            {profile.pets.length > 0 && <p>Pet estimate: {String(facts["pets.waterGallonsPerDay"] ?? "not available")} US gallons/day from recorded dog/cat weights. {facts["pets.weightsMissing"] ? "Some dog/cat weights are missing; their water is not included." : "Other species are not included in this estimate."}</p>}
+              : <p>Daily estimate: {waterDisplay(Number(facts["water.gallonsPerDay"]))} US gallons.
+                {typeof facts["water.days"] === "number" && numeric !== undefined ? ` ${waterDisplay(numeric)} stored US gallons / daily estimate = about ${waterDisplay(facts["water.days"], 2)} days.` : " Stored quantity is unassessed; duration is unknown."}</p>}
+            <p>Displays round down; duration and findings use the unrounded daily need and stored total.</p>
+            {facts["pets.weightsMissing"] && <p>Some dog/cat weights are missing; their water is not included.</p>}
+            <details>
+              <summary className="cursor-pointer font-semibold">Assumptions and limits</summary>
+              <p>General guidance uses {guidanceValue("water.supply", "gallonsPerPersonPerDay")} US gallon per person per day for drinking and sanitation, plus recorded dog/cat weights. Targets are not supplies you already have.</p>
+              {profile.pets.length > 0 && <p>Pet estimate: {String(facts["pets.waterGallonsPerDay"] ?? "not available")} US gallons/day from recorded dog/cat weights. Other species are not included in this estimate.</p>}
             <p>Needs vary with heat, health and other circumstances. This is general draft guidance, not a certification or a guarantee. Review the sources below.</p>
+            </details>
             <Button variant="outline" onClick={() => setPeopleOpen(value => !value)}>{peopleOpen ? "Close people editor" : "Add or edit people"}</Button>
             {profile.pets.length > 0 && <Button variant="outline" className="max-w-full whitespace-normal" onClick={() => openSimple(1)}>Edit pet details in Simple</Button>}
           </section>

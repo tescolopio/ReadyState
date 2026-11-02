@@ -66,11 +66,11 @@ function AssessmentContent() {
         </div>
         <p className="text-sm text-ink-2">Two ways to use one household and one local rules engine. Switch any time without losing answers or chosen actions. Guided currently prototypes water only.</p>
       </section>
-      {guided.mode === "guided" ? <GuidedWaterAssessment state={guided} update={updateGuided}
+      {guided.mode === "guided" ? <GuidedWaterAssessment key={revision} state={guided} update={updateGuided}
         openSimple={topic => { if (updateGuided({ mode: "simple" })) setTopic(topic); }} />
       : topic !== null ? (
-        <HouseholdWizard key={`${revision}-${topic}`} purpose="assessment" initialStep={topic}
-          onStepChange={next => { updateTopic(next); progress(next); }}
+        <HouseholdWizard key={revision} purpose="assessment" initialStep={topic}
+          onStepChange={updateTopic}
           onStart={() => setTopic(null)} onClose={() => setTopic(null)} />
       ) : (
         <>

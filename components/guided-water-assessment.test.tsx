@@ -40,6 +40,34 @@ async function start() {
   await click("Guided assessment"); await click("Explore water supplies");
 }
 describe("one household across Simple and Guided", () => {
+  it("keeps the wizard mounted and keyboard step focus when persisting navigation", async () => {
+    await act(async () => root.render(<AssessmentPage />));
+    await click("People");
+    const next = [...container.querySelectorAll("button")].find(button => button.textContent?.includes("Next"))!;
+    expect(next).toBeDefined();
+    next.focus();
+    await act(async () => next.click());
+    expect(next.isConnected).toBe(true);
+    expect(document.activeElement).toBe(next);
+    expect(useLocalRecordsStore.getState().data.progress).toBe(1);
+  });
+  it("displays concise rounded quantities without replacing exact saved answers", async () => {
+    const exact = 2.2641720523581483;
+    useHouseholdStore.getState().setProfile({ ...useHouseholdStore.getState().profile, supplies: { have: [], waterGallons: exact } });
+    await start(); await click("Enter an amount");
+    expect([...container.querySelectorAll("input")].find(input => input.type === "number")?.value).toBe("2.264");
+    await click("Explain this answer");
+    expect(container.textContent).not.toContain(String(exact));
+    expect(container.textContent).toContain("2.264 stored US gallons");
+    const assumptions = [...container.querySelectorAll("details")].find(details => details.querySelector("summary")?.textContent === "Assumptions and limits");
+    expect(assumptions).toBeDefined();
+    expect(assumptions?.open).toBe(false);
+    expect(container.textContent).toContain("Well-pump continuity: water source is unanswered");
+    await click("Simple assessment"); await click("Supplies");
+    const input = [...container.querySelectorAll("input")].find(input => input.labels?.[0]?.textContent === "Stored water (gallons)")!;
+    expect(input.value).toBe("2.264");
+    expect(useHouseholdStore.getState().profile.supplies.waterGallons).toBe(exact);
+  });
   it("preserves uncertainty states and independent deficiencies instead of inventing water gaps", async () => {
     const profile = useHouseholdStore.getState().profile;
     useHouseholdStore.getState().setProfile(setSupplyAnswer({ ...profile, supplies: { have: [], foodDays: 0 } }, "smoke-detector", "absent"));

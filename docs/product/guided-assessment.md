@@ -67,6 +67,20 @@ Household-only files intentionally carry answers/actions, not presentation
 progress. No calculator draft, review label or new UI metadata enters provider
 briefings. Applying a total changes only the already-supported water quantity.
 
+Quantity displays round down (up to three decimals; durations up to two), while
+stored totals and threshold comparisons retain full precision. Editing an amount
+does not replace its precise value until the user actually changes it. Shared
+water shortfall findings also truncate duration so just-under-target values do
+not appear to meet the target. Extra counting/conversion and assumption text is
+optional help. Unanswered well-pump continuity names water source or backup power
+separately from the stored-water duration check.
+
+These are ordinary application changes, included by the existing native package
+builds. See [local installation and updates](../deployment/local-installation.md);
+the package smoke now includes the assessment route and its assets. User
+walkthroughs must still distinguish interface inspection from human usability
+validation.
+
 ## Prototype visual style and asset register
 
 Use the existing ReadyState type, surface, action and focus tokens in both

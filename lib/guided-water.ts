@@ -34,7 +34,8 @@ export function countedWater(counts: GuidedAssessment["counts"]) {
 /** Review is about the answers/context seen, not certification or question completion. */
 export function waterReviewKey(profile: HouseholdProfile): string {
   return JSON.stringify({
-    people: profile.people.length, pets: profile.pets.map(pet => ({ kind: pet.kind, weightLb: pet.weightLb })),
+    people: profile.people.map(person => ({ ageRange: person.ageRange, pregnant: person.needs.some(need => need.kind === "pregnant") })),
+    pets: profile.pets.map(pet => ({ kind: pet.kind, weightLb: pet.weightLb })),
     water: profile.supplies.waterGallons ?? null,
     answer: profile.answers?.["supplies.waterGallons"] ?? null,
     source: profile.home.water ?? null, power: profile.home.backupPower ?? null,

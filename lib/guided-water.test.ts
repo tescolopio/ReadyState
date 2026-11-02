@@ -24,6 +24,10 @@ describe("guided water helper and topic state", () => {
     const changed = { ...unknown, people: [{ id: "adult", needs: [] }] };
     expect(waterTopicStatus(changed, waterReviewKey(unknown))).toBe("Needs review");
     expect(waterTopicStatus({ ...profile, supplies: { have: [], waterGallons: 0 } }, null)).toBe("Needs a few answers");
+    const adult = { ...profile, people: [{ id: "adult", ageRange: "adult" as const, needs: [] }] };
+    const reviewed = waterReviewKey(adult);
+    expect(waterTopicStatus({ ...adult, people: [{ ...adult.people[0], ageRange: "infant" }] }, reviewed)).toBe("Needs review");
+    expect(waterTopicStatus({ ...adult, people: [{ ...adult.people[0], needs: [{ kind: "pregnant" }] }] }, reviewed)).toBe("Needs review");
   });
 
   it("reads prior backup/history records and preserves new guided state in the shared full backup payload", () => {
