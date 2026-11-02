@@ -5,6 +5,7 @@ import { useId, useMemo, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { waterDisplay, waterInput } from "@/lib/water-display";
 import {
   AGE_RANGES,
   BACKUP_POWER,
@@ -146,6 +147,7 @@ function NumberField({
   placeholder,
   answerState,
   onAnswerState,
+  water = false,
 }: {
   label: string;
   value?: number;
@@ -153,7 +155,9 @@ function NumberField({
   placeholder?: string;
   answerState?: UnassessedAnswer;
   onAnswerState?: (state: UnassessedAnswer) => void;
+  water?: boolean;
 }) {
+  const [draft, setDraft] = useState<string | null>(null);
   return (
     <Field label={label}>
       {(id) => (
@@ -162,10 +166,15 @@ function NumberField({
           id={id}
           type="number"
           min={0}
+          step={water ? "any" : undefined}
           inputMode="decimal"
-          value={value ?? ""}
+          value={water ? draft ?? waterInput(value) : value ?? ""}
+          onBlur={() => setDraft(null)}
           placeholder={placeholder ?? "Not sure"}
-          onChange={(event) => onChange(toNumber(event.target.value))}
+          onChange={(event) => {
+            if (water) setDraft(event.target.value);
+            onChange(toNumber(event.target.value));
+          }}
         />
         {onAnswerState && (
           <select aria-label={`${label}: answer status`} className={fieldClass}
@@ -242,7 +251,8 @@ export function InventoryCheck({ findings }: { findings: Finding[] }) {
                   <ul>
                     {finding.evidence.map(item => (
                       <li key={item.fact}>{item.label}: {item.value === undefined ? "Unassessed" :
-                        Array.isArray(item.value) ? item.value.join(", ") || "No positive answers recorded; unlisted items are not assumed absent" : String(item.value)}</li>
+                        Array.isArray(item.value) ? item.value.join(", ") || "No positive answers recorded; unlisted items are not assumed absent" :
+                          typeof item.value === "number" && item.fact.startsWith("water.") ? waterDisplay(item.value) : String(item.value)}</li>
                     ))}
                   </ul>
                   <p>Rule: {finding.rule}. General guidance, not a certification of safety.</p>
@@ -841,6 +851,7 @@ function HouseholdWizardForm({
           <div className="grid gap-3 sm:grid-cols-3">
             <NumberField
               label="Stored water (gallons)"
+              water
               {...supplyAnswer("waterGallons")}
               value={profile.supplies.waterGallons}
               onChange={(waterGallons) => setStock("waterGallons", waterGallons)}

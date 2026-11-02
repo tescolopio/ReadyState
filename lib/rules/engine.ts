@@ -18,6 +18,7 @@ import {
 } from "@/lib/household";
 import guidanceJson from "@/data/rules/guidance.json";
 import type { Condition, InventoryRule } from "@/lib/rules/schema";
+import { waterDisplay } from "@/lib/water-display";
 
 export type FactValue = string | number | boolean | string[] | undefined;
 export type Facts = Record<string, FactValue>;
@@ -310,7 +311,13 @@ function applyRule(rule: InventoryRule, facts: Facts, answers: Record<string, Un
   const base = { id: render(rule.findingId ?? rule.id, facts), area: rule.area, kind: rule.kind, rule: rule.id, evidence };
   const unassessed = (): Finding => ({
     ...base, status: "unknown", category: "unassessed",
-    finding: `${rule.area}: this check is unassessed because an answer it needs has not been provided.`,
+    finding: rule.id === "well-pump"
+      ? facts["home.water"] === undefined
+        ? "Well-pump continuity: water source is unanswered. Stored water quantity is assessed separately."
+        : "Well-pump continuity: backup power is unanswered. Stored water quantity is assessed separately."
+      : rule.id === "water"
+        ? `Stored-water duration: ${typeof facts["water.gallons"] !== "number" ? "stored quantity is unanswered" : "household person count is unanswered"}.`
+        : `${rule.area}: this check is unassessed because an answer it needs has not been provided.`,
   });
   if (applicability === undefined) return unassessed();
 
@@ -323,7 +330,7 @@ function applyRule(rule: InventoryRule, facts: Facts, answers: Record<string, Un
       const shortBy = Math.ceil(target - value);
       const local = {
         ...facts,
-        days: days(value),
+        days: rule.metric === "water.days" ? `${waterDisplay(value, 1)} days` : days(value),
         shortBy: days(shortBy),
         shortByGallons: Math.ceil((target - value) * Number(facts["water.gallonsPerDay"] ?? facts.headcount ?? 1)),
       };
