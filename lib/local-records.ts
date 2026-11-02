@@ -5,6 +5,7 @@ import { guidedAssessmentSchema } from "@/lib/guided-water";
 import { assessInventory } from "@/lib/inventory";
 import { INVENTORY_RULES, SOURCES } from "@/lib/rules";
 import { afterActionReportSchema, turnSchema, type TtxUIMessage } from "@/lib/ttx";
+import { newId } from "@/lib/household";
 
 const text = z.string().max(200_000);
 const id = z.string().min(1).max(100);
@@ -36,6 +37,7 @@ export const privacySnapshotSchema = z.strictObject({
 export const exerciseRecordSchema = z.strictObject({
   id, savedAt: z.iso.datetime(), profile: householdSaveSchema.shape.household.nullable(),
   sampleId: id.nullable(), draft: text,
+  baselinePending: z.boolean().default(false),
   messages: z.array(savedMessageSchema).max(5000).refine(items => new Set(items.map(item => item.id)).size === items.length, "Duplicate messages"),
   privacy: privacySnapshotSchema,
 });
@@ -104,5 +106,5 @@ export function createAssessmentRecord(household: z.infer<typeof householdSaveSc
       ...sources.map(source => `Source: ${source.title} - ${source.url}`),
     ].join("\n");
   }).join("\n\n");
-  return assessmentRecordSchema.parse({ id: crypto.randomUUID(), savedAt: new Date().toISOString(), household, report });
+  return assessmentRecordSchema.parse({ id: newId(), savedAt: new Date().toISOString(), household, report });
 }

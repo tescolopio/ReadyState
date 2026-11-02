@@ -49,7 +49,7 @@ function HouseholdContext() {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const recordsError = useLocalRecordsStore(state => state.error);
-  const guided = useLocalRecordsStore(state => state.data.guidedAssessment?.mode === "guided");
+  const guided = useLocalRecordsStore(state => !state.simpleRecovery && state.data.guidedAssessment?.mode === "guided");
   const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
   const focused = hydrated && pathname === "/assessment" && guided;
   useEffect(() => {

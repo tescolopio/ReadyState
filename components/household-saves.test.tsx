@@ -90,6 +90,14 @@ describe("offline save/load controls", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("creates named local saves without requiring secure-context crypto.randomUUID", async () => {
+    vi.stubGlobal("crypto", undefined);
+    await act(async () => root.render(<AssessmentPage />));
+    await fillName("Plain HTTP local save");
+    await click("Save a named copy");
+    expect(readNamedSaves(localStorage).map(item => item.name)).toEqual(["Plain HTTP local save"]);
+  });
+
   it("validates file imports before confirmation and replaces stale wizard drafts only after approval", async () => {
     const saved = createHouseholdSave(emptyProfile(), []);
     await act(async () => root.render(<AssessmentPage />));

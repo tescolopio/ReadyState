@@ -4,6 +4,7 @@ import { useId, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { newId } from "@/lib/household";
 import { captureFullBackup, restoreFullBackup } from "@/lib/full-backup-state";
 import {
   MAX_BACKUP_BYTES, decryptFullBackup, encryptFullBackup, parseEncryptedBackup,
@@ -57,7 +58,7 @@ function BackupControls() {
       if (named) {
         const current = readFullBackups(localStorage);
         if (current.some(item => item.name.toLocaleLowerCase() === label.toLocaleLowerCase())) throw new Error("That backup name was saved meanwhile. Choose a different name.");
-        const backups = [...current, { id: crypto.randomUUID(), name: label, savedAt: data.savedAt, encrypted }];
+        const backups = [...current, { id: newId(), name: label, savedAt: data.savedAt, encrypted }];
         writeFullBackups(localStorage, backups);
         setLibrary({ backups, error: null }); setName("");
       } else download(encrypted);

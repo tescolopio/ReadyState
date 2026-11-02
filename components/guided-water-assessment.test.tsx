@@ -9,6 +9,7 @@ import { assessInventory } from "@/lib/inventory";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePlanStore } from "@/store/usePlanStore";
 import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
+import { invalidateHouseholdWizards } from "@/lib/household-restore";
 
 let root: Root;
 let container: HTMLDivElement;
@@ -21,7 +22,7 @@ beforeEach(() => {
   usePlanStore.getState().clear();
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 async function click(label: string) {
   const button = [...container.querySelectorAll("button")].find(button => button.textContent === label);
   if (!button) throw new Error(`Missing button: ${label}`);
@@ -43,6 +44,32 @@ async function resume() {
   await click("Guided assessment"); await click("Resume guided session");
 }
 describe("one household across Simple and Guided", () => {
+  it("can leave Guided without saving when progress writes fail", async () => {
+    await start();
+    const stored = localStorage.getItem("readystate-local-records");
+    const original = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function(this: Storage, key, value) {
+      if (key === "readystate-local-records") throw new DOMException("Full", "QuotaExceededError");
+      return original.call(this, key, value);
+    });
+    await click("Save and exit");
+    expect(container.textContent).toContain("could not be saved");
+    await click("Return to Simple without saving progress");
+    expect(container.querySelector('[aria-label="Guided assessment"]')).toBeNull();
+    expect(useLocalRecordsStore.getState().simpleRecovery).toBe(true);
+    expect(localStorage.getItem("readystate-local-records")).toBe(stored);
+    vi.restoreAllMocks();
+  });
+  it("does not overwrite restored household facts through an open Guided people editor", async () => {
+    await start(); await click("Keep current answer and see findings"); await click("Add or edit people");
+    await act(async () => {
+      useHouseholdStore.getState().setProfile({ ...emptyProfile(), people: [{ id: "restored", needs: [] }], supplies: { have: [], waterGallons: 17 } });
+      invalidateHouseholdWizards();
+    });
+    await fill("Person 1 name (optional, this device only)", "Fictional restored person");
+    expect(useHouseholdStore.getState().profile.people[0].id).toBe("restored");
+    expect(useHouseholdStore.getState().profile.supplies.waterGallons).toBe(17);
+  });
   it("preserves the Simple topic on ordinary exits and keeps unknown checks visible at next steps", async () => {
     await act(async () => root.render(<AssessmentPage />));
     await click("Supplies");

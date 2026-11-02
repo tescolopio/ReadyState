@@ -47,10 +47,11 @@ interface SessionState {
   sampleId: string | null;
   draft: string;
   restored: boolean;
+  baselinePending: boolean;
   baselineNeedsReview: boolean;
   generation: number;
   setDraft: (draft: string) => void;
-  begin: (profile: HouseholdProfile, sampleId?: string) => void;
+  begin: (profile: HouseholdProfile, sampleId?: string, baselinePending?: boolean) => void;
 }
 
 export const useExerciseSession = create<SessionState>()((set) => ({
@@ -58,11 +59,12 @@ export const useExerciseSession = create<SessionState>()((set) => ({
   sampleId: null,
   draft: "",
   restored: false,
+  baselinePending: false,
   baselineNeedsReview: false,
   generation: 0,
   setDraft: draft => set({ draft }),
-  begin: (activeProfile, sampleId) => set(state => ({
-    activeProfile, sampleId: sampleId ?? null, restored: false, baselineNeedsReview: false,
+  begin: (activeProfile, sampleId, baselinePending = false) => set(state => ({
+    activeProfile, sampleId: sampleId ?? null, restored: false, baselinePending, baselineNeedsReview: false,
     generation: state.generation + 1,
   })),
 }));
@@ -75,7 +77,8 @@ export function resetExercise() {
   sentSettings = undefined;
   usePrivacyStore.getState().clearMappings();
   useExerciseSession.setState(state => ({
-    activeProfile: null, sampleId: null, draft: "", restored: false, baselineNeedsReview: false,
+    activeProfile: null, sampleId: null, draft: "", restored: false,
+    baselinePending: false, baselineNeedsReview: false,
     generation: state.generation + 1,
   }));
   const records = useLocalRecordsStore.getState();

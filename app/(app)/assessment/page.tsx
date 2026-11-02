@@ -26,7 +26,8 @@ export default function AssessmentPage() {
 function AssessmentContent() {
   const profile = useHouseholdStore(state => state.profile);
   const records = useLocalRecordsStore();
-  const guided = records.data.guidedAssessment ?? emptyGuidedAssessment();
+  const savedGuided = records.data.guidedAssessment ?? emptyGuidedAssessment();
+  const guided = records.simpleRecovery ? { ...savedGuided, mode: "simple" as const } : savedGuided;
   const updateGuided = (patch: Partial<GuidedAssessment>) => {
     try {
       const current = useLocalRecordsStore.getState();
@@ -63,6 +64,8 @@ function AssessmentContent() {
       </>}
       {(saveError || records.error || records.progressWriteError) &&
         <p role="alert">{saveError || records.error || records.progressWriteError}</p>}
+      {guided.mode === "guided" && (saveError || records.error || records.progressWriteError) &&
+        <Button variant="outline" onClick={() => useLocalRecordsStore.setState({ simpleRecovery: true })}>Return to Simple without saving progress</Button>}
       {saveNotice && <p role="status">{saveNotice}</p>}
       {guided.mode === "simple" && <section aria-label="Assessment experience" className="space-y-2">
         <div role="group" aria-label="Choose assessment experience" className="flex flex-wrap gap-2">
