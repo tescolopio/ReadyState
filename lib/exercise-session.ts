@@ -47,6 +47,8 @@ interface SessionState {
   sampleId: string | null;
   draft: string;
   restored: boolean;
+  baselineNeedsReview: boolean;
+  generation: number;
   setDraft: (draft: string) => void;
   begin: (profile: HouseholdProfile, sampleId?: string) => void;
 }
@@ -56,8 +58,13 @@ export const useExerciseSession = create<SessionState>()((set) => ({
   sampleId: null,
   draft: "",
   restored: false,
+  baselineNeedsReview: false,
+  generation: 0,
   setDraft: draft => set({ draft }),
-  begin: (activeProfile, sampleId) => set({ activeProfile, sampleId: sampleId ?? null, restored: false }),
+  begin: (activeProfile, sampleId) => set(state => ({
+    activeProfile, sampleId: sampleId ?? null, restored: false, baselineNeedsReview: false,
+    generation: state.generation + 1,
+  })),
 }));
 
 /** Ends the exercise and forgets its masking ledger. */
@@ -67,10 +74,17 @@ export function resetExercise() {
   exerciseChat.clearError();
   sentSettings = undefined;
   usePrivacyStore.getState().clearMappings();
-  useExerciseSession.setState({ activeProfile: null, sampleId: null, draft: "", restored: false });
+  useExerciseSession.setState(state => ({
+    activeProfile: null, sampleId: null, draft: "", restored: false, baselineNeedsReview: false,
+    generation: state.generation + 1,
+  }));
   const records = useLocalRecordsStore.getState();
   if (records.data.activeExercise && !records.error) {
     try { records.commit({ ...records.data, activeExercise: null }); }
     catch { useLocalRecordsStore.setState({ error: "The exercise ended in memory, but its saved resume point could not be cleared. Check local storage before reloading." }); }
   }
+}
+
+export function isCurrentExerciseGeneration(generation: number) {
+  return useExerciseSession.getState().generation === generation;
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { unmaskSavedText } from "@/lib/local-records";
 import { openExercise, saveExerciseLocally } from "@/lib/saved-exercises";
 import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
 
@@ -57,7 +58,7 @@ export function LocalHistory() {
             <p className="font-semibold">{message.role === "user" ? "Participant" : "Model output (unverified)"}</p>
             <pre className="whitespace-pre-wrap break-words text-sm">{message.parts.map(part => {
               const text = part.type === "text" ? part.text : JSON.stringify(part.output, null, 2);
-              return text.replace(/\[[^\]]+\]/g, tag => record.privacy.entityMap[tag] ?? tag);
+              return unmaskSavedText(text, record.privacy.entityMap);
             }).join("\n")}</pre>
           </div>)}
           {record.draft && <p className="break-words text-sm">Unsent response draft: {record.draft}</p>}

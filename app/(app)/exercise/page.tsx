@@ -5,7 +5,7 @@ import type { DeepPartial } from "ai";
 import { AlertTriangle, Check, ClipboardCheck, Home, Loader2, Pause, Play, Plus, RotateCcw, Send, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 
 import previewJson from "@/data/fixtures/preview-exercise.json";
 import { AlwaysMaskCard } from "@/components/always-mask";
@@ -15,7 +15,9 @@ import { HouseholdSummary } from "@/components/household-summary";
 import { HouseholdWizard } from "@/components/household-wizard";
 import { OutgoingReviewPanel } from "@/components/outgoing-review";
 import { Button } from "@/components/ui/button";
-import { exerciseChat, resendLast, resetExercise, sendToExercise, useExerciseSession } from "@/lib/exercise-session";
+import {
+  exerciseChat, isCurrentExerciseGeneration, resendLast, resetExercise, sendToExercise, useExerciseSession,
+} from "@/lib/exercise-session";
 import { SCENARIOS, hasProfile, privateTerms, type HouseholdProfile } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { createApprover, editReview, prepareReview, type OutgoingReview } from "@/lib/outgoing-review";
@@ -65,6 +67,11 @@ interface LessonSource {
 }
 
 export default function ExercisePage() {
+  const generation = useExerciseSession(state => state.generation);
+  return <ExercisePageContent key={generation} generation={generation} />;
+}
+
+function ExercisePageContent({ generation }: { generation: number }) {
   const router = useRouter();
   const input = useExerciseSession(state => state.draft);
   const setInput = useExerciseSession(state => state.setDraft);
@@ -73,7 +80,7 @@ export default function ExercisePage() {
   // Subscribe so unmasked output re-renders whenever the ledger changes.
   const entityMap = usePrivacyStore((state) => state.entityMap);
   const alwaysMaskList = usePrivacyStore((state) => state.alwaysMask);
-  const { activeProfile, sampleId: activeSampleId } = useExerciseSession();
+  const { activeProfile, sampleId: activeSampleId, baselineNeedsReview } = useExerciseSession();
 
   const ttx = deriveTtxState(messages);
   const busy = status === "submitted" || status === "streaming";
@@ -102,6 +109,8 @@ export default function ExercisePage() {
   const [review, setReview] = useState<OutgoingReview | null>(null);
   const [reviewNotice, setReviewNotice] = useState<string>();
   const [reviewBlocked, setReviewBlocked] = useState<string[]>();
+  const reviewGeneration = useRef(generation);
+  const baselineReviewGeneration = useRef<number | null>(null);
 
   // The household's names and medication names are always masked, even in typed responses.
   const alwaysMask = (profile?: HouseholdProfile) => [
@@ -123,11 +132,12 @@ export default function ExercisePage() {
     }),
   );
 
-  const openReview = (next: OutgoingReview, notice?: string) => {
+  const openReview = useCallback((next: OutgoingReview, notice?: string) => {
+    reviewGeneration.current = generation;
     setReview(next);
     setReviewNotice(notice);
     setReviewBlocked(undefined);
-  };
+  }, [generation]);
   const submitText = (raw: string) => {
     const text = raw.trim();
     if (!text || inputLocked || review) return;
@@ -137,10 +147,12 @@ export default function ExercisePage() {
     event.preventDefault();
     submitText(input);
   };
-  const reviewBaseline = (profile: HouseholdProfile, sampleId?: string) => {
+  const reviewBaseline = useCallback((profile: HouseholdProfile, sampleId?: string) => {
     // Only the household part is masked; the official guidance is public text.
-    openReview(prepareReview("baseline", (mask) => engineBaseline(profile, mask), ledger(), alwaysMask(profile), { profile, sampleId }));
-  };
+    const privacy = usePrivacyStore.getState();
+    openReview(prepareReview("baseline", (mask) => engineBaseline(profile, mask), privacy.entityMap,
+      [...privacy.alwaysMask, ...privateTerms(profile)], { profile, sampleId }));
+  }, [openReview]);
   const startWithHousehold = (profile: HouseholdProfile, sampleId?: string) => {
     if (inputLocked || review) return;
     setWizardOpen(false);
@@ -148,6 +160,12 @@ export default function ExercisePage() {
   };
   const sendReview = () => {
     if (!review || exerciseBusy()) return;
+    if (!isCurrentExerciseGeneration(reviewGeneration.current)) {
+      setReview(null);
+      setReviewNotice(undefined);
+      setReviewBlocked(undefined);
+      return;
+    }
     const result = approve(review);
     if (result.status === "sent" || result.status === "duplicate") setReview(null);
     else if (result.status === "blocked") setReviewBlocked(result.problems);
@@ -170,6 +188,13 @@ export default function ExercisePage() {
     if (exerciseBusy() || review) return;
     void resendLast();
   };
+
+  useEffect(() => {
+    if (!baselineNeedsReview || !activeProfile || baselineReviewGeneration.current === generation) return;
+    baselineReviewGeneration.current = generation;
+    reviewBaseline(activeProfile, activeSampleId ?? undefined);
+    useExerciseSession.setState({ baselineNeedsReview: false });
+  }, [activeProfile, activeSampleId, baselineNeedsReview, generation, reviewBaseline]);
 
   useEffect(() => {
     if (preview && exerciseChat.messages.length === 0) {
@@ -266,7 +291,7 @@ export default function ExercisePage() {
         {messages.length === 0 &&
           !review &&
           (wizardOpen ? (
-            <HouseholdWizard onStart={(profile) => startWithHousehold(profile)} onClose={() => setWizardOpen(false)} />
+            <HouseholdWizard key={generation} onStart={(profile) => startWithHousehold(profile)} onClose={() => setWizardOpen(false)} />
           ) : (
             <StartPanel
               sample={sample}

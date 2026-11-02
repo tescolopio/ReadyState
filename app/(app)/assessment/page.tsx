@@ -33,7 +33,11 @@ function AssessmentContent() {
       const current = useLocalRecordsStore.getState();
       if (current.error) throw new Error(current.error);
       current.commit({ ...current.data, progress: next });
-    } catch { useLocalRecordsStore.setState({ error: "Assessment progress could not be saved. Check browser storage; do not rely on resuming this step after reload." }); }
+    } catch {
+      useLocalRecordsStore.setState({
+        progressWriteError: "Assessment progress could not be saved. Check browser storage; do not rely on resuming this step after reload.",
+      });
+    }
   }, []);
   useEffect(() => progress(topic), [progress, topic]);
   const setTopic = updateTopic;
@@ -44,11 +48,12 @@ function AssessmentContent() {
         intro="Describe your household, review relevant topics and choose a few next steps. This assessment runs in your browser without AI, an API key or an exercise." />
       <HouseholdSaves onRestore={() => { setRevision(value => value + 1); setTopic(null); }} />
       <Link href="/settings#backups" className="inline-block font-semibold underline">Full encrypted backups, including saved API keys and history</Link>
-      {(saveError || records.error) && <p role="alert">{saveError || records.error}</p>}
+      {(saveError || records.error || records.progressWriteError) &&
+        <p role="alert">{saveError || records.error || records.progressWriteError}</p>}
       {saveNotice && <p role="status">{saveNotice}</p>}
       {topic !== null ? (
-        <HouseholdWizard key={`${revision}-${topic}`} purpose="assessment" initialStep={topic}
-          onStepChange={progress}
+        <HouseholdWizard key={revision} purpose="assessment" initialStep={topic}
+          onStepChange={setTopic}
           onStart={() => setTopic(null)} onClose={() => setTopic(null)} />
       ) : (
         <>

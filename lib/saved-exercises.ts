@@ -3,6 +3,17 @@ import { exerciseRecordSchema, savedMessages, type ExerciseRecord } from "@/lib/
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
 
+let activeExerciseRecoveryAttempted = false;
+
+export function recoverActiveExerciseOnce() {
+  if (activeExerciseRecoveryAttempted) return false;
+  activeExerciseRecoveryAttempted = true;
+  const records = useLocalRecordsStore.getState();
+  if (records.error || !records.data.activeExercise) return false;
+  openExercise(records.data.activeExercise);
+  return true;
+}
+
 export function captureExercise(): ExerciseRecord | null {
   if (exerciseChat.status === "submitted" || exerciseChat.status === "streaming") {
     throw new Error("Wait for the model request to finish or cancel it before saving/restoring.");
@@ -20,10 +31,17 @@ export function captureExercise(): ExerciseRecord | null {
 export function openExercise(record: ExerciseRecord) {
   if (exerciseChat.status === "submitted" || exerciseChat.status === "streaming") throw new Error("Cancel the active request before opening a saved exercise.");
   const parsed = exerciseRecordSchema.parse(record);
+  const hasCompletedOutput = parsed.messages.some(message => message.role === "assistant" &&
+    message.parts.some(part => part.type === "tool-generate_turn" || part.type === "tool-after_action_report"));
+  const includesBaseline = parsed.messages.some(message => message.role === "user" &&
+    message.parts.some(part => part.type === "text" &&
+      (part.text.startsWith("People:") || part.text.includes("\nOfficial guidance"))));
+  const incompleteBaseline = parsed.profile !== null && includesBaseline && !hasCompletedOutput;
   resetExercise();
-  exerciseChat.messages = parsed.messages;
+  exerciseChat.messages = incompleteBaseline ? [] : parsed.messages;
   useExerciseSession.setState({
     activeProfile: parsed.profile, sampleId: parsed.sampleId, draft: parsed.draft, restored: true,
+    baselineNeedsReview: incompleteBaseline,
   });
   usePrivacyStore.setState(parsed.privacy);
 }

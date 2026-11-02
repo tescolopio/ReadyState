@@ -4,11 +4,17 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AssessmentPage from "@/app/(app)/assessment/page";
+import HouseholdPage from "@/app/(app)/household/page";
 import { emptyProfile, setSupplyAnswer } from "@/lib/household";
 import { SAVES_KEY, createHouseholdSave, readNamedSaves, writeNamedSaves } from "@/lib/household-saves";
+import { emptyLocalRecords } from "@/lib/local-records";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePlanStore } from "@/store/usePlanStore";
 import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
 
 let container: HTMLDivElement;
 let root: Root;
@@ -99,6 +105,37 @@ describe("offline save/load controls", () => {
     expect(useHouseholdStore.getState().profile).toEqual(saved.household);
     expect(usePlanStore.getState().items).toEqual([]);
     expect(container.querySelector('[aria-label="Household setup"]')).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("resets a retained My household wizard after another route restores a different household", async () => {
+    const original = emptyProfile();
+    original.people = [{ id: "original-person", localName: "Original name", ageRange: "adult", needs: [] }];
+    const restored = emptyProfile();
+    restored.people = [{ id: "restored-person", localName: "Restored name", ageRange: "adult", needs: [] }];
+    useHouseholdStore.getState().setProfile(original);
+    useLocalRecordsStore.setState({ data: { ...emptyLocalRecords(), progress: null }, error: null });
+    await act(async () => root.render(<><AssessmentPage /><HouseholdPage /></>));
+    await click("Edit household");
+    const nameLabel = "Person 1 name (optional, this device only)";
+    const staleInput = [...container.querySelectorAll("input")].find(input => input.labels?.[0]?.textContent === nameLabel)!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(staleInput, "Unsaved stale edit");
+      staleInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await importJson(JSON.stringify(createHouseholdSave(restored, [])));
+    await click("Replace household and plan");
+    expect(useHouseholdStore.getState().profile.people[0]).toMatchObject({ id: "restored-person", localName: "Restored name" });
+    const restoredInput = [...container.querySelectorAll("input")].find(input => input.labels?.[0]?.textContent === nameLabel)!;
+    expect(restoredInput.value).toBe("Restored name");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(restoredInput, "Edited restored name");
+      restoredInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(useHouseholdStore.getState().profile.people).toEqual([
+      expect.objectContaining({ id: "restored-person", localName: "Edited restored name" }),
+    ]);
     expect(fetch).not.toHaveBeenCalled();
   });
 

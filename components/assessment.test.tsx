@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, Activity } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AssessmentPage from "@/app/(app)/assessment/page";
 import PlanPage from "@/app/(app)/plan/page";
 import { emptyProfile } from "@/lib/household";
+import { captureFullBackup } from "@/lib/full-backup-state";
+import { createAssessmentRecord, RECORDS_KEY } from "@/lib/local-records";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePlanStore } from "@/store/usePlanStore";
 import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
@@ -59,6 +61,36 @@ describe("offline assessment experience", () => {
     await act(async () => root.render(<AssessmentPage />));
     expect(container.querySelector('[aria-label="Household setup"] h2')?.textContent).toBe("Home");
     expect(useHouseholdStore.getState().profile.people).toHaveLength(1);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps the selected topic when a retained Assessment route is hidden and revisited", async () => {
+    await act(async () => root.render(<Activity mode="visible"><AssessmentPage /></Activity>));
+    await click("Pets");
+    await click("Home");
+    expect(useLocalRecordsStore.getState().data.progress).toBe(2);
+    await act(async () => root.render(<Activity mode="hidden"><AssessmentPage /></Activity>));
+    await act(async () => root.render(<Activity mode="visible"><AssessmentPage /></Activity>));
+    expect(useLocalRecordsStore.getState().data.progress).toBe(2);
+    expect(container.querySelector('[aria-label="Household setup"] h2')?.textContent).toBe("Home");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps a failed progress write local so valid history can still be backed up", async () => {
+    const records = useLocalRecordsStore.getState();
+    records.commit({ ...records.data, assessments: [createAssessmentRecord(useHouseholdStore.getState().profile)] });
+    const original = Storage.prototype.setItem;
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key, value) {
+      if (key === RECORDS_KEY) throw new DOMException("Quota", "QuotaExceededError");
+      original.call(this, key, value);
+    });
+
+    await act(async () => root.render(<AssessmentPage />));
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Assessment progress could not be saved");
+    expect(useLocalRecordsStore.getState().error).toBeNull();
+    expect(useLocalRecordsStore.getState().progressWriteError).toContain("Assessment progress could not be saved");
+    setItem.mockRestore();
+    expect(captureFullBackup(localStorage).records.assessments).toHaveLength(1);
     expect(fetch).not.toHaveBeenCalled();
   });
 
