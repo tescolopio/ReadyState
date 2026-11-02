@@ -161,7 +161,7 @@ describe("dated local records and safe exercise recovery", () => {
     expect(record.report).toContain("Source:");
   });
 
-  it("backs up current state separately at the full historical-record capacity", () => {
+  it("refuses overflow without mutations and preserves the 1,000-report boundary through encrypted restore", async () => {
     const savedAt = new Date().toISOString();
     const profile = useHouseholdStore.getState().profile;
     const assessment = createAssessmentRecord(profile);
@@ -169,7 +169,7 @@ describe("dated local records and safe exercise recovery", () => {
       ...assessment, id: "restored-current-assessment", report: "Restored historical assessment",
     });
     const assessments = Array.from({ length: 1000 }, (_, index) =>
-      assessmentRecordSchema.parse({ ...assessment, id: `assessment-${index}` }));
+      assessmentRecordSchema.parse({ ...assessment, report: `Historical report ${index}`, id: `assessment-${index}` }));
     const exercises = Array.from({ length: 1000 }, (_, index) => exerciseRecordSchema.parse({
       id: `exercise-${index}`, savedAt, profile: null, sampleId: null, draft: "", messages: [],
       privacy: { entityMap: {}, alwaysMask: [] },
@@ -181,10 +181,19 @@ describe("dated local records and safe exercise recovery", () => {
     useExerciseSession.getState().begin(profile);
     exerciseChat.messages = [{ id: "active", role: "user", parts: [{ type: "text", text: "Synthetic active exercise" }] }];
 
+    const beforeStorage = { ...localStorage };
+    const beforeRecords = useLocalRecordsStore.getState().data;
+    expect(() => captureFullBackup(localStorage)).toThrow("1,000-report history limit");
+    expect({ ...localStorage }).toEqual(beforeStorage);
+    expect(useLocalRecordsStore.getState().data).toEqual(beforeRecords);
+    expect(beforeRecords.assessments[0].id).toBe("assessment-0");
+    useLocalRecordsStore.setState({
+      data: { ...beforeRecords, assessments: assessments.slice(0, 999) },
+    });
     const saved = captureFullBackup(localStorage);
     expect(saved.records.assessments).toHaveLength(1000);
     expect(saved.records.assessments).toContainEqual(restoredCurrentAssessment);
-    expect(saved.records.assessments.some(record => record.id === "assessment-0")).toBe(false);
+    expect(saved.records.assessments.some(record => record.id === "assessment-0")).toBe(true);
     expect(saved.records.exercises).toHaveLength(1000);
     expect(saved.records.currentAssessment).not.toBeNull();
     expect(saved.records.currentAssessment?.id).not.toBe(restoredCurrentAssessment.id);
@@ -192,10 +201,18 @@ describe("dated local records and safe exercise recovery", () => {
     expect(saved.records.activeExercise?.messages).toHaveLength(1);
     expect(fullBackupSchema.parse(saved)).toEqual(saved);
 
-    useLocalRecordsStore.setState({ data: saved.records, error: null });
+    const decrypted = await decryptFullBackup(await encryptFullBackup(saved, password), password);
+    restoreFullBackup(localStorage, decrypted);
+    useLocalRecordsStore.getState().reload();
+    expect(useLocalRecordsStore.getState().data.assessments).toEqual(saved.records.assessments);
+    expect(useLocalRecordsStore.getState().data.currentAssessment).toEqual(saved.records.currentAssessment);
+    expect(() => captureFullBackup(localStorage)).toThrow("1,000-report history limit");
+    expect(useLocalRecordsStore.getState().data.assessments).toEqual(saved.records.assessments);
+    // At capacity, an already-managed current report does not consume another slot.
+    useLocalRecordsStore.setState({ data: { ...saved.records, currentAssessment: saved.records.assessments[0] } });
     const recaptured = captureFullBackup(localStorage);
+    expect(recaptured.records.assessments).toHaveLength(1000);
     expect(recaptured.records.assessments).toContainEqual(restoredCurrentAssessment);
-    expect(recaptured.records.currentAssessment?.id).not.toBe(saved.records.currentAssessment?.id);
   });
 
   it("keeps exercise content/drafts/mappings, not metadata eval captures or retry settings; restoration cannot resend approval", () => {

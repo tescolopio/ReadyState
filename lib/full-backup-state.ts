@@ -20,8 +20,11 @@ export function captureFullBackup(storage: Storage): FullBackup {
   const previousCurrentAssessment = records.data.currentAssessment;
   const assessments = previousCurrentAssessment
     ? [...records.data.assessments.filter(record => record.id !== previousCurrentAssessment.id),
-      previousCurrentAssessment].slice(-1000)
+      previousCurrentAssessment]
     : records.data.assessments;
+  if (assessments.length > 1000) {
+    throw new Error("Full backup would exceed the 1,000-report history limit. No data was changed. Preserve an earlier backup before explicitly deleting an unneeded report in Journal.");
+  }
   const privacy = usePrivacyStore.getState();
   return fullBackupSchema.parse({
     format: "readystate-full-data", version: 1, savedAt: new Date().toISOString(),
