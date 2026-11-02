@@ -243,11 +243,35 @@ describe("dated local records and safe exercise recovery", () => {
       messages: [],
       privacy: { entityMap: { "[Person 1]": "Synthetic earlier name" }, alwaysMask: ["Earlier mask"] },
     });
+
     usePrivacyStore.setState({ entityMap: { "[Person 1]": "Synthetic current name" },
       alwaysMask: ["Newer mask", "Earlier mask"] });
     openExercise(saved);
     expect(usePrivacyStore.getState().entityMap).toEqual(saved.privacy.entityMap);
     expect(usePrivacyStore.getState().alwaysMask).toEqual(["Newer mask", "Earlier mask"]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps recoverable resume-point write errors separate from unreadable records", () => {
+    useExerciseSession.getState().begin(useHouseholdStore.getState().profile);
+    saveExerciseLocally();
+    const stored = localStorage.getItem(RECORDS_KEY);
+    const original = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function(this: Storage, key, value) {
+      if (key === RECORDS_KEY) throw new DOMException("Full", "QuotaExceededError");
+      return original.call(this, key, value);
+    });
+    resetExercise();
+    expect(useLocalRecordsStore.getState().error).toBeNull();
+    expect(useLocalRecordsStore.getState().resumePointWriteError).toContain("could not be cleared");
+    expect(useLocalRecordsStore.getState().data.activeExercise).toBeNull();
+    expect(localStorage.getItem(RECORDS_KEY)).toBe(stored);
+    expect(captureFullBackup(localStorage).records.activeExercise).toBeNull();
+    vi.restoreAllMocks();
+    const current = useLocalRecordsStore.getState();
+    current.commit({ ...current.data, progress: 2 });
+    expect(useLocalRecordsStore.getState().resumePointWriteError).toBeNull();
+    expect(JSON.parse(localStorage.getItem(RECORDS_KEY)!).activeExercise).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   });
 

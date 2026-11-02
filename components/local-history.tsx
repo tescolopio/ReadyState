@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { unmaskSavedText } from "@/lib/local-records";
 import { openExercise, saveExerciseLocally } from "@/lib/saved-exercises";
+import { OMITTED_IMPROVEMENT_NOTICE } from "@/lib/ttx";
 import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
 
 export function LocalHistory() {
@@ -70,6 +71,8 @@ export function LocalHistory() {
           <p className="my-2 text-sm">Historical model-generated material is not verified emergency advice. Opening replaces the current tab exercise, not household answers or actions. Save the current exercise first if needed.</p>
           {record.messages.map(message => <div key={message.id} className="my-3">
             <p className="font-semibold">{message.role === "user" ? "Participant" : "Model output (unverified)"}</p>
+            {message.metadata?.debriefChecks?.omittedImprovement && <p className="text-sm">{OMITTED_IMPROVEMENT_NOTICE}</p>}
+            {message.metadata?.debriefChecks?.passedImplementedChecks === false && <p className="text-sm">This saved debrief did not pass all implemented checks. It is not verified emergency advice.</p>}
             <pre className="whitespace-pre-wrap break-words text-sm">{message.parts.map(part => {
               const text = part.type === "text" ? part.text : JSON.stringify(part.output, null, 2);
               return unmaskSavedText(text, record.privacy.entityMap);

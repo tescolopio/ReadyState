@@ -84,7 +84,12 @@ export function resetExercise() {
   const records = useLocalRecordsStore.getState();
   if (records.data.activeExercise && !records.error) {
     try { records.commit({ ...records.data, activeExercise: null }); }
-    catch { useLocalRecordsStore.setState({ error: "The exercise ended in memory, but its saved resume point could not be cleared. Check local storage before reloading." }); }
+    catch {
+      useLocalRecordsStore.setState({
+        data: { ...records.data, activeExercise: null },
+        resumePointWriteError: "The exercise ended in memory, but its saved resume point could not be cleared. Check local storage before reloading.",
+      });
+    }
   }
 }
 
