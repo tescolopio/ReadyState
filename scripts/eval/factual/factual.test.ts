@@ -646,6 +646,11 @@ describe("the judge stays eval-only", () => {
     expect(files.filter((file) => IMPORTS_EVAL.test(readFileSync(file, "utf8"))).map((file) => path.relative(repo, file))).toEqual([]);
   });
 
+  it("keeps the frozen historical Alex baseline out of app, server and shared runtime code", () => {
+    const runtime = sources(repo).filter(file => !/\.(test|spec)\.[cm]?[jt]sx?$/.test(file));
+    expect(runtime.filter(file => readFileSync(file, "utf8").includes("alex-replay-turns")).map(file => path.relative(repo, file))).toEqual([]);
+  });
+
   it("catches static, dynamic and require imports", () => {
     expect(IMPORTS_EVAL.test('import { judgeBatch } from "@/scripts/eval/factual/judge";')).toBe(true);
     expect(IMPORTS_EVAL.test('const judge = await import("@/scripts/eval/factual/judge");')).toBe(true);

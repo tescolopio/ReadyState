@@ -138,6 +138,32 @@ describe("offline assessment experience", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("keeps earlier chosen actions understandable and unchanged when their supporting answer is withheld or corrected", async () => {
+    await act(async () => root.render(<AssessmentPage />));
+    await click("adult");
+    await click("Supplies");
+    await answer("Smoke detectors", "absent");
+    await answer("Food (days): answer status", "unknown");
+    await click("See assessment");
+    const save = container.querySelector<HTMLButtonElement>('[aria-label="Confirmed gaps"] button')!;
+    await act(async () => save.click());
+    const original = { ...usePlanStore.getState().items[0] };
+    for (const value of ["withheld", "present"]) {
+      await click("Supplies");
+      await answer("Smoke detectors", value);
+      await click("See assessment");
+      expect(container.querySelector('[aria-label="Confirmed gaps"]')?.textContent).not.toContain("No smoke detectors");
+      await act(async () => root.render(<PlanPage />));
+      expect(container.textContent).toContain(original.text);
+      expect(container.textContent).toContain("not a live list of deficiencies");
+      expect(container.textContent).toContain("Changing answers does not rewrite, remove or complete an action");
+      expect(container.querySelector("time")?.dateTime).toBe(original.addedAt);
+      expect(usePlanStore.getState().items).toEqual([original]);
+      await act(async () => root.render(<AssessmentPage />));
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("removes health-answer provenance when the need or person is removed", async () => {
     await act(async () => root.render(<AssessmentPage />));
     await click("adult");

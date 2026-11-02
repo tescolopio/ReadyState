@@ -131,6 +131,12 @@ action can be saved to the shared plan, and duplicate action text is not added.
 There is no aggregate preparedness score. All existing content-review caveats
 still apply; this implementation does not certify draft rules.
 
+Saved actions retain their original wording, source, timestamp and chosen
+status when household answers change. The plan explicitly labels them as
+earlier choices, not live deficiencies, and links back to the current
+assessment. Updating a profile never silently deletes or completes a saved
+action; users decide whether to keep, complete or remove it.
+
 Outgoing briefings exclude unassessed findings and local answer-status metadata.
 They retain explicitly supported gaps and the existing masking/review boundary.
 Assessment results and plan saving require neither an API key nor a model call.

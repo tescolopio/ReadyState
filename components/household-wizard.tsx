@@ -214,7 +214,11 @@ export function InventoryCheck({ findings }: { findings: Finding[] }) {
       {!findings.some(finding => finding.category === category) && <p className="text-sm text-ink-3">None identified from recorded answers.</p>}
       <ul className="space-y-2">
         {findings.filter(finding => finding.category === category).map((finding, index) => {
-          const status = STATUS_LABELS[finding.status];
+          const status = finding.category === "planning"
+            ? { ...STATUS_LABELS.unknown, text: "Plan" }
+            : finding.category === "scenario" && finding.status === "unknown"
+              ? { ...STATUS_LABELS.unknown, text: "Consider" }
+              : STATUS_LABELS[finding.status];
           return (
             // Rules can share a finding id (one per person, several needs), so the position keeps keys unique.
             <li key={`${finding.id}-${index}`} className="flex gap-2 rounded-control border border-line p-2 text-sm">

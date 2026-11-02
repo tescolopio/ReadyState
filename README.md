@@ -39,7 +39,10 @@ Health needs and Supplies details later. Results distinguish confirmed gaps,
 unassessed answers, planning guidance, scenario concerns and recorded resources.
 Expand **Based on your answers** for the facts, rule and sources, and save useful
 actions to the shared **Action plan**. Return to update answers or mark actions
-in progress/done. **Practice with this household** is optional.
+in progress/done. Saved actions show their source/date and remain earlier
+choices, not live deficiencies: changing answers does not silently rewrite,
+remove or complete them. Review your current assessment before deciding which
+to keep or remove. **Practice with this household** is optional.
 
 Zero and **I don't have this** are explicit answers, not the same as unknown,
 skipped or **Prefer not to say**. Old unchecked items become unassessed, not

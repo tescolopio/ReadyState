@@ -40,6 +40,12 @@ export default function PlanPage() {
         title="Action plan"
         intro="Practical steps you chose to keep. Mark them as you go; finishing one is progress, not a guarantee."
       />
+      <p className="text-sm text-ink-2">
+        Saved actions reflect the answers or exercise at the time you chose them, not a live list of deficiencies.
+        Changing answers does not rewrite, remove or complete an action.{" "}
+        <Link href="/assessment" className="underline">Review your current assessment</Link>
+        {" "}and keep, complete or remove earlier actions as appropriate.
+      </p>
 
       <section aria-labelledby="plan-active" className="space-y-3">
         <h2 id="plan-active" className="text-lg font-semibold">
@@ -121,7 +127,9 @@ function PlanRow({ item }: { item: PlanItem }) {
           {item.kind && <span className="mr-2 rounded border border-line-strong px-1.5 py-0.5 text-xs font-semibold text-ink-2 no-underline">{item.kind === "plan" ? "Plan" : "Get"}</span>}
           {item.text}
         </p>
-        <p className="mt-1 text-sm text-ink-3">From {item.source}</p>
+        <p className="mt-1 text-sm text-ink-3">
+          From {item.source} · Saved <time dateTime={item.addedAt}>{item.addedAt.slice(0, 10)}</time>
+        </p>
       </div>
       <div className="flex items-center gap-2">
         <label htmlFor={selectId} className="sr-only">

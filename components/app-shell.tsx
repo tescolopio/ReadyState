@@ -48,7 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     pathname === href || pathname.startsWith(`${href}/`) || (also !== undefined && pathname === also);
 
   return (
-    <div className="flex min-h-screen bg-canvas">
+    <div data-app-shell className="flex min-h-screen bg-canvas">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface lg:flex">
         <div className="px-5 py-4">
           <Wordmark />
