@@ -32,6 +32,9 @@ for (const entry of ["launch.mjs", ...(process.platform === "win32" ? ["start.ps
 cpSync(path.join(root, "LICENSE"), path.join(target, "LICENSE"));
 cpSync(path.join(root, ".env.example"), path.join(target, "configuration.example"));
 cpSync(path.join(root, "docs", "deployment", "local-installation.md"), path.join(target, "INSTALL.md"));
+for (const entry of ["windows-quick-start.md", "windows-data-flow.svg"]) {
+  cpSync(path.join(root, "docs", "deployment", entry), path.join(target, entry));
+}
 cpSync(path.join(root, "docs", "deployment", "packaging-review.md"), path.join(target, "packaging-review.md"));
 cpSync(path.join(root, "docs", "deployment", "binary-components.md"), path.join(target, "binary-components.md"));
 const revision = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
