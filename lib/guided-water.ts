@@ -39,6 +39,8 @@ export function waterReviewKey(profile: HouseholdProfile): string {
     water: profile.supplies.waterGallons ?? null,
     answer: profile.answers?.["supplies.waterGallons"] ?? null,
     source: profile.home.water ?? null, power: profile.home.backupPower ?? null,
+    sourceAnswer: profile.answers?.["home.water"] ?? null,
+    powerAnswer: profile.answers?.["home.backupPower"] ?? null,
   });
 }
 export function waterTopicStatus(profile: HouseholdProfile, reviewed: string | null, started = false) {

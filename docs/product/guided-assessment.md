@@ -74,6 +74,10 @@ water shortfall findings also truncate duration so just-under-target values do
 not appear to meet the target. Extra counting/conversion and assumption text is
 optional help. Unanswered well-pump continuity names water source or backup power
 separately from the stored-water duration check.
+The daily estimate comes from the same unrounded shared fact as duration, not
+the one-decimal quantity used in existing action wording. Displayed approximations
+are not presented as an exact division equation. Home water-source and backup-power
+answer states also invalidate topic review, even when both old/new values are unknown.
 
 These are ordinary application changes, included by the existing native package
 builds. See [local installation and updates](../deployment/local-installation.md);

@@ -28,6 +28,11 @@ describe("guided water helper and topic state", () => {
     const reviewed = waterReviewKey(adult);
     expect(waterTopicStatus({ ...adult, people: [{ ...adult.people[0], ageRange: "infant" }] }, reviewed)).toBe("Needs review");
     expect(waterTopicStatus({ ...adult, people: [{ ...adult.people[0], needs: [{ kind: "pregnant" }] }] }, reviewed)).toBe("Needs review");
+    for (const field of ["home.water", "home.backupPower"]) {
+      const unknownHome = withAnswer(adult, field, "unknown");
+      const withheldHome = withAnswer(unknownHome, field, "withheld");
+      expect(waterTopicStatus(withheldHome, waterReviewKey(unknownHome))).toBe("Needs review");
+    }
   });
 
   it("reads prior backup/history records and preserves new guided state in the shared full backup payload", () => {

@@ -40,6 +40,18 @@ async function start() {
   await click("Guided assessment"); await click("Explore water supplies");
 }
 describe("one household across Simple and Guided", () => {
+  it("explains duration using the same unrounded daily pet allowance as the engine", async () => {
+    const profile = { ...useHouseholdStore.getState().profile,
+      pets: [{ id: "dog", kind: "dog" as const, weightLb: 10 }],
+      supplies: { have: [], waterGallons: 3.3 } };
+    useHouseholdStore.getState().setProfile(profile);
+    await start(); await click("Keep current answer and see findings");
+    const explanation = container.querySelector('[aria-label="Water calculation explained"]')!.textContent!;
+    expect(explanation).toContain("Daily estimate: about 1.078 US gallons");
+    expect(explanation).toContain("3.3 stored US gallons provides about 3.06 days using the unrounded daily estimate");
+    expect(explanation).not.toContain("/ daily estimate =");
+    expect(assessInventory(profile, { scenario: false }).find(finding => finding.rule === "water")?.status).toBe("partial");
+  });
   it("keeps the wizard mounted and keyboard step focus when persisting navigation", async () => {
     await act(async () => root.render(<AssessmentPage />));
     await click("People");

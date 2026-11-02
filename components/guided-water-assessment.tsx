@@ -176,8 +176,8 @@ export function GuidedWaterAssessment({
             <h3 className="text-lg font-semibold">What this estimate uses</h3>
             <p>{profile.people.length} {profile.people.length === 1 ? "person" : "people"} recorded. Guidance: {guidanceValue("water.supply", "minimumDays")}-day minimum, {guidanceValue("water.supply", "goalDays")}-day goal.</p>
             {profile.people.length === 0 ? <p>No person count is recorded, so days of supply cannot be calculated. Add household members when you know who to include; no names are required.</p>
-              : <p>Daily estimate: {waterDisplay(Number(facts["water.gallonsPerDay"]))} US gallons.
-                {typeof facts["water.days"] === "number" && numeric !== undefined ? ` ${waterDisplay(numeric)} stored US gallons / daily estimate = about ${waterDisplay(facts["water.days"], 2)} days.` : " Stored quantity is unassessed; duration is unknown."}</p>}
+              : <p>Daily estimate: about {waterDisplay(Number(facts["water.gallonsPerDayExact"]))} US gallons.
+                {typeof facts["water.days"] === "number" && numeric !== undefined ? ` ${waterDisplay(numeric)} stored US gallons provides about ${waterDisplay(facts["water.days"], 2)} days using the unrounded daily estimate.` : " Stored quantity is unassessed; duration is unknown."}</p>}
             <p>Displays round down; duration and findings use the unrounded daily need and stored total.</p>
             {facts["pets.weightsMissing"] && <p>Some dog/cat weights are missing; their water is not included.</p>}
             <details>
