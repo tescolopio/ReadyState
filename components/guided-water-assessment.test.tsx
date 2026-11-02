@@ -44,6 +44,46 @@ async function resume() {
   await click("Guided assessment"); await click("Resume guided session");
 }
 describe("one household across Simple and Guided", () => {
+  it("does not mistake saved stage progress for a saved household answer", async () => {
+    await start(); await click("Enter an amount");
+    const stored = localStorage.getItem("readystate-household");
+    const original = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function(this: Storage, key, value) {
+      if (key === "readystate-household") throw new DOMException("Full", "QuotaExceededError");
+      return original.call(this, key, value);
+    });
+    await fill("Stored drinking water (US gallons)", "5");
+    expect(container.textContent).toContain("Household answers could not be saved");
+    await click("Explain this answer");
+    expect(container.querySelector('[aria-label="Water question"]')).not.toBeNull();
+    expect(container.textContent).toContain("Household answers could not be saved");
+    await click("Save and exit");
+    expect(container.querySelector('[aria-label="Guided assessment"]')).not.toBeNull();
+    expect(localStorage.getItem("readystate-household")).toBe(stored);
+    vi.restoreAllMocks();
+    await click("Retry saving household answers");
+    expect(JSON.parse(localStorage.getItem("readystate-household")!).state.profile.supplies.waterGallons).toBe(5);
+    expect(container.textContent).not.toContain("Household answers could not be saved");
+    await click("Explain this answer"); await click("Save and exit");
+    expect(container.querySelector('[aria-label="Guided assessment"]')).toBeNull();
+  });
+  it("surfaces focused household editor write failures and retries before continuing", async () => {
+    await act(async () => root.render(<AssessmentPage />));
+    await click("Guided assessment");
+    const original = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function(this: Storage, key, value) {
+      if (key === "readystate-household") throw new DOMException("Full", "QuotaExceededError");
+      return original.call(this, key, value);
+    });
+    await fill("Person 1 name (optional, this device only)", "Fictional unsaved name");
+    expect(container.textContent).toContain("Household answers could not be saved");
+    await click("Continue");
+    expect(container.textContent).toContain("Who is in your household?");
+    vi.restoreAllMocks();
+    await click("Continue");
+    expect(container.textContent).toContain("Are there pets to include?");
+    expect(JSON.parse(localStorage.getItem("readystate-household")!).state.profile.people[0].localName).toBe("Fictional unsaved name");
+  });
   it("can leave Guided without saving when progress writes fail", async () => {
     await start();
     const stored = localStorage.getItem("readystate-local-records");

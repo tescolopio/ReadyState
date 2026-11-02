@@ -68,6 +68,13 @@ The amount/count branch shows only its controls, with a way to choose a differen
 answer method. Findings explain; the next stage offers saving actions separately.
 Save and exit restores Simple and normal app navigation. Ordinary local save
 errors remain visible and do not claim a successful exit.
+Household-answer writes and presentation-progress writes are checked separately.
+Stage changes and ordinary exits retry the current household write first;
+a saved stage never stands in for a saved answer. Failed household edits remain
+explicitly tab-only until saving succeeds. A retry control and Settings link
+remain available. If progress storage fails, a nonpersisted return to Simple
+restores navigation without claiming progress was saved; later unrelated record
+writes do not reopen Guided.
 
 Mode, screen, helper branch, container-count draft and reviewed-answer
 fingerprint persist in local records and full encrypted backups. Applying

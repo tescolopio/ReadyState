@@ -384,13 +384,14 @@ function HouseholdWizardForm({
   const setProfile = useHouseholdStore((state) => state.setProfile);
   const clearProfile = useHouseholdStore((state) => state.clearProfile);
   const [profile, setDraft] = useState<HouseholdProfile>(saved);
+  const [saveError, setSaveError] = useState("");
   const [step, updateStep] = useState(initialStep);
   const setStep = (next: number) => { updateStep(next); onStepChange?.(next); };
 
-  // Save as the person goes, so an interruption never loses their answers.
   const update = (next: HouseholdProfile) => {
     setDraft(next);
-    setProfile(next);
+    try { setProfile(next); setSaveError(""); }
+    catch { setSaveError("Household answers could not be saved. Edits remain in this tab only; check browser storage and retry before leaving or reloading."); }
   };
   const go = (delta: number) => setStep(Math.min(STEPS.length - 1, Math.max(0, step + delta)));
 
@@ -476,6 +477,10 @@ function HouseholdWizardForm({
 
   return (
     <section aria-label="Household setup" className="space-y-4 rounded-panel border border-line bg-surface p-4">
+      {saveError && <div className="space-y-2">
+        <p role="alert" className="text-sm text-error">{saveError}</p>
+        <Button variant="outline" onClick={() => update(profile)}>Retry saving household answers</Button>
+      </div>}
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="flex items-center gap-2 text-sm font-semibold text-action">
@@ -924,7 +929,7 @@ function HouseholdWizardForm({
             </pre>
           </div>}
           <p className="text-xs text-ink-3">
-            Your profile is saved in this browser only.{" "}
+            {saveError ? "Your latest edits are not saved." : "Your profile is saved in this browser only."}{" "}
             <button
               type="button"
               className="underline hover:text-ink"

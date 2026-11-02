@@ -33,6 +33,7 @@ export function GuidedWaterAssessment({
 }) {
   const profile = useHouseholdStore(store => store.profile);
   const [error, setError] = useState("");
+  const [householdError, setHouseholdError] = useState("");
   const [completeCount, setCompleteCount] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [amountDraft, setAmountDraft] = useState<string | null>(null);
@@ -49,7 +50,18 @@ export function GuidedWaterAssessment({
   const count = countedWater(state.counts);
   const numeric = profile.supplies.waterGallons;
   const answer = profile.answers?.["supplies.waterGallons"];
+  const persistHousehold = (next = useHouseholdStore.getState().profile) => {
+    try {
+      useHouseholdStore.getState().setProfile(next);
+      setHouseholdError("");
+      return true;
+    } catch {
+      setHouseholdError("Household answers could not be saved. Edits remain in this tab only; retry saving before continuing or exiting. Reloading may lose these edits.");
+      return false;
+    }
+  };
   const show = (screen: GuidedAssessment["screen"]) => {
+    if (!persistHousehold()) return;
     if (update({ screen, sessionStarted: true, ...(screen === "water" ? { waterStarted: true } : {}) })) {
       setCompleteCount(false); setAmountDraft(null); setPeopleOpen(false); setError("");
       setTimeout(() => heading.current?.focus(), 0);
@@ -60,14 +72,10 @@ export function GuidedWaterAssessment({
     if (gallons !== undefined && (!Number.isFinite(gallons) || gallons < 0)) {
       setError("Enter a nonnegative amount, or leave this unknown."); return false;
     }
-    try {
-      // Read the latest household so editing here never replaces unrelated answers.
-      const current = useHouseholdStore.getState();
-      current.setProfile(withAnswer({
-        ...current.profile, supplies: { ...current.profile.supplies, waterGallons: gallons },
-      }, "supplies.waterGallons", unassessed));
-      return true;
-    } catch { setError("This answer could not be saved to browser storage. Check storage before leaving or reloading."); return false; }
+    const current = useHouseholdStore.getState().profile;
+    return persistHousehold(withAnswer({
+      ...current, supplies: { ...current.supplies, waterGallons: gallons },
+    }, "supplies.waterGallons", unassessed));
   };
   const unsure = (answer: UnassessedAnswer) => {
     if (save(undefined, answer)) show("results");
@@ -76,7 +84,10 @@ export function GuidedWaterAssessment({
     ? answer ? UNASSESSED_ANSWERS[answer] : "Not answered"
     : `${numeric > 0 && numeric < 0.001 ? "less than 0.001" : waterDisplay(numeric)} US gallons${numeric === 0 ? " (explicitly none)" : ""}`;
   const exit = () => {
-    if (update({ screen, sessionStarted: true })) openSimple();
+    if (persistHousehold() && update({ screen, sessionStarted: true })) openSimple();
+  };
+  const leaveForSimple = (topic?: number | null) => {
+    if (persistHousehold()) openSimple(topic);
   };
   if (choosingResume) return (
     <section aria-label="Guided assessment" className="space-y-4">
@@ -84,7 +95,8 @@ export function GuidedWaterAssessment({
       <p>Your household answers and draft counts are saved. Resume where you left off, or review from the beginning without clearing anything.</p>
       <Button onClick={() => { setChoosingResume(false); setTimeout(() => heading.current?.focus(), 0); }}>Resume guided session</Button>
       <Button variant="outline" onClick={() => { if (update({ screen: "people", sessionStarted: true })) setChoosingResume(false); }}>Start from beginning</Button>
-      <Button variant="outline" onClick={() => openSimple()}>Return to Simple</Button>
+      <Button variant="outline" onClick={() => leaveForSimple()}>Return to Simple</Button>
+      {householdError && <p role="alert">{householdError}</p>}
     </section>
   );
   return (
@@ -113,7 +125,7 @@ export function GuidedWaterAssessment({
         <p>Save a practical action if one helps. You can finish without choosing one; saved actions keep the answers they were based on.</p>
         <InventoryCheck findings={waterFindings} />
         <Button variant="outline" onClick={() => show("results")}>Back</Button>
-        <Button onClick={() => { if (update({ reviewedWater: waterReviewKey(profile) })) show("complete"); }}>Finish water review</Button>
+        <Button onClick={() => { if (persistHousehold() && update({ reviewedWater: waterReviewKey(profile) })) show("complete"); }}>Finish water review</Button>
       </> : <>
         <Button variant="outline" onClick={() => show(screen === "water" ? "pets" : "water")}>Back</Button>
         {screen === "water" ? <section aria-label="Water question" className="space-y-4 rounded-panel border border-line bg-surface p-4">
@@ -142,7 +154,7 @@ export function GuidedWaterAssessment({
                 setAmountDraft(raw);
                 save(raw.trim() === "" ? undefined : Number(raw), raw.trim() === "" ? "skipped" : undefined);
               }} />
-            <p className="text-sm">Saved as you edit. Blank means skipped, not zero.</p>
+            <p className="text-sm">{householdError ? "Not saved. Retry before leaving." : "Saved as you edit."} Blank means skipped, not zero.</p>
             <Button onClick={() => show("results")}>Explain this answer</Button>
           </div>}
           {state.entry === "count" && <section aria-label="Water container helper" className="space-y-3">
@@ -199,7 +211,7 @@ export function GuidedWaterAssessment({
             <p>Needs vary with heat, health and other circumstances. This is general draft guidance, not a certification or a guarantee. Review the sources below.</p>
             </details>
             <Button variant="outline" onClick={() => setPeopleOpen(value => !value)}>{peopleOpen ? "Close people editor" : "Add or edit people"}</Button>
-            {profile.pets.length > 0 && <Button variant="outline" className="max-w-full whitespace-normal" onClick={() => openSimple(1)}>Edit pet details in Simple</Button>}
+            {profile.pets.length > 0 && <Button variant="outline" className="max-w-full whitespace-normal" onClick={() => leaveForSimple(1)}>Edit pet details in Simple</Button>}
           </section>
           {peopleOpen && <HouseholdWizard purpose="assessment" initialStep={0} onStart={() => setPeopleOpen(false)} onClose={() => setPeopleOpen(false)} />}
           <InventoryCheck findings={waterFindings} showActions={false} />
@@ -208,12 +220,17 @@ export function GuidedWaterAssessment({
             <ul className="my-2 list-inside list-disc text-sm">
               {findings.filter(finding => finding.category === "gap" && finding.area !== "Water").map((finding, index) => <li key={`${finding.id}-${index}`}>{finding.finding}</li>)}
             </ul>
-            <Button className="max-w-full whitespace-normal" variant="outline" onClick={() => openSimple(null)}>See all findings and evidence in Simple</Button>
+            <Button className="max-w-full whitespace-normal" variant="outline" onClick={() => leaveForSimple(null)}>See all findings and evidence in Simple</Button>
           </details>}
           <Button onClick={() => show("actions")}>Continue to next steps</Button>
         </>}
       </>}
       {error && <p role="alert" className="text-sm text-error">{error}</p>}
+      {householdError && <div className="space-y-2">
+        <p role="alert" className="text-sm text-error">{householdError}</p>
+        <Button variant="outline" onClick={() => persistHousehold()}>Retry saving household answers</Button>
+        <a className="block underline" href="/settings#backups">Open Settings to manage local backups and storage</a>
+      </div>}
     </section>
   );
 }
