@@ -43,6 +43,19 @@ async function resume() {
   await click("Guided assessment"); await click("Resume guided session");
 }
 describe("one household across Simple and Guided", () => {
+  it("preserves the Simple topic on ordinary exits and keeps unknown checks visible at next steps", async () => {
+    await act(async () => root.render(<AssessmentPage />));
+    await click("Supplies");
+    await click("Guided assessment");
+    await click("Continue"); await click("Continue"); await click("Not sure");
+    await click("Continue to next steps");
+    const unassessed = container.querySelector('[aria-label="Unassessed answers"]')!.textContent!;
+    expect(unassessed).toContain("stored quantity is unanswered");
+    expect(unassessed).not.toContain("None identified");
+    await click("Save and exit");
+    expect(useLocalRecordsStore.getState().data.progress).toBe(4);
+    expect(container.querySelector('[aria-label="Household setup"]')?.textContent).toContain("Supplies");
+  });
   it("explains duration using the same unrounded daily pet allowance as the engine", async () => {
     const profile = { ...useHouseholdStore.getState().profile,
       pets: [{ id: "dog", kind: "dog" as const, weightLb: 10 }],

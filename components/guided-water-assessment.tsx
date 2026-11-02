@@ -29,7 +29,7 @@ export function GuidedWaterAssessment({
 }: {
   state: GuidedAssessment;
   update: (patch: Partial<GuidedAssessment>) => boolean;
-  openSimple: (topic: number | null) => void;
+  openSimple: (topic?: number | null) => void;
 }) {
   const profile = useHouseholdStore(store => store.profile);
   const [error, setError] = useState("");
@@ -76,7 +76,7 @@ export function GuidedWaterAssessment({
     ? answer ? UNASSESSED_ANSWERS[answer] : "Not answered"
     : `${numeric > 0 && numeric < 0.001 ? "less than 0.001" : waterDisplay(numeric)} US gallons${numeric === 0 ? " (explicitly none)" : ""}`;
   const exit = () => {
-    if (update({ screen, sessionStarted: true })) openSimple(null);
+    if (update({ screen, sessionStarted: true })) openSimple();
   };
   if (choosingResume) return (
     <section aria-label="Guided assessment" className="space-y-4">
@@ -84,7 +84,7 @@ export function GuidedWaterAssessment({
       <p>Your household answers and draft counts are saved. Resume where you left off, or review from the beginning without clearing anything.</p>
       <Button onClick={() => { setChoosingResume(false); setTimeout(() => heading.current?.focus(), 0); }}>Resume guided session</Button>
       <Button variant="outline" onClick={() => { if (update({ screen: "people", sessionStarted: true })) setChoosingResume(false); }}>Start from beginning</Button>
-      <Button variant="outline" onClick={() => openSimple(null)}>Return to Simple</Button>
+      <Button variant="outline" onClick={() => openSimple()}>Return to Simple</Button>
     </section>
   );
   return (
@@ -111,7 +111,7 @@ export function GuidedWaterAssessment({
         <Button variant="outline" onClick={() => show("actions")}>Back</Button>
       </> : screen === "actions" ? <>
         <p>Save a practical action if one helps. You can finish without choosing one; saved actions keep the answers they were based on.</p>
-        <InventoryCheck findings={waterFindings.filter(finding => finding.category !== "unassessed" && finding.status !== "ok")} />
+        <InventoryCheck findings={waterFindings} />
         <Button variant="outline" onClick={() => show("results")}>Back</Button>
         <Button onClick={() => { if (update({ reviewedWater: waterReviewKey(profile) })) show("complete"); }}>Finish water review</Button>
       </> : <>
