@@ -1,5 +1,45 @@
 # Local packaging review
 
+## Authorized tester pre-release (2026-11-02)
+
+The user requested: "Lets go ahead and commit, merge, build, and release the new
+version", then selected a **public Windows/Linux tester pre-release,
+`v0.1.0-preview.1`**, not a stable release. The subsequent instruction explicitly
+keeps release on hold until #33's backup data-loss defect is fixed, #34 is
+synchronized and reviewed, and #35's instructions and publication scope are
+corrected. Merge in dependency order only after final-revision reviews/checks
+clear, verify merged main CI, then verify the final packages before publishing.
+This is the separate release decision required by the historical records below;
+it does not retroactively clear historical artifacts.
+
+Scope is Windows x64 and Linux x64 tester archives only. No stable release,
+container publication, automatic updates, model evaluations/downloads, model
+calls or Vercel configuration changes are authorized by this decision. The
+existing Vercel integration may still deploy pushes automatically.
+
+Publication controls are reviewed separately from the #35 onboarding guide:
+
+- Normal PR/push runs upload manifest/checksum evidence only.
+- An explicit manual dispatch must opt in (default **false**), select
+  `v0.1.0-preview.1`, and supply the full reviewed main SHA. A non-main ref,
+  mismatched/moving revision or another tag fails before package assembly.
+- Each native archive is uploaded only after that platform's clean-source,
+  exclusion/notice, extracted-package, key-free startup and installer checks
+  succeed. A passing platform can upload while the other platform fails;
+  **both platforms must pass before publishing a release**.
+- These are public-downloadable workflow artifacts, not private staging.
+  Dispatch itself therefore requires the above review/CI clearance; do not
+  dispatch early merely to inspect release candidates.
+- The workflow has read-only repository permissions and cannot create tags or
+  releases. Maintainer verification and a separate explicit GitHub pre-release
+  operation remain required. Publish matching source, checksums and manifests
+  with the exact archives; do not substitute a generic main source link.
+
+No artifact upload or release is authorized until these gates clear. Human
+usability, physical-phone/Safari/Firefox coverage, independent clean-machine
+desktop testing and real-provider/debrief quality remain qualified, not inferred
+from package CI or browser interface inspection.
+
 ## Current image-processing scope
 
 The app has no Sharp or `next/image` consumer. A supported configuration now
@@ -9,7 +49,8 @@ Docker builds exclude native/WASM image processors; static SVG and disabled
 optimizer checks validate the intended behavior without deleting traced files.
 See [scope and historical component record](binary-components.md).
 Final-commit review and archive CI passed; PR #26 was merged as infrastructure
-only. Binary publishing stays disabled. Historical Sharp-containing artifacts
+only. Binary publishing stayed disabled at that stage; the narrowly authorized
+tester pre-release controls are described above. Historical Sharp-containing artifacts
 remain excluded from distribution. The record below identifies the merged-main
 builds and separates current obligations from those historical findings.
 
@@ -399,8 +440,9 @@ inside binary data and captured secret canaries anywhere in a file.
 
 ## Current gates still open
 
-1. Separate binary-publication/release authorization; #26 is merged, but uploads
-   remain disabled.
+1. The separate decision now authorizes only `v0.1.0-preview.1` as recorded above.
+   Final-revision review/CI clearance and explicit main-only dispatch remain
+   required before public archive uploads.
 2. Remaining runtime attribution/source/provenance obligations identified for
    the merged-main artifacts above, not removed Sharp components.
 3. Publish matching source and hashes together only with separate release
