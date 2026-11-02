@@ -6,6 +6,11 @@ const sha = "a".repeat(40);
 const otherSha = "b".repeat(40);
 const guard = resolve("scripts/local/authorize-preview.ps1");
 const shell = process.platform === "win32" ? "powershell.exe" : "pwsh";
+const probe = spawnSync(shell, ["-NoProfile", "-NonInteractive", "-Command", "exit 0"], { encoding: "utf8" });
+const unavailable = Boolean(probe.error && "code" in probe.error && probe.error.code === "ENOENT");
+if (probe.error && !unavailable) throw probe.error;
+if (!unavailable && probe.status !== 0) throw new Error(`PowerShell probe failed: ${probe.stderr}`);
+if (unavailable) console.warn("Skipping preview upload guard tests: PowerShell is not installed. Native package CI must run these with PowerShell.");
 const command = `
 function git {
   $global:LASTEXITCODE = 0
@@ -19,7 +24,7 @@ function git {
 & $env:TEST_GUARD
 `;
 
-describe("authorized preview upload scope", () => {
+describe.skipIf(unavailable)("authorized preview upload scope (requires PowerShell)", () => {
   it.each([
     { name: "exact reviewed live main", allowed: true },
     { name: "another branch", ref: "refs/heads/preview", allowed: false },
