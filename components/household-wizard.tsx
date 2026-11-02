@@ -339,24 +339,27 @@ export function HouseholdWizard({
   onClose,
   purpose = "exercise",
   initialStep = 0,
+  onStepChange,
 }: {
   onStart: (profile: HouseholdProfile) => void;
   onClose: () => void;
   purpose?: "exercise" | "assessment";
   initialStep?: number;
+  onStepChange?: (step: number) => void;
 }) {
   const saved = useHouseholdStore((state) => state.profile);
   const setProfile = useHouseholdStore((state) => state.setProfile);
   const clearProfile = useHouseholdStore((state) => state.clearProfile);
   const [profile, setDraft] = useState<HouseholdProfile>(saved);
-  const [step, setStep] = useState(initialStep);
+  const [step, updateStep] = useState(initialStep);
+  const setStep = (next: number) => { updateStep(next); onStepChange?.(next); };
 
   // Save as the person goes, so an interruption never loses their answers.
   const update = (next: HouseholdProfile) => {
     setDraft(next);
     setProfile(next);
   };
-  const go = (delta: number) => setStep((current) => Math.min(STEPS.length - 1, Math.max(0, current + delta)));
+  const go = (delta: number) => setStep(Math.min(STEPS.length - 1, Math.max(0, step + delta)));
 
   const current = STEPS[step];
   const preview = useMemo(

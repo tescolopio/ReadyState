@@ -144,6 +144,52 @@ boundary. Negative health-need metadata stays local.
 Assessment results and plan saving require neither an API key nor a model call.
 Dedicated communication/evacuation questions are outside this first increment.
 
+### Local snapshots
+
+The assessment's save/load controls share the existing working household and
+plan stores. `lib/household-saves.ts` defines a strict, versioned portable JSON
+contract and the separate `readystate-household-saves` named snapshot library.
+Snapshots preserve all household answer semantics and the selected action
+history, not derived findings; results are recalculated using the installed
+rules after restore. A snapshot is an independent copy, not a second assessment
+engine or a live profile.
+
+File parsing validates identifiers, answer enums, nonnegative finite numbers,
+timestamps, supported not-applicable states and contradictory answers.
+Unrecognized fields are rejected, including provider settings. Imports are
+limited to 2 MiB, require a replacement confirmation, and never merge actions
+or silently overwrite named copies. Working household/plan persistence is
+written with rollback on ordinary write failure before rehydrating the shared
+stores. An open wizard draft is discarded only after a confirmed successful
+restore, so stale edits cannot overwrite restored data.
+
+All data stays local; household-only snapshots are unencrypted and include sensitive local
+details. Deleting the current profile, named copies and downloaded files are
+separate operations. No exercise session, provider settings, API keys or
+masking ledger are serialized in that format. Local save/load does not bypass S2.
+
+The separate full-data format (`lib/full-backups.ts`) includes browser-saved
+provider settings/keys, local progress/history, the active exercise/draft,
+private tag mappings, named household copies and appearance. It is encrypted
+with Web Crypto AES-256-GCM using a fresh 16-byte salt, 12-byte IV and
+PBKDF2-SHA256 (600,000 iterations). The password is not persisted. Versioned
+strict schemas validate the decrypted application state before replacement.
+Encrypted backup containers are excluded from the logical payload to prevent
+recursive growth; server configuration/keys, cookies, eval capture metadata,
+outgoing approvals and retry credentials are never included.
+
+`readystate-local-records` retains the assessment topic and explicit dated
+snapshots. Assessment reports preserve the answers, category/status,
+explanations, supporting facts, next steps, rule IDs and source references at
+save time; they are not recomputed historical scores. Saved exercises retain
+participant text and completed tool outputs/debrief quality notices, not
+transport or eval metadata. Local history is unencrypted and may contain
+private mappings; its UI discloses this before saving. A saved resume point is
+consumed after loading; it is not continuous exercise autosave. Full restore
+reloads the page, invalidating stale reviews and memory-only retry credentials.
+Reopening a saved exercise sends nothing and requires fresh S2 review for a new
+response. Previously captured retry settings are not reconstructible.
+
 Historical Alex replay/evaluation evidence uses the baseline frozen in
 `lib/fixtures/alex-replay-turns.json` from pre-migration main `3f9dc8d`.
 Its legacy unchecked-as-absent interpretation is historical evidence only,

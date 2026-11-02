@@ -3,7 +3,7 @@
 import { BookOpen, Compass, Home, ListChecks, Settings, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 
 import { Wordmark } from "@/components/brand";
 import { householdLine } from "@/components/household-summary";
@@ -11,6 +11,10 @@ import { SiteFooter } from "@/components/site-footer";
 import { useExerciseSession } from "@/lib/exercise-session";
 import { hasProfile } from "@/lib/household";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
+import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
+import { openExercise } from "@/lib/saved-exercises";
+import { privacySnapshotSchema } from "@/lib/local-records";
+import { usePrivacyStore } from "@/store/usePrivacyStore";
 
 /**
  * The app's destinations (design brief §3, Modern treatment §6): a sidebar on
@@ -44,6 +48,21 @@ function HouseholdContext() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const recordsError = useLocalRecordsStore(state => state.error);
+  useEffect(() => {
+    try {
+      const records = useLocalRecordsStore.getState();
+      if (records.error) return;
+      if (records.data.activeExercise) openExercise(records.data.activeExercise);
+      const privacy = localStorage.getItem("readystate-restored-privacy");
+      if (privacy !== null) {
+        usePrivacyStore.setState(privacySnapshotSchema.parse(JSON.parse(privacy)));
+        localStorage.removeItem("readystate-restored-privacy");
+      }
+    } catch {
+      useLocalRecordsStore.setState({ error: "Saved exercise/privacy data could not be restored. Nothing was sent. Check local records and browser storage before continuing." });
+    }
+  }, []);
   const isActive = (href: string, also?: string) =>
     pathname === href || pathname.startsWith(`${href}/`) || (also !== undefined && pathname === also);
 
@@ -86,6 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <HouseholdContext />
           </div>
         </header>
+        {recordsError && <p role="alert" className="m-4 rounded-control border border-error p-3 text-sm">{recordsError}</p>}
         {children}
         <SiteFooter />
       </div>

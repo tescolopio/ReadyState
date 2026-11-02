@@ -8,6 +8,7 @@ import PlanPage from "@/app/(app)/plan/page";
 import { emptyProfile } from "@/lib/household";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePlanStore } from "@/store/usePlanStore";
+import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -15,6 +16,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("fetch", vi.fn(() => { throw new Error("Offline assessment must not make requests"); }));
   localStorage.clear();
+  useLocalRecordsStore.getState().reload();
   useHouseholdStore.getState().setProfile(emptyProfile());
   usePlanStore.getState().clear();
   container = document.createElement("div");
@@ -46,6 +48,37 @@ async function answer(label: string, value: string) {
 }
 
 describe("offline assessment experience", () => {
+  it("resumes the saved assessment topic after remount instead of treating partial answers as completion", async () => {
+    await act(async () => root.render(<AssessmentPage />));
+    await click("adult");
+    await click("Pets");
+    await click("Home");
+    expect(useLocalRecordsStore.getState().data.progress).toBe(2);
+    await act(async () => root.render(null));
+    useLocalRecordsStore.getState().reload();
+    await act(async () => root.render(<AssessmentPage />));
+    expect(container.querySelector('[aria-label="Household setup"] h2')?.textContent).toBe("Home");
+    expect(useHouseholdStore.getState().profile.people).toHaveLength(1);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("saves a dated assessment as a historical report, not a changing deficiency list", async () => {
+    await act(async () => root.render(<AssessmentPage />));
+    await click("adult");
+    await click("Supplies");
+    await answer("Smoke detectors", "absent");
+    await click("See assessment");
+    await click("Save dated assessment");
+    const saved = useLocalRecordsStore.getState().data.assessments[0];
+    expect(saved.report).toContain("No smoke detectors recorded");
+    await click("Supplies");
+    await answer("Smoke detectors", "present");
+    await click("See assessment");
+    expect(container.querySelector('[aria-label="Confirmed gaps"]')?.textContent).not.toContain("No smoke detectors recorded");
+    expect(useLocalRecordsStore.getState().data.assessments[0]).toEqual(saved);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("completes a short profile, confirms a gap, explains evidence and saves an action without exercise or AI", async () => {
     await act(async () => root.render(<AssessmentPage />));
     await click("adult");

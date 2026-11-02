@@ -10,17 +10,18 @@ import { usePrivacyStore } from "@/store/usePrivacyStore";
 
 /**
  * Names the masker should always replace, for anything its detectors miss.
- * Held in memory only, like the privacy ledger, so it clears on reload.
+ * Live state clears on reload unless restored from an explicit local save.
  */
 export function AlwaysMaskCard() {
   const alwaysMask = usePrivacyStore((state) => state.alwaysMask);
   const setAlwaysMask = usePrivacyStore((state) => state.setAlwaysMask);
-  const [draft, setDraft] = useState(() => alwaysMask.join(", "));
+  const [draft, setDraft] = useState<string | null>(null);
   const id = useId();
 
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setAlwaysMask(draft.split(","));
+    setAlwaysMask((draft ?? alwaysMask.join(", ")).split(","));
+    setDraft(null);
   };
 
   return (
@@ -42,7 +43,7 @@ export function AlwaysMaskCard() {
           <div className="flex gap-2">
             <Input
               id={`${id}-names`}
-              value={draft}
+              value={draft ?? alwaysMask.join(", ")}
               onChange={(event) => setDraft(event.target.value)}
               placeholder="e.g. Priya, Escolopio"
               autoComplete="off"
@@ -54,7 +55,7 @@ export function AlwaysMaskCard() {
           <p className="text-xs text-ink-3">
             {alwaysMask.length > 0
               ? `Masking ${alwaysMask.length} name${alwaysMask.length === 1 ? "" : "s"} in everything you send.`
-              : "For names the automatic masking misses. Kept in memory only."}
+              : "For names the automatic masking misses. Live state is memory-only; explicit exercise saves and encrypted backups can preserve it."}
           </p>
         </form>
       </CardContent>

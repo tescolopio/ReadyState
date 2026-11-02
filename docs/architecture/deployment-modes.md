@@ -51,7 +51,7 @@ Only Groq has been benchmarked against the forced `generate_turn` tool call. Oth
 
 - **Self-hosted mode trusts the browser.** It accepts API keys and, for `ollama` and `custom`, arbitrary base URLs from the client, so the server makes outbound requests wherever the browser says. That's fine on your own machine, but don't expose a self-hosted instance to the internet or an untrusted network. `docker-compose.yml` binds to `127.0.0.1` for this reason.
 - **Hosted mode trusts only its own env.** `resolveModel("hosted", …)` drops client settings entirely, so customers can't redirect the operator's server or spend someone else's key (covered in `lib/providers.test.ts`).
-- **Browser key storage.** Keys saved in Settings sit in that browser's `localStorage` (`store/useSettingsStore.ts`) and travel to the ReadyState server in each request body. The privacy ledger of real names stays memory-only, as before.
+- **Browser key storage.** Keys saved in Settings sit in that browser's `localStorage` (`store/useSettingsStore.ts`) and travel to the ReadyState server in each request body, for provider authentication rather than conversation text. Explicit full backups include browser-saved keys only in password-encrypted files/copies, never server/environment keys. Live privacy mappings remain memory-only unless deliberately preserved in a local exercise snapshot or encrypted full backup; local exercise history itself is unencrypted.
 
 ## Running self-hosted
 

@@ -66,7 +66,8 @@ interface LessonSource {
 
 export default function ExercisePage() {
   const router = useRouter();
-  const [input, setInput] = useState("");
+  const input = useExerciseSession(state => state.draft);
+  const setInput = useExerciseSession(state => state.setDraft);
   // The exercise lives outside this page, so leaving for Journal or Settings doesn't end it.
   const { messages, setMessages, status, error } = useChat<TtxUIMessage>({ chat: exerciseChat });
   // Subscribe so unmasked output re-renders whenever the ledger changes.
@@ -171,7 +172,12 @@ export default function ExercisePage() {
   };
 
   useEffect(() => {
-    if (preview && exerciseChat.messages.length === 0) setMessages(PREVIEW_MESSAGES);
+    if (preview && exerciseChat.messages.length === 0) {
+      const household = TEST_HOUSEHOLDS.find(household => household.id === "sam");
+      if (!household) throw new Error("Recorded preview household is missing.");
+      useExerciseSession.getState().begin(structuredClone(household.profile), household.id);
+      setMessages(PREVIEW_MESSAGES);
+    }
   }, [preview, setMessages]);
 
   const autoStarted = useRef(false);
@@ -392,7 +398,7 @@ export default function ExercisePage() {
                 Review before sending
               </Button>
             </div>
-            <p className="text-xs text-ink-3">Paused exercises wait in this tab until you close it or reload.</p>
+            <p className="text-xs text-ink-3">Unsaved exercise changes stay in this tab. Save a snapshot in Journal before closing or reloading.</p>
           </form>
         )}
         <div ref={bottomRef} />
