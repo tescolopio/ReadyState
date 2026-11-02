@@ -81,7 +81,7 @@ export function LocalHistory() {
             <Button variant="outline" onClick={() => setDeleting(record.id)}>Delete exercise record</Button>
           </div>
           {opening === record.id && <div role="group" aria-label="Confirm opening saved exercise" className="my-2 flex flex-wrap gap-2">
-            <p>Replace the current tab exercise and its private tag mappings? No messages will be sent; new responses must be reviewed.</p>
+            <p>Replace the current tab exercise and its private tag mappings? Current and saved always-mask terms are kept. No messages will be sent; new responses must be reviewed.</p>
             <Button onClick={() => run(() => { openExercise(record); router.push("/exercise"); }, "Saved exercise opened without sending.")}>Replace tab exercise</Button>
             <Button variant="outline" onClick={() => setOpening(null)}>Keep current exercise</Button>
           </div>}

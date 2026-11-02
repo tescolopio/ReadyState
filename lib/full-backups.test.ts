@@ -241,6 +241,20 @@ describe("dated local records and safe exercise recovery", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("preserves newer always-mask protections when opening an older exercise snapshot", () => {
+    const saved = exerciseRecordSchema.parse({
+      id: "older-privacy", savedAt: new Date().toISOString(), profile: null, sampleId: null, draft: "",
+      messages: [],
+      privacy: { entityMap: { "[Person 1]": "Synthetic earlier name" }, alwaysMask: ["Earlier mask"] },
+    });
+    usePrivacyStore.setState({ entityMap: { "[Person 1]": "Synthetic current name" },
+      alwaysMask: ["Newer mask", "Earlier mask"] });
+    openExercise(saved);
+    expect(usePrivacyStore.getState().entityMap).toEqual(saved.privacy.entityMap);
+    expect(usePrivacyStore.getState().alwaysMask).toEqual(["Newer mask", "Earlier mask"]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("creates dated assessment and exercise IDs without requiring crypto.randomUUID", () => {
     vi.spyOn(crypto, "randomUUID").mockImplementation(() => { throw new Error("randomUUID unavailable on plain HTTP"); });
     const assessment = createAssessmentRecord(useHouseholdStore.getState().profile);

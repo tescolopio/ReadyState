@@ -189,6 +189,15 @@ consumed after loading; it is not continuous exercise autosave. Full restore
 reloads the page, invalidating stale reviews and memory-only retry credentials.
 Reopening a saved exercise sends nothing and requires fresh S2 review for a new
 response. Previously captured retry settings are not reconstructible.
+Opening an older exercise restores its tag mappings for that transcript but
+keeps the union of current and saved always-mask terms; it never silently
+removes newer masking protections.
+
+History supports 1,000 dated assessment reports plus a separately captured
+current assessment. Full backup moves a restored current snapshot into dated
+history before capturing today's answers. If that would exceed 1,000 reports,
+backup clearly refuses without changing data; it never discards the oldest
+report. Keep earlier backups before deliberately removing unneeded history.
 
 Historical Alex replay/evaluation evidence uses the baseline frozen in
 `lib/fixtures/alex-replay-turns.json` from pre-migration main `3f9dc8d`.
