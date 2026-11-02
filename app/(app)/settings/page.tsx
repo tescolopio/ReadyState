@@ -7,6 +7,7 @@ import { AlwaysMaskCard } from "@/components/always-mask";
 import { ProviderSettingsCard } from "@/components/provider-settings";
 import { StyleSwitcher } from "@/components/site-footer";
 import { Button } from "@/components/ui/button";
+import { FullBackups } from "@/components/full-backups";
 import type { ServerConfig } from "@/lib/providers";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePlanStore } from "@/store/usePlanStore";
@@ -44,8 +45,9 @@ export default function SettingsPage() {
       <Section title="Appearance" intro="ReadyState is testing two visual styles. Both have the same screens and content.">
         <StyleSwitcher />
       </Section>
+      <FullBackups />
 
-      <Section title="Data on this device" intro="Your household and action plan are saved in this browser only. Deleting them can't be undone.">
+      <Section title="Data on this device" intro="Working data is saved in this browser. Deleting it cannot be undone and does not delete historical records, named copies or downloaded backups; remove those separately.">
         <div className="space-y-3">
           <DeleteRow
             label="Household profile"

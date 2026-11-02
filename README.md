@@ -61,6 +61,100 @@ provider summaries. Dedicated
 communication and evacuation planning questions are deferred to a separate
 increment.
 
+### Save and load household data
+
+On **Assessment**, open **Save or load household and plan**:
+
+- **Save a named copy** keeps an independent snapshot in this browser. Give
+  each snapshot a different name; existing copies are not silently overwritten.
+- **Export current household and plan** downloads a versioned JSON save file.
+  You can also export an earlier named copy without loading it first.
+- **Load a save file** or **Load [name]** previews the saved date and household/
+  action counts. **Replace household and plan** explicitly replaces both,
+  rather than merging; **Cancel load** changes nothing. Export or name your
+  current work first if you want to keep it.
+- Deleting a named copy requires confirmation and leaves the working household,
+  chosen actions and previously downloaded files alone.
+
+Saves contain the complete household (including local names, practical health
+needs, notes and unknown/skipped/withheld answer states) and chosen action text,
+source, dates and status. **Files and browser saves are not encrypted.** Keep
+them private and do not enter credentials in household notes or plan text.
+Provider settings/keys, exercise history and the in-memory masking ledger are
+not part of the save format. Save/load does not contact a server or model.
+
+Named copies and automatic working data are tied to the browser and site
+address, including its port. They survive restarting ReadyState, but not
+clearing browser storage. Export files for backups or to move to a new browser,
+installation or local address. Deleting the working profile does not delete
+named copies or downloaded files; remove those separately if needed.
+
+Imports support ReadyState save format **version 1**, up to **2 MiB**. Invalid,
+conflicting or unsupported data is rejected before loading; old raw browser
+storage dumps are not this portable format. Browser quota/read/write errors are
+shown explicitly. If a normal storage write fails during restore, the prior
+household/plan are restored before reporting failure; an unrecoverable storage
+failure is reported rather than claiming success.
+
+### Full encrypted backups and local history
+
+For **all ReadyState application data**, use **Settings → Full encrypted
+backups**, not the household-only JSON export. Full backups include:
+
+- Household answers and assessment stage, chosen plan actions/statuses, named
+  household snapshots and appearance.
+- A dated report of the current nonempty assessment and earlier deliberately
+  saved reports, including their original explanations, supporting answers,
+  next steps and source references.
+- Saved exercise/debrief snapshots plus the current exercise and unsent response
+  draft. Model-generated material remains unverified, historical material.
+- **Browser-saved provider settings and API keys**, Always Mask names and private
+  tag mappings needed to display the saved exercise.
+
+Full backups use password-derived AES-256-GCM encryption (PBKDF2-SHA256,
+600,000 iterations, fresh random salt and IV). Use a unique password/passphrase
+of at least 12 characters. **There is no password recovery.** Save to an
+encrypted file or a named encrypted browser copy; named copies can be exported
+without unlocking them. Names/dates of browser copies are not secret.
+
+Enter the password to unlock a file or named backup, inspect its counts/date,
+then explicitly **Replace all and reload**, or cancel without changing working
+data. Restore replaces, rather than merges, the listed application data and
+reloads the app to discard stale forms, send approvals and retry credentials.
+It preserves unrelated browser data and existing encrypted full backup copies.
+Avoid simultaneous edits/restores in other tabs.
+
+This is an application-data backup, not a backup of the installation or server:
+server/environment keys, authentication cookies, deployment configuration,
+model downloads, eval diagnostics/repair drafts and captured retry settings are
+excluded. Unsaved settings form edits and outgoing review/approval state are
+also excluded. Backup containers are not recursively copied into new backups.
+The current browser provider key is intentionally included in the encrypted
+settings section, never in the saved conversation metadata.
+
+The assessment remembers its current topic between visits/reloads.
+**Save dated assessment** keeps a historical report in **Journal**;
+**Journal → Save current exercise locally** keeps a dated exercise, debrief
+and response-draft snapshot. A saved resume point is loaded once after reload;
+later exercise changes require another explicit save. Older snapshots remain
+available to open deliberately. Starting over clears the saved resume point,
+not the history. New responses still need S2 review; restoring never calls a
+model and never restores permission to retry a previous request.
+
+Encryption protects full backup copies, **not live browser storage**.
+Working profiles, saved keys and deliberately saved local history are still
+readable by someone with browser access. History can include names and private
+tag mappings. Delete history, named household copies, encrypted copies and
+downloaded files separately when removing personal data.
+
+Version-1 full backups support up to **20 MiB of decrypted data** in an encrypted
+JSON file up to **30 MiB**. Invalid/unsupported data, wrong passwords, tampering
+and quota/storage errors are reported explicitly; no unencrypted fallback is
+used. Ordinary write failures roll back prior writes, but browser storage is
+not a crash-atomic transaction. Web Crypto requires HTTPS or localhost; plain
+HTTP on a LAN address is not supported for encrypted backups. Keep a portable
+backup before replacing data.
+
 Scripts: `npm run dev`, `npm run build`, `npm start` (loopback standalone production launcher), `npm run package:local`, `npm run lint`, `npm run typecheck`, `npm test` (Vitest). CI (`.github/workflows/ci.yml`) runs application checks and Docker smoke tests on every PR.
 
 ## Architecture
@@ -70,6 +164,8 @@ Scripts: `npm run dev`, `npm run build`, `npm start` (loopback standalone produc
 | `store/usePrivacyStore.ts` | In-memory Zustand ledger (`entityMap`: tag → real value) and the always-mask name list. |
 | `lib/household.ts` / `store/useHouseholdStore.ts` | Structured household profile from the setup wizard (`components/household-wizard.tsx`), saved in this browser only. `describeHousehold` turns it into the attribute summary the engine sees: needs as functional tags, no names or medication names, and skipped sections marked unknown. |
 | `store/useSettingsStore.ts` | Self-hosted provider choice and API key, persisted to this browser's `localStorage`. |
+| `lib/full-backups.ts` / `lib/full-backup-state.ts` | Strict full-data contract, local password encryption and confirmed, rollback-protected restore. No server/environment keys or transport approvals. |
+| `lib/local-records.ts` / `store/useLocalRecordsStore.ts` | Assessment progress, dated assessment explanations and explicitly saved exercise/debrief snapshots. Live privacy state can be preserved by explicit local saves; it is not automatically logged. |
 | `utils/obfuscator.ts` | `maskInput` replaces people, pets, places, street addresses, postcodes, phones, emails, URLs and ID numbers with tags (`[Person 1]`, `[Pet 1]`, `[Phone 1]`, …) using patterns, context rules ("my wife Priya", "our dog Max"), compromise NLP and the user's always-mask list. `unmaskOutput` restores them. Tested against `utils/masking-corpus.ts`. |
 | `lib/ttx.ts` | Zod schemas for the `generate_turn` and `after_action_report` tools, `deriveTtxState` (the TTX state machine) and `buildExercisePrompt` (compact per-call briefing). |
 | `lib/providers.ts` | Provider presets and `resolveModel`, which picks the model per request from browser settings or server env. |

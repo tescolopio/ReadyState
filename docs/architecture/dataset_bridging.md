@@ -74,7 +74,7 @@ Example inject for `[Refrigerated Medication Dependent]`:
 
 _Added while formatting (2026-10-27)._
 
-- **Where the data lives.** The design brief keeps detailed household profiles on the device and sends only the attributes an exercise needs. The current privacy model agrees: the privacy ledger is memory-only. So by default the condition-to-constraint mapping should run in the browser, with profiles stored locally (Dexie, Frontend F3). A server-side `health_constraints` table would hold health information and should exist only for hosted Cloud Sync (H6), opt-in and encrypted. `public.user_profiles` doesn't exist yet either.
+- **Where the data lives.** The design brief keeps detailed household profiles on the device and sends only the attributes an exercise needs. The live privacy ledger is memory-only; explicit local exercise snapshots or password-encrypted full backups can preserve it. By default the condition-to-constraint mapping runs in the browser, with profiles stored locally. A server-side `health_constraints` table would hold health information and should exist only for hosted Cloud Sync (H6), opt-in and encrypted. `public.user_profiles` doesn't exist yet either.
 - **Tags already in use.** The game prompt already treats bracketed tags such as `[Requires Refrigeration]` as placeholders to reuse verbatim. This dictionary should become the canonical tag list, emitted by the structured household form (F2) rather than typed by hand.
 - **Tone.** The design brief asks for calm, non-shaming prompts. Injects should be realistic, not "terrifying"; the example above follows that.
 

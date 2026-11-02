@@ -2,8 +2,9 @@ import { create } from "zustand";
 
 /**
  * Client-side privacy ledger. Maps obfuscation tags (e.g. `[Person 1]`) to the
- * real values they replace. Intentionally kept in memory only (no `persist`
- * middleware). Only the tags are sent, never the real values they stand for.
+ * real values they replace. Live state is memory-only (no `persist` middleware);
+ * explicit local exercise snapshots and encrypted full backups can preserve it.
+ * Only the tags are sent, never the real values they stand for.
  * Masking can still miss identifiers it doesn't recognize.
  */
 interface PrivacyState {
