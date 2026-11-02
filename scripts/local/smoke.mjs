@@ -16,6 +16,9 @@ if (!source) {
   inspectPackage(directory);
   assert.ok(existsSync(path.join(directory, "LICENSE")));
   assert.ok(existsSync(path.join(directory, "runtime", "LICENSE")));
+  for (const file of ["windows-quick-start.md", "windows-data-flow.svg"]) {
+    assert.ok(existsSync(path.join(directory, file)), `Missing onboarding guide asset: ${file}`);
+  }
   verifyNotices(path.join(directory, "app"));
   for (const file of ["inter-OFL.txt", "source-sans-3-OFL.txt", "source-serif-4-OFL.txt"]) {
     assert.ok(existsSync(path.join(directory, "app", "public", "licenses", file)), file);

@@ -4,7 +4,9 @@ How to run ReadyState on your own machine and check it by hand. The automated ch
 
 ## 1. Start it
 
-You need a model provider. The quickest is a free Groq key from [console.groq.com](https://console.groq.com/keys).
+Assessment, setup and review/cancellation checks do not need a provider key.
+Only live AI exercises need a provider. For optional Groq account/key setup and
+Windows installation, use the [Windows quick-start](../deployment/windows-quick-start.md).
 
 **Option A: Node (for development)**
 

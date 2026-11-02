@@ -22,7 +22,7 @@ if (Test-Path -LiteralPath $shortcut) {
 }
 if ($RemoveInstallation) {
     Write-Host 'Stop ReadyState before removal. Browser household/plan data is not removed.'
-    foreach ($entry in @('app', 'runtime', 'launch.mjs', 'start.ps1', 'install.ps1', 'uninstall.ps1', 'LICENSE', 'configuration.example', 'INSTALL.md', 'packaging-review.md', 'binary-components.md', 'release.json')) {
+    foreach ($entry in @('app', 'runtime', 'launch.mjs', 'start.ps1', 'install.ps1', 'uninstall.ps1', 'LICENSE', 'configuration.example', 'INSTALL.md', 'windows-quick-start.md', 'windows-data-flow.svg', 'packaging-review.md', 'binary-components.md', 'release.json')) {
         $path = Join-Path $PSScriptRoot $entry
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse }
     }

@@ -33,6 +33,10 @@ Open http://localhost:3000 for the website, or http://localhost:3000/journal for
 
 ## Local household assessment
 
+For Windows testers, see the
+[Windows quick-start and optional Groq setup](docs/deployment/windows-quick-start.md).
+Assessment needs no provider account; downloadable packages are not published yet.
+
 Open **Assessment** (`/assessment`), add a short household profile, and choose
 **See assessment** whenever you are ready. Add optional People, Pets, Home,
 Health needs and Supplies details later. Results distinguish confirmed gaps,

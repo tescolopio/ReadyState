@@ -5,6 +5,29 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("per-user installer ownership", () => {
+  it.skipIf(process.platform !== "win32")("copies onboarding materials and removes them without removing unrelated files", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "readystate-guide-"));
+    const source = path.join(root, "package");
+    const installed = path.join(root, "installed");
+    try {
+      mkdirSync(source);
+      for (const file of ["install.ps1", "uninstall.ps1"]) {
+        cpSync(path.resolve("scripts/local", file), path.join(source, file));
+      }
+      for (const file of ["windows-quick-start.md", "windows-data-flow.svg"]) {
+        cpSync(path.resolve("docs/deployment", file), path.join(source, file));
+      }
+      writeFileSync(path.join(source, "release.json"), JSON.stringify({ source: "https://github.com/tescolopio/ReadyState/tree/synthetic" }));
+      execFileSync("powershell.exe", ["-NoProfile", "-File", path.join(source, "install.ps1"), "-Destination", installed, "-NoShortcut"], { stdio: "pipe", timeout: 20_000 });
+      for (const file of ["windows-quick-start.md", "windows-data-flow.svg"]) {
+        expect(readFileSync(path.join(installed, file), "utf8")).toBe(readFileSync(path.join(source, file), "utf8"));
+      }
+      writeFileSync(path.join(installed, "unrelated.txt"), "Keep this");
+      execFileSync("powershell.exe", ["-NoProfile", "-File", path.join(installed, "uninstall.ps1"), "-RemoveInstallation"], { stdio: "pipe", timeout: 20_000 });
+      for (const file of ["windows-quick-start.md", "windows-data-flow.svg"]) expect(existsSync(path.join(installed, file))).toBe(false);
+      expect(readFileSync(path.join(installed, "unrelated.txt"), "utf8")).toBe("Keep this");
+    } finally { rmSync(root, { recursive: true }); }
+  }, 30_000);
   it.skipIf(process.platform !== "win32")("rejects junction ancestors before creating any installation files", () => {
     const root = mkdtempSync(path.join(tmpdir(), "readystate-junction-"));
     const source = path.join(root, "package");

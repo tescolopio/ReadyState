@@ -7,6 +7,10 @@ accuracy/safety findings. No model is included or downloaded by these installers
 
 ## Supported targets
 
+New to Windows setup? Start with the
+[Windows quick-start and optional Groq setup](windows-quick-start.md).
+It includes a key-free walkthrough, privacy boundaries and troubleshooting.
+
 Initial native packages target **Windows x64 with Node 24** and **Ubuntu 24.04
 x64 with Node 24**. Other Linux distributions, ARM64, native mobile apps,
 code-signed Windows executable installers, automatic updates and background
