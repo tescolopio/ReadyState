@@ -31,6 +31,6 @@ export const useLocalRecordsStore = create<RecordsState>()((set) => ({
   commit: data => {
     const parsed = localRecordsSchema.parse(data);
     localStorage.setItem(RECORDS_KEY, JSON.stringify(parsed));
-    set({ data: parsed, error: null, progressWriteError: null, simpleRecovery: false });
+    set({ data: parsed, error: null, progressWriteError: null });
   },
 }));

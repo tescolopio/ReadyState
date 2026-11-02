@@ -33,6 +33,8 @@ function AssessmentContent() {
       const current = useLocalRecordsStore.getState();
       if (current.error) throw new Error(current.error);
       current.commit({ ...current.data, guidedAssessment: { ...(current.data.guidedAssessment ?? emptyGuidedAssessment()), ...patch } });
+      if (patch.mode) useLocalRecordsStore.setState({ simpleRecovery: false });
+      setSaveError("");
       return true;
     } catch { setSaveError("Assessment experience could not be saved. Check browser storage; your household answers were not replaced."); return false; }
   };

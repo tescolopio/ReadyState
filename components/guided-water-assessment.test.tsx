@@ -59,6 +59,15 @@ describe("one household across Simple and Guided", () => {
     expect(useLocalRecordsStore.getState().simpleRecovery).toBe(true);
     expect(localStorage.getItem("readystate-local-records")).toBe(stored);
     vi.restoreAllMocks();
+    await act(async () => {
+      const current = useLocalRecordsStore.getState();
+      current.commit({ ...current.data, progress: 4 });
+    });
+    expect(container.querySelector('[aria-label="Guided assessment"]')).toBeNull();
+    expect(useLocalRecordsStore.getState().simpleRecovery).toBe(true);
+    await click("Guided assessment");
+    expect(useLocalRecordsStore.getState().simpleRecovery).toBe(false);
+    expect(container.textContent).not.toContain("could not be saved");
   });
   it("does not overwrite restored household facts through an open Guided people editor", async () => {
     await start(); await click("Keep current answer and see findings"); await click("Add or edit people");
