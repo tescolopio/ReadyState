@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, Activity } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AssessmentPage from "@/app/(app)/assessment/page";
 import PlanPage from "@/app/(app)/plan/page";
 import { emptyProfile } from "@/lib/household";
+import { captureFullBackup } from "@/lib/full-backup-state";
+import { createAssessmentRecord, RECORDS_KEY } from "@/lib/local-records";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePlanStore } from "@/store/usePlanStore";
+import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -15,6 +18,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("fetch", vi.fn(() => { throw new Error("Offline assessment must not make requests"); }));
   localStorage.clear();
+  useLocalRecordsStore.getState().reload();
   useHouseholdStore.getState().setProfile(emptyProfile());
   usePlanStore.getState().clear();
   container = document.createElement("div");
@@ -46,6 +50,67 @@ async function answer(label: string, value: string) {
 }
 
 describe("offline assessment experience", () => {
+  it("resumes the saved assessment topic after remount instead of treating partial answers as completion", async () => {
+    await act(async () => root.render(<AssessmentPage />));
+    await click("adult");
+    await click("Pets");
+    await click("Home");
+    expect(useLocalRecordsStore.getState().data.progress).toBe(2);
+    await act(async () => root.render(null));
+    useLocalRecordsStore.getState().reload();
+    await act(async () => root.render(<AssessmentPage />));
+    expect(container.querySelector('[aria-label="Household setup"] h2')?.textContent).toBe("Home");
+    expect(useHouseholdStore.getState().profile.people).toHaveLength(1);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps the selected topic when a retained Assessment route is hidden and revisited", async () => {
+    await act(async () => root.render(<Activity mode="visible"><AssessmentPage /></Activity>));
+    await click("Pets");
+    await click("Home");
+    expect(useLocalRecordsStore.getState().data.progress).toBe(2);
+    await act(async () => root.render(<Activity mode="hidden"><AssessmentPage /></Activity>));
+    await act(async () => root.render(<Activity mode="visible"><AssessmentPage /></Activity>));
+    expect(useLocalRecordsStore.getState().data.progress).toBe(2);
+    expect(container.querySelector('[aria-label="Household setup"] h2')?.textContent).toBe("Home");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps a failed progress write local so valid history can still be backed up", async () => {
+    const records = useLocalRecordsStore.getState();
+    records.commit({ ...records.data, assessments: [createAssessmentRecord(useHouseholdStore.getState().profile)] });
+    const original = Storage.prototype.setItem;
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key, value) {
+      if (key === RECORDS_KEY) throw new DOMException("Quota", "QuotaExceededError");
+      original.call(this, key, value);
+    });
+
+    await act(async () => root.render(<AssessmentPage />));
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Assessment progress could not be saved");
+    expect(useLocalRecordsStore.getState().error).toBeNull();
+    expect(useLocalRecordsStore.getState().progressWriteError).toContain("Assessment progress could not be saved");
+    setItem.mockRestore();
+    expect(captureFullBackup(localStorage).records.assessments).toHaveLength(1);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("saves a dated assessment as a historical report, not a changing deficiency list", async () => {
+    await act(async () => root.render(<AssessmentPage />));
+    await click("adult");
+    await click("Supplies");
+    await answer("Smoke detectors", "absent");
+    await click("See assessment");
+    await click("Save dated assessment");
+    const saved = useLocalRecordsStore.getState().data.assessments[0];
+    expect(saved.report).toContain("No smoke detectors recorded");
+    await click("Supplies");
+    await answer("Smoke detectors", "present");
+    await click("See assessment");
+    expect(container.querySelector('[aria-label="Confirmed gaps"]')?.textContent).not.toContain("No smoke detectors recorded");
+    expect(useLocalRecordsStore.getState().data.assessments[0]).toEqual(saved);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("completes a short profile, confirms a gap, explains evidence and saves an action without exercise or AI", async () => {
     await act(async () => root.render(<AssessmentPage />));
     await click("adult");

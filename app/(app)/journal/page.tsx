@@ -7,6 +7,7 @@ import { useSyncExternalStore } from "react";
 
 import { PageHeader } from "@/components/app-shell";
 import { SimulationLabel } from "@/components/brand";
+import { LocalHistory } from "@/components/local-history";
 import { exerciseChat, useExerciseSession } from "@/lib/exercise-session";
 import { SCENARIOS, hasProfile } from "@/lib/household";
 import { deriveTtxState } from "@/lib/ttx";
@@ -70,7 +71,7 @@ export default function JournalPage() {
               <Play className="h-4 w-4" aria-hidden />
               {ttx.phase === "aar" ? "Read the debrief" : "Resume exercise"}
             </Link>
-            <span className="text-xs text-ink-3">Kept in this tab until you close it or reload.</span>
+            <span className="text-xs text-ink-3">Save a snapshot below before closing or reloading; later changes are not autosaved.</span>
           </div>
         </section>
       ) : (
@@ -129,8 +130,9 @@ export default function JournalPage() {
       )}
 
       <p className="text-sm text-ink-3">
-        Past exercises aren&apos;t saved yet: each one lasts until you close the tab. A saved history is planned.
+        The live exercise stays in this tab. Save a snapshot below before closing or reloading; later changes are not automatically added to that snapshot.
       </p>
+      {hydrated && <LocalHistory />}
     </main>
   );
 }

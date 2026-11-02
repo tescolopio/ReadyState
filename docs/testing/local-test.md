@@ -66,6 +66,33 @@ must use a dedicated key-free server and intercept `/api/ttx` before navigation.
 The earlier merged-main packaging walkthrough passed through **explicit setup**;
 its direct-entry failure is historical evidence, not retroactively a pass.
 
+### Local saves, history and encrypted full backups (no model calls)
+
+Use synthetic profiles and fake keys only, with every `/api/ttx` and external
+request intercepted before navigation on a dedicated key-free server.
+
+- [ ] Leave an assessment topic unfinished; reload/return and verify its stage
+  and explicit zero/unknown/skipped/withheld answers survive.
+- [ ] Save a dated assessment; change answers and confirm current findings
+  update while the historical explanation and saved action stay unchanged.
+- [ ] Create/export a named household copy. Load it, cancel, then confirm;
+  household and plan (including statuses/source/date) restore together.
+- [ ] Save a recorded/offline exercise and unsent draft in Journal; reload and
+  open its history without a model request. Do not retry/send or request a debrief.
+- [ ] Save a **synthetic** API key in Settings. Create named and file full
+  backups; inspect exported JSON/browser backup container for ciphertext only,
+  never household text, API key, password or private mappings.
+- [ ] Wrong password/tampered file changes nothing. Correct unlock shows a
+  replace preview, not the key; cancellation changes nothing.
+- [ ] Restore an encrypted file in an isolated fresh browser: saved stage,
+  reports, exercise/debrief, draft, mappings, plan status, keys and appearance
+  return. No outgoing approval/retry credentials return and no requests send.
+- [ ] Delete a named copy/history record only after confirmation; verify
+  working data, unrelated storage, other backups and downloaded files remain.
+- [ ] Test keyboard access/focus, small-screen wrapping and explicit quota/
+  invalid-data errors. Physical phones, Safari and Firefox remain separate
+  follow-ups unless actually tested.
+
 ### Privacy masking (S1)
 
 - [ ] Use made-up details, for example: _"My wife Priya and our kids Linh (8) and Bao (5), our dog Max. We live at 4512 Elm Ave, Denver CO 80203, phone 303-555-0142. Priya takes insulin."_
@@ -105,7 +132,7 @@ Mocked browser checks establish transmission behavior only, not real provider re
 
 ### Known gaps, not bugs yet
 
-- A reload loses the exercise in progress (F3); the household, action plan and settings are kept.
+- Unsaved exercise changes are tab-only. Explicit Journal exercise snapshots retain a saved resume point (loaded once), history/debrief and unsent response draft; later changes require saving again. Household, plan, settings and assessment stage persist automatically. Full encrypted backups include browser-saved keys, not server/environment keys.
 
 ## 3. Scenarios to run
 

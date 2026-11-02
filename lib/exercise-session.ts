@@ -7,12 +7,13 @@ import type { ProviderSettings } from "@/lib/providers";
 import type { TtxUIMessage } from "@/lib/ttx";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
+import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
 
 /**
  * The exercise in progress, shared by every app page so moving between
  * Journal, Exercises and the exercise doesn't end it. Held in memory only,
- * like the privacy ledger that unmasks it: reloading or closing the tab ends
- * the exercise. Saving exercises is work item F3.
+ * like the privacy ledger that unmasks it. Explicit local exercise snapshots
+ * and encrypted backups preserve selected resume points; this is not autosave.
  */
 export const exerciseChat = new Chat<TtxUIMessage>({
   transport: new DefaultChatTransport<TtxUIMessage>({
@@ -27,6 +28,7 @@ let sentSettings: ProviderSettings | undefined;
 
 /** Sends a reviewed message or the disclosed debrief request, with the current Settings. */
 export function sendToExercise(text: string) {
+  useExerciseSession.setState({ restored: false });
   const settings = useSettingsStore.getState().settings;
   sentSettings = settings ? { ...settings } : undefined;
   return exerciseChat.sendMessage({ text }, { body: { settings: sentSettings } });
@@ -34,6 +36,7 @@ export function sendToExercise(text: string) {
 
 /** Sends the failed request again exactly as approved: the same messages and Settings. */
 export function resendLast() {
+  if (useExerciseSession.getState().restored) throw new Error("A restored exercise has no retry approval. Review a new response before sending.");
   return exerciseChat.regenerate({ body: { settings: sentSettings } });
 }
 
@@ -42,13 +45,26 @@ interface SessionState {
   activeProfile: HouseholdProfile | null;
   /** Set when the exercise is a fictional sample, so it can end in "Make this mine". */
   sampleId: string | null;
+  draft: string;
+  restored: boolean;
+  baselineNeedsReview: boolean;
+  generation: number;
+  setDraft: (draft: string) => void;
   begin: (profile: HouseholdProfile, sampleId?: string) => void;
 }
 
 export const useExerciseSession = create<SessionState>()((set) => ({
   activeProfile: null,
   sampleId: null,
-  begin: (activeProfile, sampleId) => set({ activeProfile, sampleId: sampleId ?? null }),
+  draft: "",
+  restored: false,
+  baselineNeedsReview: false,
+  generation: 0,
+  setDraft: draft => set({ draft }),
+  begin: (activeProfile, sampleId) => set(state => ({
+    activeProfile, sampleId: sampleId ?? null, restored: false, baselineNeedsReview: false,
+    generation: state.generation + 1,
+  })),
 }));
 
 /** Ends the exercise and forgets its masking ledger. */
@@ -58,5 +74,17 @@ export function resetExercise() {
   exerciseChat.clearError();
   sentSettings = undefined;
   usePrivacyStore.getState().clearMappings();
-  useExerciseSession.setState({ activeProfile: null, sampleId: null });
+  useExerciseSession.setState(state => ({
+    activeProfile: null, sampleId: null, draft: "", restored: false, baselineNeedsReview: false,
+    generation: state.generation + 1,
+  }));
+  const records = useLocalRecordsStore.getState();
+  if (records.data.activeExercise && !records.error) {
+    try { records.commit({ ...records.data, activeExercise: null }); }
+    catch { useLocalRecordsStore.setState({ error: "The exercise ended in memory, but its saved resume point could not be cleared. Check local storage before reloading." }); }
+  }
+}
+
+export function isCurrentExerciseGeneration(generation: number) {
+  return useExerciseSession.getState().generation === generation;
 }
