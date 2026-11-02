@@ -49,6 +49,9 @@ function HouseholdContext() {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const recordsError = useLocalRecordsStore(state => state.error);
+  const guided = useLocalRecordsStore(state => state.data.guidedAssessment?.mode === "guided");
+  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
+  const focused = hydrated && pathname === "/assessment" && guided;
   useEffect(() => {
     try {
       if (useLocalRecordsStore.getState().error) return;
@@ -67,7 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div data-app-shell className="flex min-h-screen bg-canvas">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface lg:flex">
+      {!focused && <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface lg:flex">
         <div className="px-5 py-4">
           <Wordmark />
         </div>
@@ -95,21 +98,21 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="mt-auto border-t border-line p-3">
           <HouseholdContext />
         </div>
-      </aside>
+      </aside>}
 
       <div className="flex min-w-0 flex-1 flex-col pb-20 lg:pb-0">
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface/95 px-4 py-2 backdrop-blur lg:hidden">
+        {!focused && <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface/95 px-4 py-2 backdrop-blur lg:hidden">
           <Wordmark />
           <div className="min-w-0 max-w-[55%]">
             <HouseholdContext />
           </div>
-        </header>
+        </header>}
         {recordsError && <p role="alert" className="m-4 rounded-control border border-error p-3 text-sm">{recordsError}</p>}
         {children}
-        <SiteFooter />
+        {!focused && <SiteFooter />}
       </div>
 
-      <nav aria-label="App" className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface lg:hidden">
+      {!focused && <nav aria-label="App" className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface lg:hidden">
         <ul className="grid grid-cols-6">
           {DESTINATIONS.map(({ href, short, icon: Icon, also }) => {
             const active = isActive(href, also);
@@ -131,7 +134,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </ul>
-      </nav>
+      </nav>}
     </div>
   );
 }

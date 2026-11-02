@@ -207,7 +207,7 @@ const STATUS_LABELS: Record<FindingStatus, { text: string; className: string }> 
 };
 
 /** The inventory check's findings, gaps first, each with what to do about it. */
-export function InventoryCheck({ findings }: { findings: Finding[] }) {
+export function InventoryCheck({ findings, showActions = true }: { findings: Finding[]; showActions?: boolean }) {
   const items = usePlanStore(state => state.items);
   const add = usePlanStore(state => state.add);
   const groups = [
@@ -261,7 +261,7 @@ export function InventoryCheck({ findings }: { findings: Finding[] }) {
                     return source && <a key={id} href={source.url} className="mr-2 underline">{source.publisher}: {source.title}</a>;
                   })}
                 </details>
-                {finding.action && finding.category !== "unassessed" && finding.status !== "ok" && (
+                {showActions && finding.action && finding.category !== "unassessed" && finding.status !== "ok" && (
                   <Button type="button" variant="outline" size="sm" className="mt-2"
                     disabled={items.some(item => item.text === finding.action)}
                     onClick={() => add({ text: finding.action!, source: `Household assessment: ${finding.rule}`, kind: finding.kind })}>
@@ -351,16 +351,18 @@ export function HouseholdWizard({
   purpose = "exercise",
   initialStep = 0,
   onStepChange,
+  focusedStep,
 }: {
   onStart: (profile: HouseholdProfile) => void;
   onClose: () => void;
   purpose?: "exercise" | "assessment";
   initialStep?: number;
   onStepChange?: (step: number) => void;
+  focusedStep?: 0 | 1;
 }) {
   const restoreVersion = useHouseholdRestoreStore(state => state.version);
   return <HouseholdWizardForm key={restoreVersion} onStart={onStart} onClose={onClose}
-    purpose={purpose} initialStep={initialStep} onStepChange={onStepChange} />;
+    purpose={purpose} initialStep={initialStep} onStepChange={onStepChange} focusedStep={focusedStep} />;
 }
 
 function HouseholdWizardForm({
@@ -369,12 +371,14 @@ function HouseholdWizardForm({
   purpose = "exercise",
   initialStep = 0,
   onStepChange,
+  focusedStep,
 }: {
   onStart: (profile: HouseholdProfile) => void;
   onClose: () => void;
   purpose?: "exercise" | "assessment";
   initialStep?: number;
   onStepChange?: (step: number) => void;
+  focusedStep?: 0 | 1;
 }) {
   const saved = useHouseholdStore((state) => state.profile);
   const setProfile = useHouseholdStore((state) => state.setProfile);
@@ -390,7 +394,7 @@ function HouseholdWizardForm({
   };
   const go = (delta: number) => setStep(Math.min(STEPS.length - 1, Math.max(0, step + delta)));
 
-  const current = STEPS[step];
+  const current = STEPS[focusedStep ?? step];
   const preview = useMemo(
     () =>
       current === "Review" && purpose === "exercise"
@@ -476,16 +480,16 @@ function HouseholdWizardForm({
         <div>
           <p className="flex items-center gap-2 text-sm font-semibold text-action">
             <Home className="h-4 w-4" aria-hidden />
-            My household · step {step + 1} of {STEPS.length}
+            {focusedStep === undefined ? `My household · step ${step + 1} of ${STEPS.length}` : "Household basics"}
           </p>
           <h2 className="mt-1 text-lg font-semibold">{current}</h2>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={onClose} aria-label="Close household setup">
+        {focusedStep === undefined && <Button type="button" variant="outline" size="sm" onClick={onClose} aria-label="Close household setup">
           <X className="h-4 w-4" aria-hidden />
-        </Button>
+        </Button>}
       </div>
 
-      <ol className="flex flex-wrap gap-1" aria-label="Steps">
+      {focusedStep === undefined && <ol className="flex flex-wrap gap-1" aria-label="Steps">
         {STEPS.map((name, index) => (
           <li key={name}>
             <button
@@ -502,21 +506,21 @@ function HouseholdWizardForm({
             </button>
           </li>
         ))}
-      </ol>
+      </ol>}
 
-      <TestHouseholdPicker
+      {focusedStep === undefined && <TestHouseholdPicker
         replacing={hasProfile(profile)}
         onLoad={(next) => {
           update(next);
           setStep(STEPS.length - 1);
         }}
-      />
+      />}
 
       <p className="text-sm text-ink-2">{purpose === "assessment" && current === "Review"
         ? "Review local findings and their supporting answers, then save useful actions to your shared plan. Nothing here is sent to a provider."
         : WHY[current]}</p>
       <p className="text-xs text-ink-3">All topics are optional. Zero and “I don&apos;t have this” are explicit answers; unknown, skipped and withheld answers are not gaps.</p>
-      {purpose === "assessment" && <Button type="button" onClick={() => onStart(profile)}>See assessment</Button>}
+      {purpose === "assessment" && focusedStep === undefined && <Button type="button" onClick={() => onStart(profile)}>See assessment</Button>}
 
       {current === "People" && (
         <div className="space-y-3">
@@ -936,7 +940,7 @@ function HouseholdWizardForm({
         </div>
       )}
 
-      <div className="flex flex-wrap justify-between gap-2 border-t border-line pt-3">
+      {focusedStep === undefined && <div className="flex flex-wrap justify-between gap-2 border-t border-line pt-3">
         <Button type="button" variant="outline" size="sm" onClick={() => go(-1)} disabled={step === 0}>
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Back
@@ -957,7 +961,7 @@ function HouseholdWizardForm({
             <ArrowRight className="h-4 w-4" aria-hidden />
           </Button>
         )}
-      </div>
+      </div>}
     </section>
   );
 }

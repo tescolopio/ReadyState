@@ -37,7 +37,10 @@ async function fill(label: string, value: string) {
 }
 async function start() {
   await act(async () => root.render(<AssessmentPage />));
-  await click("Guided assessment"); await click("Explore water supplies");
+  await click("Guided assessment"); await click("Continue"); await click("Continue");
+}
+async function resume() {
+  await click("Guided assessment"); await click("Resume guided session");
 }
 describe("one household across Simple and Guided", () => {
   it("explains duration using the same unrounded daily pet allowance as the engine", async () => {
@@ -75,7 +78,7 @@ describe("one household across Simple and Guided", () => {
     expect(assumptions).toBeDefined();
     expect(assumptions?.open).toBe(false);
     expect(container.textContent).toContain("Well-pump continuity: water source is unanswered");
-    await click("Simple assessment"); await click("Supplies");
+    await click("Save and exit"); await click("Supplies");
     const input = [...container.querySelectorAll("input")].find(input => input.labels?.[0]?.textContent === "Stored water (gallons)")!;
     expect(input.value).toBe("2.264");
     expect(useHouseholdStore.getState().profile.supplies.waterGallons).toBe(exact);
@@ -104,8 +107,7 @@ describe("one household across Simple and Guided", () => {
     await fill("Number of 1 US gallon containers", "2");
     expect(useHouseholdStore.getState().profile.supplies.waterGallons).toBeUndefined();
     expect([...container.querySelectorAll("button")].find(button => button.textContent === "Use counted amount")?.disabled).toBe(true);
-    await click("Simple assessment"); await click("Guided assessment");
-    await click("Help me count");
+    await click("Save and exit"); await resume();
     expect([...container.querySelectorAll("input")].find(input => input.labels?.[0]?.textContent === "Number of 1 US gallon containers")?.value).toBe("2");
     const checkbox = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
     await act(async () => checkbox.click()); await click("Use counted amount");
@@ -113,13 +115,13 @@ describe("one household across Simple and Guided", () => {
     expect(container.textContent).toContain("about 2 days");
     const baseline = assessInventory(useHouseholdStore.getState().profile, { scenario: false });
     const action = baseline.find(finding => finding.rule === "water")!.action!;
-    await click("Save to my plan");
+    await click("Continue to next steps"); await click("Save to my plan");
     expect(usePlanStore.getState().items[0].text).toBe(action);
-    await click("Mark water reviewed and return to topics");
+    await click("Finish water review");
     expect(container.textContent).toContain("Reviewed");
-    await click("Simple assessment"); await click("Supplies");
+    await click("Save and exit"); await click("Supplies");
     await fill("Stored water (gallons)", "9");
-    await click("Guided assessment");
+    await resume();
     expect(container.textContent).toContain("Needs review");
     expect(usePlanStore.getState().items[0].text).toBe(action);
     await act(async () => root.render(null));
@@ -127,6 +129,30 @@ describe("one household across Simple and Guided", () => {
     await act(async () => root.render(<AssessmentPage />));
     expect(container.querySelector('[aria-label="Guided assessment"]')).not.toBeNull();
     expect(useHouseholdStore.getState().profile.supplies.waterGallons).toBe(9);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("offers a focused staged session, explicit resume/restart and answer-preserving exit", async () => {
+    await act(async () => root.render(<AssessmentPage />));
+    await click("Guided assessment");
+    expect(container.textContent).toContain("Who is in your household?");
+    expect(container.querySelector('[aria-label="Ways to answer water question"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Steps"]')).toBeNull();
+    expect(container.textContent).not.toContain("Full encrypted backups");
+    await click("Continue");
+    expect(container.textContent).toContain("Are there pets to include?");
+    await click("Continue"); await click("Help me count");
+    await fill("Number of 1 US gallon containers", "4");
+    await click("Save and exit"); await click("Guided assessment");
+    expect(container.textContent).toContain("Return to your guided session");
+    await click("Resume guided session");
+    expect([...container.querySelectorAll("input")].find(input => input.labels?.[0]?.textContent === "Number of 1 US gallon containers")?.value).toBe("4");
+    await click("Save and exit"); await click("Guided assessment"); await click("Start from beginning");
+    expect(container.textContent).toContain("Who is in your household?");
+    expect(useHouseholdStore.getState().profile.people).toHaveLength(1);
+    expect(useLocalRecordsStore.getState().data.guidedAssessment?.counts.gallon1).toBe("4");
+    await click("Continue"); await click("Back");
+    expect(container.textContent).toContain("Who is in your household?");
     expect(fetch).not.toHaveBeenCalled();
   });
 

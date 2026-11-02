@@ -63,7 +63,9 @@ increment.
 
 **Simple / Guided:** Switch between the quick-entry assessment and the Guided
 prototype on Assessment without losing household answers or chosen actions.
-Guided currently covers water: an optional labeled-container helper, explicit
+Guided is a focused, one-stage-at-a-time session: confirm people and pets, answer
+water, review findings, then choose a next step. Save and exit, resume or start
+from the beginning without clearing answers. It includes an optional labeled-container helper, explicit
 uncertainty choices, transparent existing-rule explanations and saved next
 steps. Helper drafts are not recorded supplies until confirmed. Topic progress
 describes review, never readiness. Other topics still use Simple forms.

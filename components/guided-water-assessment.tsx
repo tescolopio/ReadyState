@@ -1,7 +1,6 @@
 "use client";
 
-import { Droplets, Home, HeartPulse, PawPrint, Users, PackageCheck } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { HouseholdWizard, InventoryCheck } from "@/components/household-wizard";
 import { Button } from "@/components/ui/button";
@@ -37,7 +36,12 @@ export function GuidedWaterAssessment({
   const [completeCount, setCompleteCount] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [amountDraft, setAmountDraft] = useState<string | null>(null);
+  const [choosingResume, setChoosingResume] = useState(state.sessionStarted || state.waterStarted);
+  const screen = state.screen === "topics" ? "people" : state.screen;
+  const stages = ["people", "pets", "water", "results", "actions", "complete"] as const;
+  const stage = stages.indexOf(screen);
   const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { heading.current?.focus(); }, [choosingResume]);
   const id = useId();
   const findings = assessInventory(profile, { scenario: false });
   const waterFindings = findings.filter(finding => finding.area === "Water");
@@ -46,8 +50,8 @@ export function GuidedWaterAssessment({
   const numeric = profile.supplies.waterGallons;
   const answer = profile.answers?.["supplies.waterGallons"];
   const show = (screen: GuidedAssessment["screen"]) => {
-    if (update({ screen, ...(screen === "water" ? { waterStarted: true } : {}) })) {
-      setCompleteCount(false); setError("");
+    if (update({ screen, sessionStarted: true, ...(screen === "water" ? { waterStarted: true } : {}) })) {
+      setCompleteCount(false); setAmountDraft(null); setPeopleOpen(false); setError("");
       setTimeout(() => heading.current?.focus(), 0);
     }
   };
@@ -71,51 +75,59 @@ export function GuidedWaterAssessment({
   const recorded = numeric === undefined
     ? answer ? UNASSESSED_ANSWERS[answer] : "Not answered"
     : `${numeric > 0 && numeric < 0.001 ? "less than 0.001" : waterDisplay(numeric)} US gallons${numeric === 0 ? " (explicitly none)" : ""}`;
-  const availableTopics = [
-    { title: "People", detail: "Who needs to be considered; names optional.", icon: Users, topic: 0 },
-    { title: "Pets", detail: "Pet kind and optional weight for water estimates.", icon: PawPrint, topic: 1 },
-    { title: "Home", detail: "Heating, access, water source and backup resources.", icon: Home, topic: 2 },
-    { title: "Health and accessibility", detail: "Optional continuity needs; no diagnosis required.", icon: HeartPulse, topic: 3 },
-    { title: "Food and other supplies", detail: "Known resources, explicit absences and unanswered questions.", icon: PackageCheck, topic: 4 },
-  ];
+  const exit = () => {
+    if (update({ screen, sessionStarted: true })) openSimple(null);
+  };
+  if (choosingResume) return (
+    <section aria-label="Guided assessment" className="space-y-4">
+      <h2 ref={heading} tabIndex={-1} className="text-2xl font-semibold">Return to your guided session</h2>
+      <p>Your household answers and draft counts are saved. Resume where you left off, or review from the beginning without clearing anything.</p>
+      <Button onClick={() => { setChoosingResume(false); setTimeout(() => heading.current?.focus(), 0); }}>Resume guided session</Button>
+      <Button variant="outline" onClick={() => { if (update({ screen: "people", sessionStarted: true })) setChoosingResume(false); }}>Start from beginning</Button>
+      <Button variant="outline" onClick={() => openSimple(null)}>Return to Simple</Button>
+    </section>
+  );
   return (
     <section aria-label="Guided assessment" className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm">Stage {stage + 1} of {stages.length} · Guided water assessment</p>
+        <Button variant="outline" onClick={exit}>Save and exit</Button>
+      </div>
       <div>
         <h2 ref={heading} tabIndex={-1} className="scroll-mt-24 text-2xl font-semibold">
-          {state.screen === "topics" ? "Your household journey" : state.screen === "water" ? "Water you have set aside" : "Understand your water findings"}
+          {screen === "people" ? "Who is in your household?" : screen === "pets" ? "Are there pets to include?" : screen === "water" ? "Water you have set aside" : screen === "results" ? "Understand your water findings" : screen === "actions" ? "Choose one useful next step" : "Your water review is saved"}
         </h2>
-        {state.screen === "topics" && <p className="mt-2 text-sm text-ink-2">Water is the first guided prototype. Other topics open Simple. No AI required.</p>}
       </div>
-      {state.screen === "topics" ? <>
-        <p className="text-sm text-ink-2">Topic labels describe your review, not preparedness. You can review a topic while leaving answers unknown. Changes to supporting answers make it need review again.</p>
-        <div className="rounded-panel border border-line bg-surface p-4">
-          <div className="flex items-center gap-2"><Droplets aria-hidden="true" className="h-6 w-6 text-action" /><h3 className="text-lg font-semibold">Water supplies</h3></div>
-          <p className="my-2 text-sm">Recorded amount: {recorded}</p>
-          <p className="mb-3 text-sm">Topic: <strong>{waterTopicStatus(profile, state.reviewedWater, state.waterStarted)}</strong></p>
-          <Button onClick={() => show("water")}>Explore water supplies</Button>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {availableTopics.map(({ title, detail, icon: Icon, topic }) => <div key={title} className="space-y-2 rounded-panel border border-line p-4">
-            <h3 className="flex items-center gap-2 font-semibold"><Icon aria-hidden="true" className="h-5 w-5 shrink-0" />{title}</h3>
-            <p className="text-sm text-ink-2">{detail}</p>
-            <Button className="max-w-full whitespace-normal" variant="outline" onClick={() => openSimple(topic)}>Open {title.toLowerCase()} in Simple</Button>
-          </div>)}
-        </div>
-        <p className="text-sm text-ink-3">Staying connected, reunification and leaving-home planning need their own question/rule/guidance review; they are not assessed by this prototype.</p>
+      {screen === "people" || screen === "pets" ? <>
+        <p className="text-sm">Confirm what you know. Names and other details are optional; existing answers stay in place. You can continue with unanswered details.</p>
+        <HouseholdWizard key={screen} purpose="assessment" focusedStep={screen === "people" ? 0 : 1}
+          onStart={() => {}} onClose={exit} />
+        {screen === "pets" && <Button variant="outline" onClick={() => show("people")}>Back</Button>}
+        <Button onClick={() => show(screen === "people" ? "pets" : "water")}>Continue</Button>
+      </> : screen === "complete" ? <>
+        <p>Topic: <strong>{waterTopicStatus(profile, state.reviewedWater, state.waterStarted)}</strong>. Reviewed means you looked at this topic, not that you are prepared.</p>
+        <p>Answers and chosen actions are saved locally. You can return to update them.</p>
+        <Button onClick={exit}>Finish and return to Simple</Button>
+        <Button variant="outline" onClick={() => show("actions")}>Back</Button>
+      </> : screen === "actions" ? <>
+        <p>Save a practical action if one helps. You can finish without choosing one; saved actions keep the answers they were based on.</p>
+        <InventoryCheck findings={waterFindings.filter(finding => finding.category !== "unassessed" && finding.status !== "ok")} />
+        <Button variant="outline" onClick={() => show("results")}>Back</Button>
+        <Button onClick={() => { if (update({ reviewedWater: waterReviewKey(profile) })) show("complete"); }}>Finish water review</Button>
       </> : <>
-        <Button variant="outline" onClick={() => show("topics")}>Back to topics</Button>
-        {state.screen === "water" ? <section aria-label="Water question" className="space-y-4 rounded-panel border border-line bg-surface p-4">
+        <Button variant="outline" onClick={() => show(screen === "water" ? "pets" : "water")}>Back</Button>
+        {screen === "water" ? <section aria-label="Water question" className="space-y-4 rounded-panel border border-line bg-surface p-4">
           <h3 className="text-xl font-semibold">Do you know how much drinking water you have stored?</h3>
           <p>Count drinking water already set aside for an emergency, not water you plan to buy.</p>
           <p className="text-sm">Current answer: <strong>{recorded}</strong>. You can replace or clear it below.</p>
-          <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Ways to answer water question">
-            <Button variant="outline" aria-pressed={state.entry === "amount"} onClick={() => { update({ entry: "amount" }); setError(""); }}>Enter an amount</Button>
-            <Button variant="outline" aria-pressed={state.entry === "count"} onClick={() => { update({ entry: "count" }); setCompleteCount(false); setError(""); }}>Help me count</Button>
+          {state.entry === "question" ? <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Ways to answer water question">
+            <Button variant="outline" onClick={() => { update({ entry: "amount" }); setError(""); }}>Enter an amount</Button>
+            <Button variant="outline" onClick={() => { update({ entry: "count" }); setCompleteCount(false); setError(""); }}>Help me count</Button>
             <Button variant="outline" onClick={() => unsure("unknown")}>Not sure</Button>
             <Button variant="outline" onClick={() => unsure("skipped")}>Skip for now</Button>
             <Button variant="outline" onClick={() => unsure("withheld")}>Prefer not to say</Button>
             <Button variant="outline" onClick={() => { if (save(0)) show("results"); }}>I have none (zero)</Button>
-          </div>
+          </div> : <Button variant="outline" onClick={() => { if (update({ entry: "question" })) setCompleteCount(false); }}>Choose another way to answer</Button>}
           <p className="text-xs text-ink-3">An uncertainty choice clears the amount; none records zero. Switching experiences keeps your answer.</p>
           <details className="rounded-control border border-line p-3">
             <summary className="cursor-pointer font-semibold">Show me an example</summary>
@@ -171,7 +183,7 @@ export function GuidedWaterAssessment({
           <Button variant="outline" className="max-w-full whitespace-normal" onClick={() => show("results")}>Keep current answer and see findings</Button>
         </section> : <>
           <p className="text-sm">Your recorded answer: <strong>{recorded}</strong>. Uncertainty is not a deficiency.</p>
-          <Button variant="outline" onClick={() => show("water")}>Edit water answer</Button>
+          <Button variant="outline" onClick={() => { if (update({ entry: "question" })) show("water"); }}>Edit water answer</Button>
           <section aria-label="Water calculation explained" className="space-y-2 rounded-panel border border-line p-4 text-sm">
             <h3 className="text-lg font-semibold">What this estimate uses</h3>
             <p>{profile.people.length} {profile.people.length === 1 ? "person" : "people"} recorded. Guidance: {guidanceValue("water.supply", "minimumDays")}-day minimum, {guidanceValue("water.supply", "goalDays")}-day goal.</p>
@@ -190,7 +202,7 @@ export function GuidedWaterAssessment({
             {profile.pets.length > 0 && <Button variant="outline" className="max-w-full whitespace-normal" onClick={() => openSimple(1)}>Edit pet details in Simple</Button>}
           </section>
           {peopleOpen && <HouseholdWizard purpose="assessment" initialStep={0} onStart={() => setPeopleOpen(false)} onClose={() => setPeopleOpen(false)} />}
-          <InventoryCheck findings={waterFindings} />
+          <InventoryCheck findings={waterFindings} showActions={false} />
           {findings.some(finding => finding.category === "gap" && finding.area !== "Water") && <details className="space-y-2 rounded-control border border-line p-3">
             <summary className="cursor-pointer font-semibold">Other confirmed household gaps still apply</summary>
             <ul className="my-2 list-inside list-disc text-sm">
@@ -198,12 +210,10 @@ export function GuidedWaterAssessment({
             </ul>
             <Button className="max-w-full whitespace-normal" variant="outline" onClick={() => openSimple(null)}>See all findings and evidence in Simple</Button>
           </details>}
-          <p className="text-sm">Choose one useful next step from a supported finding above; you do not need to resolve every question now. Previously saved actions keep their original meaning even if your answers change.</p>
-          <Button className="max-w-full whitespace-normal" onClick={() => { if (update({ reviewedWater: waterReviewKey(profile) })) show("topics"); }}>Mark water reviewed and return to topics</Button>
-          <p className="text-xs text-ink-3">Reviewed means you looked at this topic, even with unknown answers. It does not mean prepared.</p>
+          <Button onClick={() => show("actions")}>Continue to next steps</Button>
         </>}
-        {error && <p role="alert" className="text-sm text-error">{error}</p>}
       </>}
+      {error && <p role="alert" className="text-sm text-error">{error}</p>}
     </section>
   );
 }

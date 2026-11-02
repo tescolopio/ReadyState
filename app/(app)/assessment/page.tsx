@@ -56,21 +56,23 @@ function AssessmentContent() {
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 space-y-6 px-4 py-6">
       <PageHeader title="Household assessment"
-        intro="Describe your household, review relevant topics and choose a few next steps. This assessment runs in your browser without AI, an API key or an exercise." />
-      <HouseholdSaves onRestore={() => { setRevision(value => value + 1); setTopic(null); }} />
-      <Link href="/settings#backups" className="inline-block font-semibold underline">Full encrypted backups, including saved API keys and history</Link>
+        intro={guided.mode === "guided" ? "One stage at a time. Saved locally, without AI." : "Describe your household, review relevant topics and choose a few next steps. This assessment runs in your browser without AI, an API key or an exercise."} />
+      {guided.mode === "simple" && <>
+        <HouseholdSaves onRestore={() => { setRevision(value => value + 1); setTopic(null); }} />
+        <Link href="/settings#backups" className="inline-block font-semibold underline">Full encrypted backups, including saved API keys and history</Link>
+      </>}
       {(saveError || records.error || records.progressWriteError) &&
         <p role="alert">{saveError || records.error || records.progressWriteError}</p>}
       {saveNotice && <p role="status">{saveNotice}</p>}
-      <section aria-label="Assessment experience" className="space-y-2">
+      {guided.mode === "simple" && <section aria-label="Assessment experience" className="space-y-2">
         <div role="group" aria-label="Choose assessment experience" className="flex flex-wrap gap-2">
           <Button variant={guided.mode === "simple" ? "default" : "outline"} aria-pressed={guided.mode === "simple"}
             onClick={() => updateGuided({ mode: "simple" })}>Simple assessment</Button>
-          <Button variant={guided.mode === "guided" ? "default" : "outline"} aria-pressed={guided.mode === "guided"}
+          <Button variant="outline" aria-pressed={false}
             onClick={() => updateGuided({ mode: "guided" })}>Guided assessment</Button>
         </div>
         <p className="text-sm text-ink-2">Two ways to use one household and one local rules engine. Switch any time without losing answers or chosen actions. Guided currently prototypes water only.</p>
-      </section>
+      </section>}
       {guided.mode === "guided" ? <GuidedWaterAssessment key={revision} state={guided} update={updateGuided}
         openSimple={topic => { if (updateGuided({ mode: "simple" })) setTopic(topic); }} />
       : topic !== null ? (
@@ -90,7 +92,7 @@ function AssessmentContent() {
           <InventoryCheck findings={assessInventory(profile, { scenario: false })} />
         </>
       )}
-      {(guided.mode === "guided" || topic === null) && <>
+      {guided.mode === "simple" && topic === null && <>
           <div className="space-y-2">
             <Button variant="outline" onClick={() => {
               setSaveNotice(""); setSaveError("");

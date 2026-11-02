@@ -95,9 +95,13 @@ request intercepted before navigation on a dedicated key-free server.
 
 ### Simple / Guided water prototype (no model calls)
 
-- [ ] Switch **Simple assessment / Guided assessment** while editing and
-  verify the same answers/action plan remain. Other topic cards explicitly
-  open Simple; communication/evacuation depth is not implemented here.
+- [ ] Enter Guided from Simple: only the current stage, Back and Save and exit
+  should compete for attention, without app navigation, backups or a dashboard.
+  Confirm people, then pets, then water, findings, chosen actions and finish.
+  Empty details can remain unanswered. Exit restores normal navigation.
+- [ ] Exit/reload/re-enter: Resume returns to the saved stage; Start from
+  beginning preserves answers, actions and helper drafts. Back never clears them.
+  Communication/evacuation depth is not implemented here.
 - [ ] Enter mixed full-container counts; verify the visible multiplication,
   sum, litre/US gallon conversion and the difference between counted supplies
   and guidance targets. Switching/reloading preserves counts and helper
@@ -113,7 +117,7 @@ request intercepted before navigation on a dedicated key-free server.
   Relevant changes invalidate review, without a readiness score.
 - [ ] Encrypted full backup/restore preserves Guided state/counts/answer
   semantics. Older records without Guided fields still open Simple.
-- [ ] Check 320/390px dashboard/helper/results, keyboard confirmation/apply
+- [ ] Check 320/390px stages/helper/results, keyboard confirmation/apply
   controls, focus visibility, reduced motion and text-only understanding.
   Human usability, physical devices, Safari and Firefox remain separate checks.
 

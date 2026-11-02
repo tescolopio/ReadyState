@@ -13,7 +13,8 @@ export type WaterContainerId = (typeof WATER_CONTAINERS)[number]["id"];
 const count = z.string().max(8).refine(value => value === "" || /^\d{1,6}$/.test(value), "Enter a whole number from 0 to 999999.");
 export const guidedAssessmentSchema = z.strictObject({
   mode: z.enum(["simple", "guided"]),
-  screen: z.enum(["topics", "water", "results"]),
+  screen: z.enum(["topics", "people", "pets", "water", "results", "actions", "complete"]),
+  sessionStarted: z.boolean().default(false),
   waterStarted: z.boolean(),
   entry: z.enum(["question", "amount", "count"]),
   counts: z.strictObject({ bottle500: count, bottle1000: count, gallon1: count, gallon5: count }),
@@ -21,7 +22,7 @@ export const guidedAssessmentSchema = z.strictObject({
 });
 export type GuidedAssessment = z.infer<typeof guidedAssessmentSchema>;
 export const emptyGuidedAssessment = (): GuidedAssessment => ({
-  mode: "simple", screen: "topics", waterStarted: false, entry: "question",
+  mode: "simple", screen: "topics", sessionStarted: false, waterStarted: false, entry: "question",
   counts: { bottle500: "", bottle1000: "", gallon1: "", gallon5: "" },
   reviewedWater: null,
 });

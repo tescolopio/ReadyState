@@ -37,9 +37,11 @@ supported food, safety or other findings.
 
 1. Switch **Simple assessment / Guided assessment** at any time. Answers and
    actions stay in the shared stores. Simple retains the last form topic.
-2. The Guided dashboard offers Water supplies; other implemented topics
-   explicitly open their Simple forms. Unimplemented planning areas are labeled
-   as future work, not assumed gaps.
+2. Guided opens a focused session, without app navigation, backup controls or a
+   topic dashboard competing for attention. Confirm People, then Pets, then
+   answer Water, review Findings, choose Next steps and Finish. Each stage has
+   Back (after the first) and Save and exit. Existing fields/rules are reused;
+   this is not a new question set. Missing household details can remain unanswered.
 3. Enter an amount quickly, or open **Help me count**. Counts are whole numbers
    for full 500 mL, 1 litre, 1 US gallon and 5 US gallon containers. Text labels
    convey everything shown by the schematic SVGs.
@@ -54,10 +56,18 @@ supported food, safety or other findings.
    weights, unknown quantity/count limitations and sourced findings. Save a
    supported action using the same existing plan control. Historical chosen
    actions are not rewritten when answers change.
-7. Mark reviewed and return later. **Reviewed** means the user looked at the
+7. Finish the water review and return later. **Reviewed** means the user looked at the
    topic, even with uncertainty; relevant answer/context changes invalidate it.
    Not started / Started / Needs a few answers / Needs review are progress labels, not risk
    ratings or readiness percentages.
+
+Returning users choose **Resume guided session** or **Start from beginning**.
+Both preserve household answers, actions and calculator drafts; restarting only
+changes the presentation stage. First-time Guided entry starts with People.
+The amount/count branch shows only its controls, with a way to choose a different
+answer method. Findings explain; the next stage offers saving actions separately.
+Save and exit restores Simple and normal app navigation. Ordinary local save
+errors remain visible and do not claim a successful exit.
 
 Mode, screen, helper branch, container-count draft and reviewed-answer
 fingerprint persist in local records and full encrypted backups. Applying
