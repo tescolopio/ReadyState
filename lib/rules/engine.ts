@@ -18,6 +18,7 @@ import {
 } from "@/lib/household";
 import guidanceJson from "@/data/rules/guidance.json";
 import type { Condition, InventoryRule } from "@/lib/rules/schema";
+import { waterDisplay } from "@/lib/water-display";
 
 export type FactValue = string | number | boolean | string[] | undefined;
 export type Facts = Record<string, FactValue>;
@@ -43,6 +44,7 @@ export const PROFILE_FACTS: Record<string, string> = {
   "water.gallons": "Stored water recorded, in gallons",
   "water.daysPerPerson": "Stored gallons divided by headcount",
   "water.gallonsPerDay": "Estimated daily gallons for recorded people and weighed dogs/cats",
+  "water.gallonsPerDayExact": "Unrounded daily gallons used to calculate stored-water duration",
   "water.days": "Stored gallons divided by that estimated daily need",
   "pets.waterGallonsPerDay": 'Drinking-water estimate for weighed dogs/cats in gallons, formatted ("2.1")',
   "pets.kcalPerDay": 'Pets\' daily calories, formatted ("5,040"), when their weights are known',
@@ -130,6 +132,7 @@ export function profileFacts(profile: HouseholdProfile): Facts {
     "water.gallons": supplies.waterGallons,
     "water.daysPerPerson": supplies.waterGallons === undefined || !people.length ? undefined : supplies.waterGallons / headcount,
     "water.gallonsPerDay": people.length ? Math.round(waterPerDay * 10) / 10 : undefined,
+    "water.gallonsPerDayExact": people.length ? waterPerDay : undefined,
     "water.days": supplies.waterGallons === undefined || !people.length ? undefined : supplies.waterGallons / waterPerDay,
     "pets.waterGallonsPerDay": weighed.length ? (Math.round(petWater * 10) / 10).toFixed(1) : undefined,
     "pets.kcalPerDay": weighed.length ? thousands(petKcal) : undefined,
@@ -310,7 +313,13 @@ function applyRule(rule: InventoryRule, facts: Facts, answers: Record<string, Un
   const base = { id: render(rule.findingId ?? rule.id, facts), area: rule.area, kind: rule.kind, rule: rule.id, evidence };
   const unassessed = (): Finding => ({
     ...base, status: "unknown", category: "unassessed",
-    finding: `${rule.area}: this check is unassessed because an answer it needs has not been provided.`,
+    finding: rule.id === "well-pump"
+      ? facts["home.water"] === undefined
+        ? "Well-pump continuity: water source is unanswered. Stored water quantity is assessed separately."
+        : "Well-pump continuity: backup power is unanswered. Stored water quantity is assessed separately."
+      : rule.id === "water"
+        ? `Stored-water duration: ${typeof facts["water.gallons"] !== "number" ? "stored quantity is unanswered" : "household person count is unanswered"}.`
+        : `${rule.area}: this check is unassessed because an answer it needs has not been provided.`,
   });
   if (applicability === undefined) return unassessed();
 
@@ -323,7 +332,7 @@ function applyRule(rule: InventoryRule, facts: Facts, answers: Record<string, Un
       const shortBy = Math.ceil(target - value);
       const local = {
         ...facts,
-        days: days(value),
+        days: rule.metric === "water.days" ? `${waterDisplay(value, 1)} days` : days(value),
         shortBy: days(shortBy),
         shortByGallons: Math.ceil((target - value) * Number(facts["water.gallonsPerDay"] ?? facts.headcount ?? 1)),
       };

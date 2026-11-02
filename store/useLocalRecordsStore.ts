@@ -6,6 +6,7 @@ interface RecordsState {
   data: LocalRecords;
   error: string | null;
   progressWriteError: string | null;
+  simpleRecovery: boolean;
   resumePointWriteError: string | null;
   reload: () => void;
   commit: (data: LocalRecords) => void;
@@ -26,8 +27,9 @@ const read = (): Pick<RecordsState, "data" | "error" | "progressWriteError"> => 
 
 export const useLocalRecordsStore = create<RecordsState>()((set) => ({
   ...read(),
+  simpleRecovery: false,
   resumePointWriteError: null,
-  reload: () => set({ ...read(), resumePointWriteError: null }),
+  reload: () => set({ ...read(), simpleRecovery: false, resumePointWriteError: null }),
   commit: data => {
     const parsed = localRecordsSchema.parse(data);
     localStorage.setItem(RECORDS_KEY, JSON.stringify(parsed));

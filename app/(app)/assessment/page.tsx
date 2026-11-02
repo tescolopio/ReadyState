@@ -6,9 +6,11 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { HouseholdWizard, InventoryCheck } from "@/components/household-wizard";
 import { HouseholdSaves } from "@/components/household-saves";
+import { GuidedWaterAssessment } from "@/components/guided-water-assessment";
 import { Button } from "@/components/ui/button";
 import { hasAssessmentAnswers } from "@/lib/household";
 import { createAssessmentRecord } from "@/lib/local-records";
+import { emptyGuidedAssessment, type GuidedAssessment } from "@/lib/guided-water";
 import { assessInventory } from "@/lib/inventory";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { useLocalRecordsStore } from "@/store/useLocalRecordsStore";
@@ -24,6 +26,18 @@ export default function AssessmentPage() {
 function AssessmentContent() {
   const profile = useHouseholdStore(state => state.profile);
   const records = useLocalRecordsStore();
+  const savedGuided = records.data.guidedAssessment ?? emptyGuidedAssessment();
+  const guided = records.simpleRecovery ? { ...savedGuided, mode: "simple" as const } : savedGuided;
+  const updateGuided = (patch: Partial<GuidedAssessment>) => {
+    try {
+      const current = useLocalRecordsStore.getState();
+      if (current.error) throw new Error(current.error);
+      current.commit({ ...current.data, guidedAssessment: { ...(current.data.guidedAssessment ?? emptyGuidedAssessment()), ...patch } });
+      if (patch.mode) useLocalRecordsStore.setState({ simpleRecovery: false });
+      setSaveError("");
+      return true;
+    } catch { setSaveError("Assessment experience could not be saved. Check browser storage; your household answers were not replaced."); return false; }
+  };
   const [topic, updateTopic] = useState<number | null>(() => records.data.progress === "auto"
     ? hasAssessmentAnswers(profile) ? null : 0 : records.data.progress);
   const [saveError, setSaveError] = useState("");
@@ -45,15 +59,30 @@ function AssessmentContent() {
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 space-y-6 px-4 py-6">
       <PageHeader title="Household assessment"
-        intro="Describe your household, review relevant topics and choose a few next steps. This assessment runs in your browser without AI, an API key or an exercise." />
-      <HouseholdSaves onRestore={() => { setRevision(value => value + 1); setTopic(null); }} />
-      <Link href="/settings#backups" className="inline-block font-semibold underline">Full encrypted backups, including saved API keys and history</Link>
+        intro={guided.mode === "guided" ? "One stage at a time. Saved locally, without AI." : "Describe your household, review relevant topics and choose a few next steps. This assessment runs in your browser without AI, an API key or an exercise."} />
+      {guided.mode === "simple" && <>
+        <HouseholdSaves onRestore={() => { setRevision(value => value + 1); setTopic(null); }} />
+        <Link href="/settings#backups" className="inline-block font-semibold underline">Full encrypted backups, including saved API keys and history</Link>
+      </>}
       {(saveError || records.error || records.progressWriteError) &&
         <p role="alert">{saveError || records.error || records.progressWriteError}</p>}
+      {guided.mode === "guided" && (saveError || records.error || records.progressWriteError) &&
+        <Button variant="outline" onClick={() => useLocalRecordsStore.setState({ simpleRecovery: true })}>Return to Simple without saving progress</Button>}
       {saveNotice && <p role="status">{saveNotice}</p>}
-      {topic !== null ? (
+      {guided.mode === "simple" && <section aria-label="Assessment experience" className="space-y-2">
+        <div role="group" aria-label="Choose assessment experience" className="flex flex-wrap gap-2">
+          <Button variant={guided.mode === "simple" ? "default" : "outline"} aria-pressed={guided.mode === "simple"}
+            onClick={() => updateGuided({ mode: "simple" })}>Simple assessment</Button>
+          <Button variant="outline" aria-pressed={false}
+            onClick={() => updateGuided({ mode: "guided" })}>Guided assessment</Button>
+        </div>
+        <p className="text-sm text-ink-2">Two ways to use one household and one local rules engine. Switch any time without losing answers or chosen actions. Guided currently prototypes water only.</p>
+      </section>}
+      {guided.mode === "guided" ? <GuidedWaterAssessment key={revision} state={guided} update={updateGuided}
+        openSimple={next => { if (updateGuided({ mode: "simple" }) && next !== undefined) setTopic(next); }} />
+      : topic !== null ? (
         <HouseholdWizard key={revision} purpose="assessment" initialStep={topic}
-          onStepChange={setTopic}
+          onStepChange={updateTopic}
           onStart={() => setTopic(null)} onClose={() => setTopic(null)} />
       ) : (
         <>
@@ -66,6 +95,9 @@ function AssessmentContent() {
             <p className="text-sm text-ink-3">Dedicated communication and evacuation planning questions are a later increment. Existing related guidance is not proof that you lack a plan.</p>
           </section>
           <InventoryCheck findings={assessInventory(profile, { scenario: false })} />
+        </>
+      )}
+      {guided.mode === "simple" && topic === null && <>
           <div className="space-y-2">
             <Button variant="outline" onClick={() => {
               setSaveNotice(""); setSaveError("");
@@ -82,8 +114,7 @@ function AssessmentContent() {
             <Link href="/exercises" className="underline">Practice with this household (optional)</Link>
           </div>
           <p className="text-sm text-ink-3">Saved in this browser&apos;s local storage, not an encrypted vault. Shared-device users may be able to read it. Assessment answers and plan actions do not contact a provider. Exercises retain review-before-send.</p>
-        </>
-      )}
+        </>}
     </main>
   );
 }
