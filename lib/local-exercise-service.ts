@@ -205,6 +205,14 @@ export class LocalExerciseService {
     return this.access(sessionId, principal);
   }
 
+  listOwnedSessions(principal: string) {
+    parse(id, principal);
+    return this.db.prepare("SELECT session_id FROM exercise_access WHERE principal = ?").all(principal)
+      .map(row => this.access(parse(id, row.session_id, "corrupt-storage"), principal))
+      .filter(state => state.owner === principal)
+      .map(({ id, revision, phase }) => ({ id, revision, phase }));
+  }
+
   /** Only the local owner can grant/revoke access; transport pairing is separate. */
   setAccess(sessionId: string, owner: string, principal: string, permission: "read" | "write" | "revoke") {
     parse(id, principal);

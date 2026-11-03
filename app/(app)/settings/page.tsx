@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
 
 import { PageHeader } from "@/components/app-shell";
 import { AlwaysMaskCard } from "@/components/always-mask";
@@ -43,6 +44,10 @@ export default function SettingsPage() {
 
       <Section title="Appearance" intro="ReadyState is testing two visual styles. Both have the same screens and content.">
         <StyleSwitcher />
+      </Section>
+
+      <Section title="Local assistant connection" intro="Experimental opt-in development screen. No Claude extension or installable connector is available yet.">
+        <Link href="/connections" className="font-semibold underline">Open local connection setup</Link>
       </Section>
 
       <Section title="Data on this device" intro="Your household and action plan are saved in this browser only. Deleting them can't be undone.">

@@ -19,6 +19,7 @@ export function OutgoingReviewPanel({
   onMask,
   onSend,
   onBack,
+  delivery = "api",
 }: {
   review: OutgoingReview;
   /** Why the review was shown again, such as edits that were masked. */
@@ -31,6 +32,7 @@ export function OutgoingReviewPanel({
   onMask: (value: string) => void;
   onSend: () => void;
   onBack: () => void;
+  delivery?: "api" | "local-connection";
 }) {
   const id = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -75,9 +77,13 @@ export function OutgoingReviewPanel({
           </p>
         )}
         <p className="text-sm text-ink-2">
-          The message goes to this ReadyState server, which sends the conversation to the selected model provider.
+          {delivery === "local-connection" ? (
+            <>This approved text is saved on this local ReadyState server and becomes available to a connection you pair for this exercise.
+              When you ask Claude to continue, it retrieves this context for another model call in your Claude conversation.
+              ReadyState does not use or send your provider API keys on this path. The private masking map stays in this browser.</>
+          ) : <>The message goes to this ReadyState server, which sends the conversation to the selected model provider.
           Any API key you entered in Settings also goes to ReadyState&apos;s server to authenticate with that provider;
-          it is not part of the model&apos;s conversation text.
+          it is not part of the model&apos;s conversation text.</>}
         </p>
         <p className="rounded-control border-l-4 border-attention-accent bg-attention-soft px-3 py-2 text-sm text-ink">
           This is a review, not a guarantee of anonymity. Masking can miss details, so read it before sending. Once sent, the
