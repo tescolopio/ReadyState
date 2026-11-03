@@ -58,37 +58,61 @@ export default function ConnectionsPage() {
   const [pending, setPending] = useState<ApprovedWrite>();
   const pendingReview = useRef<OutgoingReview | undefined>(undefined);
   const [reviewRules, setReviewRules] = useState<MaskTerm[]>([]);
+  const refreshGeneration = useRef(0);
+  const selectedSessionId = useRef<string | undefined>(undefined);
 
+  const invalidateRefreshes = (nextSessionId?: string) => {
+    refreshGeneration.current += 1;
+    selectedSessionId.current = nextSessionId;
+  };
   const refresh = async (sessionId?: string) => {
-    const next = localConnectionViewSchema.parse(await call({ action: "status" }));
+    const generation = ++refreshGeneration.current;
+    const selectedAtStart = selectedSessionId.current;
+    const isCurrent = () => generation === refreshGeneration.current
+      && selectedSessionId.current === selectedAtStart
+      && (!sessionId || selectedAtStart === sessionId);
+
+    const body = await call({ action: "status" });
+    if (!isCurrent()) return;
+    const next = localConnectionViewSchema.parse(body);
+    if (!sessionId) {
+      setView(next);
+      setUnlocked(true);
+      return;
+    }
+
+    const restored = localConnectionStateSchema.parse(await call({ action: "state", sessionId }));
+    if (!isCurrent()) return;
+    const storage = getLocalPrivacyStorage();
+    const privacy = storage
+      ? loadLocalSessionPrivacy(storage, restored.id, restored.baseline.id)
+      : { status: "unavailable" as const };
     setView(next);
     setUnlocked(true);
-    if (sessionId) {
-      const restored = localConnectionStateSchema.parse(await call({ action: "state", sessionId }));
-      setSession(restored);
-      setSessionPrivacy(undefined);
-      const storage = getLocalPrivacyStorage();
-      const privacy = storage
-        ? loadLocalSessionPrivacy(storage, restored.id, restored.baseline.id)
-        : { status: "unavailable" as const };
-      if (privacy.status === "ready") {
-        setSessionPrivacy(privacy.context);
-        setPrivacyProblem(undefined);
-      } else {
-        setPrivacyProblem(privacy.status === "missing"
-          ? "No browser-private privacy context is saved for this session."
-          : privacy.status === "corrupt"
-            ? "The browser-private privacy context for this session is invalid or does not match its saved briefing."
-            : "Browser storage could not restore or associate this session's privacy context.");
-      }
+    setSession(restored);
+    setSessionPrivacy(privacy.status === "ready" ? privacy.context : undefined);
+    if (privacy.status === "ready") {
+      setPrivacyProblem(undefined);
+    } else {
+      setPrivacyProblem(privacy.status === "missing"
+        ? "No browser-private privacy context is saved for this session."
+        : privacy.status === "corrupt"
+          ? "The browser-private privacy context for this session is invalid or does not match its saved briefing."
+          : "Browser storage could not restore or associate this session's privacy context.");
     }
   };
   useEffect(() => {
     let active = true;
+    const generation = refreshGeneration.current;
     call({ action: "status" }).then(body => {
-      if (active) { setView(localConnectionViewSchema.parse(body)); setUnlocked(true); }
+      if (active && generation === refreshGeneration.current && !selectedSessionId.current) {
+        setView(localConnectionViewSchema.parse(body));
+        setUnlocked(true);
+      }
     }).catch((failure: unknown) => {
-      if (active) setError(failure instanceof Error ? failure.message : "Could not read local connection status.");
+      if (active && generation === refreshGeneration.current) {
+        setError(failure instanceof Error ? failure.message : "Could not read local connection status.");
+      }
     });
     return () => { active = false; };
   }, []);
@@ -101,6 +125,7 @@ export default function ConnectionsPage() {
     try { await operation(); }
     catch (failure) {
       if (failure instanceof LocalRequestError && failure.status === 401) {
+        invalidateRefreshes();
         setUnlocked(false); setView(undefined); setSession(undefined); setPairing(undefined);
         setSessionPrivacy(undefined); setPrivacyProblem(undefined);
       }
@@ -113,6 +138,7 @@ export default function ConnectionsPage() {
     setPending(undefined);
     pendingReview.current = undefined;
     setInput("");
+    if (selectedSessionId.current !== receipt.sessionId) invalidateRefreshes(receipt.sessionId);
     await refresh(receipt.sessionId);
   };
   const approve = async (current: OutgoingReview, retry?: Extract<ApprovedWrite, { action: "response" }>): Promise<ApproveResult> => {
@@ -223,6 +249,7 @@ export default function ConnectionsPage() {
     setReviewRules([]);
     const profile = useHouseholdStore.getState().profile;
     if (kind === "baseline") {
+      invalidateRefreshes();
       setPairing(undefined);
       setSession(undefined);
       setSessionPrivacy(undefined);
@@ -289,7 +316,9 @@ export default function ConnectionsPage() {
           <div className="flex flex-wrap gap-2">
             <Button disabled={disabled} onClick={() => void run(() => refresh(session?.id))}>Refresh accepted results</Button>
             <Button variant="outline" disabled={disabled} onClick={() => void run(async () => {
-              await call({ action: "lock" }); setUnlocked(false); setView(undefined); setSession(undefined); setPairing(undefined);
+              invalidateRefreshes();
+              await call({ action: "lock" });
+              setUnlocked(false); setView(undefined); setSession(undefined); setPairing(undefined);
             })}>Lock setup</Button>
             <Button variant="outline" disabled={disabled} onClick={() => openReview("baseline")}>Review new household briefing</Button>
           </div>
@@ -299,6 +328,7 @@ export default function ConnectionsPage() {
               Use the experimental in-ReadyState Claude diagnostic below, or the optional assistant-hosted MCP connector.
               No model is called by this creation button.</p>
             <Button className="max-w-full whitespace-normal" disabled={disabled} onClick={() => void run(async () => {
+              invalidateRefreshes();
               setPairing(undefined);
               setSession(undefined);
               setSessionPrivacy(undefined);
@@ -315,6 +345,7 @@ export default function ConnectionsPage() {
             {view?.sessions.length === 0 && <p>No local assistant exercises yet.</p>}
             {view?.sessions.map(value => (
               <Button key={value.id} variant="outline" disabled={disabled} onClick={() => {
+                invalidateRefreshes(value.id);
                 setPairing(undefined);
                 setInput("");
                 setSession(undefined);

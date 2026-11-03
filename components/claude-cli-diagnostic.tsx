@@ -36,6 +36,7 @@ export function ClaudeCliDiagnostic({ sessionId, accepted, onSaved }: {
     active.current = controller;
     setBusy(true);
     setError("");
+    if (!send) setStatus(undefined);
     try {
       if (send) {
         const state = localConnectionStateSchema.parse(await request({ action: "claude-diagnostic", sessionId, model }, controller.signal));
@@ -50,7 +51,7 @@ export function ClaudeCliDiagnostic({ sessionId, accepted, onSaved }: {
       setError(controller.signal.aborted
         ? "Cancellation requested. Refresh accepted results before retrying; an already saved acknowledgement is retained."
         : failure instanceof Error ? failure.message : "The Claude diagnostic failed.");
-      if (send) setStatus(undefined);
+      setStatus(undefined);
     } finally { active.current = null; setBusy(false); }
   };
 

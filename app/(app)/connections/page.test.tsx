@@ -17,35 +17,77 @@ let writes: string[];
 let requests: unknown[];
 let responseFailure: "uncommitted" | "committed" | undefined;
 let stateWait: Promise<void> | undefined;
+let stateWaitBySession: Map<string, Promise<void>>;
+let stateWaitQueue: Map<string, Promise<void>[]>;
+let onStateRequest: ((id: string) => void) | undefined;
+let fixtureEvent: LocalConnectionState["events"][number];
+let otherSaved: LocalConnectionState;
 const sessionId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const baselineId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const otherSessionId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const otherBaselineId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
   usePrivacyStore.setState({ alwaysMask: [], entityMap: {} });
+  fixtureEvent = {
+    id: randomUUID(),
+    turn: {
+      feedback: null, narrative_response: "Fixture event.", hours_elapsed: 0, time_elapsed: "Hour 0",
+      new_inject: "Fixture only.", critical_alerts: [], suggested_actions: [],
+      response_options: ["Check.", "Wait.", "Ask."], scenario_status: "ongoing",
+    },
+  };
   saved = {
     id: sessionId, revision: 1, phase: "loop",
     baseline: { id: baselineId, text: "Approved fictional household." },
-    events: [{
-      id: randomUUID(),
-      turn: {
-        feedback: null, narrative_response: "Fixture event.", hours_elapsed: 0, time_elapsed: "Hour 0",
-        new_inject: "Fixture only.", critical_alerts: [], suggested_actions: [],
-        response_options: ["Check.", "Wait.", "Ask."], scenario_status: "ongoing",
-      },
-    }],
+    events: [fixtureEvent],
+  };
+  otherSaved = {
+    ...saved, id: otherSessionId,
+    baseline: { id: otherBaselineId, text: "Other fictional session." },
   };
   saveLocalSessionPrivacy(localStorage, sessionId, newLocalSessionPrivacy(baselineId, ["originalprivateterm"]));
   writes = [];
   requests = [];
   responseFailure = undefined;
   stateWait = undefined;
+  stateWaitBySession = new Map();
+  stateWaitQueue = new Map();
+  onStateRequest = undefined;
   vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body));
     requests.push(body);
-    if (body.action === "status") return Response.json({ sessions: [{ id: sessionId, revision: saved.revision, phase: "loop" }], connections: [] });
-    if (body.action === "state") { await stateWait; return Response.json(saved); }
+    if (body.action === "status") return Response.json({
+      sessions: [saved, otherSaved].map(state => ({ id: state.id, revision: state.revision, phase: state.phase })),
+      connections: [],
+    });
+    if (body.action === "state") {
+      const id = String(body.sessionId);
+      onStateRequest?.(id);
+      const state = structuredClone(id === sessionId ? saved : otherSaved);
+      const wait = stateWaitQueue.get(id)?.shift() ?? stateWaitBySession.get(id) ?? stateWait;
+      await wait;
+      return Response.json(state);
+    }
+    if (body.action === "lock") return Response.json({ locked: true });
+    if (body.action === "claude-status") {
+      return Response.json({ installed: true, version: "2.1.300", authentication: "native-subscription", evaluationEnabled: true });
+    }
+    if (body.action === "claude-diagnostic") {
+      saved = {
+        ...saved,
+        events: [{ ...fixtureEvent, turn: { ...fixtureEvent.turn, narrative_response: "Diagnostic result." } }],
+      };
+      return Response.json(saved);
+    }
     if (body.action === "response") {
       writes.push(body.approval.text);
       if (responseFailure === "uncommitted") throw new Error("Fixture lost request");
@@ -82,6 +124,18 @@ async function start(text: string) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await click("Review response");
+}
+async function startDiagnostic() {
+  saved = { ...saved, baseline: { ...saved.baseline, text: DIAGNOSTIC_BASELINE }, events: [] };
+  await act(async () => root.render(<ConnectionsPage />));
+  await click(`Resume ${sessionId.slice(0, 8)} · loop`);
+  await click("Check installed Claude and sign-in");
+}
+async function waitForText(text: string) {
+  for (let attempt = 0; attempt < 30 && !container.textContent?.includes(text); attempt++) {
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  }
+  expect(container.textContent).toContain(text);
 }
 
 describe("local connection send-time privacy", () => {
@@ -245,5 +299,70 @@ describe("local connection send-time privacy", () => {
     expect(writes).toEqual([original]);
     expect(writes[0]).not.toContain("unapprovedsecret");
     expect(JSON.stringify({ ...localStorage })).not.toContain("quietorchid");
+  });
+});
+
+describe("local connection refresh races", () => {
+  it("ignores an older saved-result response that arrives after a newer refresh", async () => {
+    await startDiagnostic();
+    const older = deferred();
+    const newer = deferred();
+    const olderStarted = deferred();
+    const newerStarted = deferred();
+    let stateCalls = 0;
+    stateWaitQueue.set(sessionId, [older.promise, newer.promise]);
+    onStateRequest = id => {
+      if (id !== sessionId) return;
+      stateCalls++;
+      if (stateCalls === 1) olderStarted.resolve();
+      if (stateCalls === 2) newerStarted.resolve();
+    };
+
+    await click("Send fictional diagnostic to Claude");
+    await olderStarted.promise;
+    saved = {
+      ...saved,
+      events: [{ ...fixtureEvent, turn: { ...fixtureEvent.turn, narrative_response: "Newer saved result." } }],
+    };
+    await click("Refresh accepted results");
+    await newerStarted.promise;
+
+    await act(async () => { newer.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    await waitForText("Newer saved result.");
+    await act(async () => { older.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(container.textContent).toContain("Newer saved result.");
+    expect(container.textContent).not.toContain("Diagnostic result.");
+  });
+
+  it("does not restore the previously selected session after a session change during refresh", async () => {
+    await startDiagnostic();
+    const pending = deferred();
+    const stateStarted = deferred();
+    stateWaitBySession.set(sessionId, pending.promise);
+    onStateRequest = id => { if (id === sessionId) stateStarted.resolve(); };
+
+    await click("Send fictional diagnostic to Claude");
+    await stateStarted.promise;
+    await click(`Resume ${otherSessionId.slice(0, 8)} · loop`);
+    await waitForText(`Exercise ${otherSessionId.slice(0, 8)}`);
+    await act(async () => { pending.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(container.textContent).toContain(`Exercise ${otherSessionId.slice(0, 8)}`);
+    expect(container.textContent).not.toContain(`Exercise ${sessionId.slice(0, 8)}`);
+  });
+
+  it("does not unlock setup when a saved-result refresh completes after locking", async () => {
+    await startDiagnostic();
+    const pending = deferred();
+    const stateStarted = deferred();
+    stateWaitBySession.set(sessionId, pending.promise);
+    onStateRequest = id => { if (id === sessionId) stateStarted.resolve(); };
+
+    await click("Send fictional diagnostic to Claude");
+    await stateStarted.promise;
+    await click("Lock setup");
+    expect(container.querySelector("#owner-code")).not.toBeNull();
+    await act(async () => { pending.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(container.querySelector("#owner-code")).not.toBeNull();
+    expect([...container.querySelectorAll("button")].some(value => value.textContent === "Lock setup")).toBe(false);
   });
 });

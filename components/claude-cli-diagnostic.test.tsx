@@ -45,6 +45,21 @@ it("detects runtime without a model call and keeps inference disabled by default
   expect(container.textContent).toContain(DIAGNOSTIC_BASELINE);
   expect(container.textContent).toContain(DIAGNOSTIC_CLI_REQUEST);
 });
+it("clears a previously successful auth check when the next check fails", async () => {
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(Response.json({
+      installed: true, version: "2.1.300", authentication: "native-subscription", evaluationEnabled: true,
+    }))
+    .mockRejectedValueOnce(new Error("Native status check timed out."));
+  vi.stubGlobal("fetch", fetchMock);
+  await render();
+  await click("Check installed Claude and sign-in");
+  expect(button("Send fictional diagnostic to Claude").disabled).toBe(false);
+  await click("Check installed Claude and sign-in");
+  expect(button("Send fictional diagnostic to Claude").disabled).toBe(true);
+  expect(container.textContent).not.toContain("Authentication: native-subscription");
+  expect(container.textContent).toContain("Native status check timed out.");
+});
 it("sends a selected model from ReadyState and refreshes the saved acknowledgement", async () => {
   const calls: unknown[] = [];
   vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
