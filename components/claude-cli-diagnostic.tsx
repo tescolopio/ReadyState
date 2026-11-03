@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { claudeCliStatusSchema, claudeRequestedModelSchema } from "@/lib/claude-cli-contracts";
 import { localConnectionStateSchema } from "@/lib/local-connection-contracts";
-import { DIAGNOSTIC_BASELINE, diagnosticTurn } from "@/lib/connection-diagnostic.mjs";
+import { DIAGNOSTIC_CLI_REQUEST, diagnosticTurn } from "@/lib/connection-diagnostic.mjs";
 
 async function request(input: unknown, signal?: AbortSignal): Promise<unknown> {
   const response = await fetch("/api/local-connection", {
@@ -73,8 +73,7 @@ export function ClaudeCliDiagnostic({ sessionId, accepted, onSaved }: {
       not household facts, exercise history or browser-private masking context.
       The native CLI supplies its own system context; use a clean test profile without personal instructions.</p>
     <details><summary>Fixed fictional request and acknowledgement</summary>
-      <p>{DIAGNOSTIC_BASELINE}</p>
-      <pre className="whitespace-pre-wrap break-words text-sm">{JSON.stringify(diagnosticTurn, null, 2)}</pre>
+      <pre className="whitespace-pre-wrap break-words text-sm">{`${DIAGNOSTIC_CLI_REQUEST}${JSON.stringify(diagnosticTurn, null, 2)}`}</pre>
     </details>
     <Button disabled={busy || accepted || !status?.evaluationEnabled || status.authentication !== "native-subscription"}
       onClick={() => void run(true)}>Send fictional diagnostic to Claude</Button>

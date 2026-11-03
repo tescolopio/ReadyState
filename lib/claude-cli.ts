@@ -5,7 +5,7 @@ import path from "node:path";
 import { z } from "zod";
 
 import { claudeCliEvidenceSchema, claudeRequestedModelSchema } from "@/lib/claude-cli-contracts";
-import { DIAGNOSTIC_BASELINE, diagnosticTurn, diagnosticTurnSchema } from "@/lib/connection-diagnostic.mjs";
+import { DIAGNOSTIC_CLI_REQUEST, diagnosticTurn, diagnosticTurnSchema } from "@/lib/connection-diagnostic.mjs";
 
 export class ClaudeCliError extends Error {}
 type ProcessResult = { code: number | null; stdout: string; stderr: string };
@@ -127,7 +127,7 @@ export class ClaudeCli {
       "--setting-sources", "", "--settings", '{"disableAllHooks":true}',
       "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
       "--json-schema", JSON.stringify(z.toJSONSchema(diagnosticTurnSchema)),
-    ], `${DIAGNOSTIC_BASELINE}\nReturn this exact JSON acknowledgement, without tools:\n${JSON.stringify(diagnosticTurn)}`, signal);
+    ], `${DIAGNOSTIC_CLI_REQUEST}${JSON.stringify(diagnosticTurn)}`, signal);
     if (signal.aborted) throw new ClaudeCliError("Claude request cancelled. Nothing was accepted.");
     if (result.code !== 0) failure(result);
     const envelope = z.object({

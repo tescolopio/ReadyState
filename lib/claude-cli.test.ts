@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClaudeCli, claudeEnvironment, configuredClaudeExecutable, runClaudeProcess, type ClaudeRunner } from "@/lib/claude-cli";
-import { diagnosticTurn } from "@/lib/connection-diagnostic.mjs";
+import { DIAGNOSTIC_CLI_REQUEST, diagnosticTurn } from "@/lib/connection-diagnostic.mjs";
 
 const signal = () => new AbortController().signal;
 const success = (value: unknown) => ({ code: 0, stdout: JSON.stringify(value), stderr: "" });
@@ -52,7 +52,7 @@ describe("official Claude CLI diagnostic adapter (no live model)", () => {
     expect(args).not.toContain("--bare");
     expect(args).not.toContain("--dangerously-skip-permissions");
     expect(args).not.toContain("--fallback-model");
-    expect(prompt).toContain(JSON.stringify(diagnosticTurn));
+    expect(prompt).toBe(`${DIAGNOSTIC_CLI_REQUEST}${JSON.stringify(diagnosticTurn)}`);
     expect(prompt).not.toContain("not-retained");
   });
   it("marks absent response model evidence as unavailable", async () => {

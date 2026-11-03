@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ClaudeCliDiagnostic } from "@/components/claude-cli-diagnostic";
-import { DIAGNOSTIC_BASELINE, diagnosticTurn } from "@/lib/connection-diagnostic.mjs";
+import { DIAGNOSTIC_BASELINE, DIAGNOSTIC_CLI_REQUEST, diagnosticTurn } from "@/lib/connection-diagnostic.mjs";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -43,6 +43,7 @@ it("detects runtime without a model call and keeps inference disabled by default
   expect(button("Send fictional diagnostic to Claude").disabled).toBe(true);
   expect(container.textContent).toContain("claude auth login");
   expect(container.textContent).toContain(DIAGNOSTIC_BASELINE);
+  expect(container.textContent).toContain(DIAGNOSTIC_CLI_REQUEST);
 });
 it("sends a selected model from ReadyState and refreshes the saved acknowledgement", async () => {
   const calls: unknown[] = [];
