@@ -12,7 +12,7 @@
 import { SAFETY_RULES } from "@/lib/rules";
 import { guidanceValue } from "@/lib/rules/engine";
 import { introducedEquipment, mentions, negated, powerOutageContext, type IntroducedItem } from "@/lib/continuity";
-import type { AfterActionReport, Improvement, TurnOutput } from "@/lib/ttx";
+import type { AfterActionReport, Improvement, TurnOutput } from "@/lib/exercise-contracts";
 
 export type DebriefCheckCategory = "continuity" | "suitability" | "citation" | "safety" | "accuracy";
 

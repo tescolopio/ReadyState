@@ -13,7 +13,7 @@
  * for a reviewer (G11).
  */
 import type { IntroducedItem } from "@/lib/continuity";
-import type { TurnOutput } from "@/lib/ttx";
+import type { TurnOutput } from "@/lib/exercise-contracts";
 
 /**
  * Power coming back as an event, not a hypothetical ("stay with your neighbor until power returns", Alex Hour 42)
