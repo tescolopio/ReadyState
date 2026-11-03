@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ConnectionsPage from "@/app/(app)/connections/page";
 import { DIAGNOSTIC_BASELINE } from "@/lib/connection-diagnostic.mjs";
-import { loadLocalSessionPrivacy, newLocalSessionPrivacy, saveLocalSessionPrivacy } from "@/lib/local-session-privacy";
+import { loadLocalSessionPrivacy, LOCAL_PRIVACY_SETTINGS_KEY, newLocalSessionPrivacy, saveLocalPrivacySettings, saveLocalSessionPrivacy } from "@/lib/local-session-privacy";
 import type { LocalConnectionState } from "@/lib/local-connection-contracts";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 
@@ -87,6 +87,12 @@ beforeEach(() => {
         events: [{ ...fixtureEvent, turn: { ...fixtureEvent.turn, narrative_response: "Diagnostic result." } }],
       };
       return Response.json(saved);
+    if (body.action === "create") {
+      writes.push(body.approval.text);
+      if (responseFailure === "uncommitted") throw new Error("Fixture lost request");
+      saved = { ...saved, baseline: body.approval, revision: saved.revision + 1 };
+      if (responseFailure === "committed") throw new Error("Fixture lost acknowledgement");
+      return Response.json({ sessionId, revision: saved.revision });
     }
     if (body.action === "response") {
       writes.push(body.approval.text);
@@ -151,6 +157,64 @@ describe("local connection send-time privacy", () => {
     expect(container.textContent).not.toContain("Diagnostic acknowledgement saved");
     expect(container.textContent).not.toContain("Accepted simulated event");
   });
+
+  it("does not send when shared Settings storage is corrupt", async () => {
+    await start("the codeword is quietorchid");
+    localStorage.setItem(LOCAL_PRIVACY_SETTINGS_KEY, '{"invalid":true}');
+    await click("Send this");
+    expect(writes).toEqual([]);
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+  });
+
+  it("does not blindly retry a briefing after another tab restricts its approved text", async () => {
+    await act(async () => root.render(<ConnectionsPage />));
+    await click("Review new household briefing");
+    const preview = container.querySelector<HTMLTextAreaElement>("textarea")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(preview, "the codeword is quietorchid");
+      preview.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    responseFailure = "uncommitted";
+    await click("Send this");
+    expect(writes).toEqual(["the codeword is quietorchid"]);
+    await saveLocalPrivacySettings(localStorage, ["quietorchid"]);
+    responseFailure = undefined;
+    await click("Retry approved save");
+    expect(writes).toHaveLength(1);
+    expect(container.textContent).toContain("Nothing was retransmitted");
+    expect(container.querySelector('[aria-label="Unconfirmed save"]')).not.toBeNull();
+  });
+
+  it("still retries the fixed fictional diagnostic without a household privacy review", async () => {
+    await act(async () => root.render(<ConnectionsPage />));
+    responseFailure = "uncommitted";
+    await click("Create fictional connection diagnostic");
+    expect(writes).toHaveLength(1);
+    responseFailure = undefined;
+    await click("Retry approved save");
+    expect(writes).toHaveLength(2);
+    expect(writes[1]).toBe(writes[0]);
+  });
+
+  it.each(["approval", "retry"])("does not send data newly restricted by another tab's Settings before %s", async stage => {
+    await start("the codeword is quietorchid");
+    if (stage === "retry") {
+      responseFailure = "uncommitted";
+      await click("Send this");
+      responseFailure = undefined;
+    }
+    // Another tab saves shared Settings without touching this tab's in-memory store.
+    await saveLocalPrivacySettings(localStorage, ["quietorchid"]);
+    expect(usePrivacyStore.getState().alwaysMask).toEqual([]);
+    const previousWrites = writes.length;
+    await click(stage === "retry" ? "Retry approved save" : "Send this");
+    expect(writes).toHaveLength(previousWrites);
+    const preview = container.querySelector<HTMLTextAreaElement>('textarea:not(#local-response)')!;
+    expect(preview.value).not.toContain("quietorchid");
+    await click("Send this");
+    expect(writes).toHaveLength(previousWrites + 1);
+    expect(writes.at(-1)).not.toContain("quietorchid");
+  });
   it("uses newly added Settings rules and requires another review when they change", async () => {
     usePrivacyStore.getState().setAlwaysMask(["firstprivateword"]);
     await start("firstprivateword and secondprivateword with originalprivateterm");
@@ -199,7 +263,7 @@ describe("local connection send-time privacy", () => {
     let release!: () => void;
     const wait = new Promise<void>(resolve => { release = resolve; });
     const lock = vi.fn(async (_name: string, _options: LockOptions, callback: LockGrantedCallback<unknown>) => {
-      await wait;
+      if (_name === `readystate.local-session-privacy.${sessionId}`) await wait;
       return callback(null);
     });
     vi.stubGlobal("navigator", { locks: { request: lock } });

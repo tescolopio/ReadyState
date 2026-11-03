@@ -42,6 +42,36 @@ export type PrivacyLoadResult =
 
 const sessionKey = (sessionId: string) => `readystate.local-session-privacy.v1.session.${sessionId}`;
 const draftKey = (approvalId: string) => `readystate.local-session-privacy.v1.draft.${approvalId}`;
+export const LOCAL_PRIVACY_SETTINGS_KEY = "readystate.local-privacy-settings.v1";
+const settingsLock = "readystate.local-privacy-settings";
+
+/** Read inside the settings lock; storage events and another tab's memory are not authoritative. */
+export function loadLocalPrivacySettings(storage: PrivateStorage): string[] {
+  const raw = storage.getItem(LOCAL_PRIVACY_SETTINGS_KEY);
+  return raw === null ? [] : z.array(z.string().min(1)).parse(JSON.parse(raw));
+}
+
+export async function withLocalPrivacySettingsLock<T>(
+  operation: () => Promise<T>,
+  mode: LockMode = "shared",
+  locks: Pick<LockManager, "request"> | null | undefined = typeof navigator === "undefined" ? undefined : navigator.locks,
+): Promise<T> {
+  if (!locks) throw new Error("Safe cross-tab privacy coordination is unavailable. No privacy setting was changed and no response was saved or sent.");
+  return locks.request(settingsLock, { mode }, operation);
+}
+
+/** Settings writes cannot take effect between a response's privacy check and its save. */
+export async function saveLocalPrivacySettings(
+  storage: PrivateStorage,
+  names: string[],
+  locks: Pick<LockManager, "request"> | null | undefined = typeof navigator === "undefined" ? undefined : navigator.locks,
+): Promise<string[]> {
+  const rules = [...new Set(names.map(name => name.trim()).filter(Boolean))];
+  return withLocalPrivacySettingsLock(async () => {
+    storage.setItem(LOCAL_PRIVACY_SETTINGS_KEY, JSON.stringify(rules));
+    return rules;
+  }, "exclusive", locks);
+}
 
 export function localSessionMaskRules(...lists: MaskTerm[][]): MaskTerm[] {
   const terms = new Map<string, MaskTerm>();
@@ -54,7 +84,11 @@ export async function withLocalSessionPrivacyLock<T>(
   locks: Pick<LockManager, "request"> | null | undefined = typeof navigator === "undefined" ? undefined : navigator.locks,
 ): Promise<T> {
   if (!locks) throw new Error("Safe cross-tab privacy coordination is unavailable. Use a browser with Web Locks support; no response was saved or sent.");
-  return locks.request(`readystate.local-session-privacy.${sessionId}`, { mode: "exclusive" }, operation);
+  // Always acquire settings before the session lock, including retries and masking writes.
+  return withLocalPrivacySettingsLock(
+    () => locks.request(`readystate.local-session-privacy.${sessionId}`, { mode: "exclusive" }, operation),
+    "shared", locks,
+  );
 }
 
 export function newLocalSessionPrivacy(

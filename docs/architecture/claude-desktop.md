@@ -235,8 +235,15 @@ Response approval uses an exclusive per-session Web Lock across tabs, reloads
 the current private context and checks the server revision before saving new
 mappings or transmitting. Changed mappings/rules require a rebuilt review;
 stale exercise state is refreshed without overwriting mappings. Browsers
-without Web Locks fail closed. Current Settings Always Mask terms are combined
-with the session's original terms both when opening and approving a review.
+without Web Locks fail closed. Settings Always Mask writes are browser-local
+and use an exclusive settings Web Lock. Response approval/retry acquires its
+shared settings lock before the exclusive session lock, reloads persisted
+Settings rules and holds both locks through saving the approved request.
+Consequently another tab cannot apply a new restriction between approval and
+transmission. A restriction saved before approval rebuilds the review instead
+of sending its now-restricted text. Briefing approval/retry uses the same
+settings coordination. Settings terms are combined with the session's original
+terms; invalid or unavailable Settings storage blocks transmission.
 Selecting an additional mask in this local review applies only to this session,
 stays in tab memory until Send and does not change Settings or other sessions.
 Back discards these unapproved rules. Private-draft recovery reads do not

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { loadLocalSessionPrivacy, localSessionMaskRules, newLocalSessionPrivacy, saveLocalPrivacyDraft, saveLocalSessionPrivacy, withLocalSessionPrivacyLock, type PrivateStorage } from "@/lib/local-session-privacy";
+import { loadLocalPrivacySettings, loadLocalSessionPrivacy, localSessionMaskRules, newLocalSessionPrivacy, saveLocalPrivacyDraft, saveLocalPrivacySettings, saveLocalSessionPrivacy, withLocalSessionPrivacyLock, type PrivateStorage } from "@/lib/local-session-privacy";
 import { createApprover, prepareReview } from "@/lib/outgoing-review";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 
@@ -103,11 +103,11 @@ describe("local session privacy", () => {
     saveLocalSessionPrivacy(storage, a, context);
     const first = prepareReview("response", mask => mask("My sister Alice called."), {}, []);
     const second = prepareReview("response", mask => mask("My sister Beatrice called."), {}, []);
-    let tail: Promise<unknown> = Promise.resolve();
+    const tails = new Map<string, Promise<unknown>>();
     const locks: Pick<LockManager, "request"> = {
-      request: ((_name: string, _options: LockOptions, callback: LockGrantedCallback<unknown>) => {
-        const next = tail.then(() => callback(null));
-        tail = next;
+      request: ((name: string, _options: LockOptions, callback: LockGrantedCallback<unknown>) => {
+        const next = (tails.get(name) ?? Promise.resolve()).then(() => callback(null));
+        tails.set(name, next.catch(() => {}));
         return next;
       }) as LockManager["request"],
     };
@@ -129,6 +129,50 @@ describe("local session privacy", () => {
     expect(restored.status === "ready" && restored.context.entityMap["[Person 1]"]).toBe("Alice");
     if (results[1].status !== "review-again") throw new Error("Expected stale review rebuild");
     expect(results[1].review.text).toContain("[Person 2]");
+  });
+
+  it("holds Settings coordination through the outbound save and releases it on failure", async () => {
+    const storage = new MemoryStorage();
+    const tails = new Map<string, Promise<unknown>>();
+    const locks: Pick<LockManager, "request"> = {
+      request: ((name: string, _options: LockOptions, callback: LockGrantedCallback<unknown>) => {
+        const next = (tails.get(name) ?? Promise.resolve()).then(() => callback(null));
+        tails.set(name, next.catch(() => {}));
+        return next;
+      }) as LockManager["request"],
+    };
+    let reachedSend!: () => void;
+    const sending = new Promise<void>(resolve => { reachedSend = resolve; });
+    let finishSend!: () => void;
+    const transport = new Promise<void>(resolve => { finishSend = resolve; });
+    const send = withLocalSessionPrivacyLock(a, async () => {
+      expect(loadLocalPrivacySettings(storage)).toEqual([]);
+      reachedSend();
+      await transport;
+      throw new Error("lost acknowledgement");
+    }, locks);
+    const failure = expect(send).rejects.toThrow("lost acknowledgement");
+    await sending;
+    let settingSaved = false;
+    const setting = saveLocalPrivacySettings(storage, ["quietorchid"], locks).then(() => { settingSaved = true; });
+    await Promise.resolve();
+    expect(settingSaved).toBe(false);
+    expect(loadLocalPrivacySettings(storage)).toEqual([]);
+    finishSend();
+    await failure;
+    await setting;
+    expect(loadLocalPrivacySettings(storage)).toEqual(["quietorchid"]);
+
+    const review = prepareReview("response", mask => mask("the codeword is quietorchid"), {}, []);
+    const sent: string[] = [];
+    const retry = await withLocalSessionPrivacyLock(a, async () => createApprover({
+      ledger: () => ({}), alwaysMask: () => loadLocalPrivacySettings(storage),
+      addMapping: () => {}, send: text => { sent.push(text); },
+    })(review), locks);
+    expect(retry.status).toBe("review-again");
+    expect(sent).toEqual([]);
+    if (retry.status !== "review-again") throw new Error("Expected a fresh masked review");
+    expect(retry.review.text).not.toContain("quietorchid");
   });
 
   it("requires lock support and applies current explicit rules while preserving original session terms", async () => {

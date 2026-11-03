@@ -11,7 +11,7 @@ import { DIAGNOSTIC_BASELINE, diagnosticStateSchema } from "@/lib/connection-dia
 import { privateTerms } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { LOCAL_SHORT_STEP_REASON, localConnectionStateSchema, localConnectionViewSchema, type LocalConnectionState } from "@/lib/local-connection-contracts";
-import { getLocalPrivacyStorage, loadLocalSessionPrivacy, localSessionMaskRules, newLocalSessionPrivacy, saveLocalPrivacyDraft, saveLocalSessionPrivacy, withLocalSessionPrivacyLock, type LocalSessionPrivacy } from "@/lib/local-session-privacy";
+import { getLocalPrivacyStorage, loadLocalPrivacySettings, loadLocalSessionPrivacy, localSessionMaskRules, newLocalSessionPrivacy, saveLocalPrivacyDraft, saveLocalSessionPrivacy, withLocalPrivacySettingsLock, withLocalSessionPrivacyLock, type LocalSessionPrivacy } from "@/lib/local-session-privacy";
 import { createApprover, editReview, prepareReview, type ApproveResult, type OutgoingReview } from "@/lib/outgoing-review";
 import type { MaskTerm } from "@/utils/obfuscator";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
@@ -175,13 +175,16 @@ export default function ConnectionsPage() {
       }
       restored = privacy.context;
     }
+    const settingsStorage = getLocalPrivacyStorage();
+    if (!settingsStorage) throw new Error("Browser privacy settings are unavailable. Nothing was saved or sent.");
+    const settingsRules = loadLocalPrivacySettings(settingsStorage);
     const candidate: LocalSessionPrivacy = restored
-      ? { ...restored, entityMap: { ...restored.entityMap }, alwaysMask: localSessionMaskRules(restored.alwaysMask, usePrivacyStore.getState().alwaysMask, reviewRules) }
+      ? { ...restored, entityMap: { ...restored.entityMap }, alwaysMask: localSessionMaskRules(restored.alwaysMask, usePrivacyStore.getState().alwaysMask, settingsRules, reviewRules) }
       : {
           version: 1,
           baselineApprovalId: baselineApprovalId.current ?? crypto.randomUUID(),
           entityMap: {},
-          alwaysMask: current.alwaysMask.map(term => typeof term === "string" ? term : { ...term }),
+          alwaysMask: localSessionMaskRules(current.alwaysMask, usePrivacyStore.getState().alwaysMask, settingsRules),
         };
     let approvedWrite: ApprovedWrite | undefined;
     const approver = createApprover({
@@ -231,7 +234,26 @@ export default function ConnectionsPage() {
     return result;
   };
   const retrySave = async (write: ApprovedWrite) => {
-    if (write.action === "create") { await save(write); return; }
+    if (write.action === "create") {
+      if (write.approval.text === DIAGNOSTIC_BASELINE) { await save(write); return; }
+      const approved = pendingReview.current;
+      if (!approved) throw new Error("The approved briefing review is unavailable. Clear retry and review saved state.");
+      await withLocalPrivacySettingsLock(async () => {
+        const storage = getLocalPrivacyStorage();
+        if (!storage) throw new Error("Browser privacy settings are unavailable. Nothing was saved or sent.");
+        const result = createApprover({
+          ledger: () => ({ ...approved.base }),
+          alwaysMask: () => localSessionMaskRules(approved.alwaysMask, usePrivacyStore.getState().alwaysMask, loadLocalPrivacySettings(storage)),
+          addMapping: () => {},
+          send: () => {},
+        })(approved);
+        if (result.status !== "sent") {
+          throw new Error("Privacy rules changed or the briefing retry is invalid. Nothing was retransmitted. Clear retry and review saved sessions before creating a new briefing; the original save may already have succeeded.");
+        }
+        await save(write);
+      });
+      return;
+    }
     const approved = pendingReview.current;
     if (!approved) throw new Error("The approved response review is unavailable. Clear retry and review saved state.");
     await withLocalSessionPrivacyLock(write.command.sessionId, async () => {
@@ -503,7 +525,7 @@ export default function ConnectionsPage() {
             };
             const target = reviewTarget.current;
             if (review.kind === "response" && target) await withLocalSessionPrivacyLock(target.sessionId, operation);
-            else await operation();
+            else await withLocalPrivacySettingsLock(operation);
           });
         }} />}
     </main>
