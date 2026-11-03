@@ -114,6 +114,7 @@ export class LocalConnectionAuth {
     z.enum(["read", "write"]).parse(permission);
     return this.transaction(() => {
       const code = secret();
+      // Each pairing gets a fresh grant identity; old revocation retries cannot target it.
       const principal = randomUUID();
       const id = randomUUID();
       grant(principal);

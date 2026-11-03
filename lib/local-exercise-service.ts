@@ -250,6 +250,7 @@ export class LocalExerciseService {
       if (principal === owner) throw new LocalExerciseError("access");
       if (permission === "revoke") {
         const result = this.db.prepare("DELETE FROM exercise_access WHERE session_id = ? AND principal = ?").run(sessionId, principal);
+        // Cleanup can retry after a crash; an absent grant must leave newer work untouched.
         if (result.changes === 0) return;
         // A task released to this connection must not survive revocation/re-pairing.
         state.task = undefined;

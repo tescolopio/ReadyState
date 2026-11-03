@@ -151,6 +151,29 @@ describe("authoritative local exercise sessions", () => {
     refused(() => service.submitTurn(connector, command(state.revision), task.id, turn(12)), "stale-task");
   });
 
+  it.each(["never granted", "already revoked"] as const)(
+    "keeps revision and pending work unchanged on repeated revocation of a grant that was %s",
+    (grant) => {
+      const absent = grant === "already revoked" ? connector : randomUUID();
+      if (grant === "already revoked") service.setAccess(sessionId, owner, absent, "revoke");
+      const current = randomUUID();
+      service.setAccess(sessionId, owner, current, "write");
+      const task = service.getGenerationTask(sessionId, current);
+      const before = service.getState(sessionId, owner);
+      const restarted = new LocalExerciseService(filename);
+      services.push(restarted);
+
+      for (const instance of [service, restarted, restarted]) {
+        instance.setAccess(sessionId, owner, absent, "revoke");
+        expect(instance.getState(sessionId, owner)).toEqual(before);
+        expect(instance.getGenerationTask(sessionId, current)).toEqual(task);
+        refused(() => instance.getState(sessionId, absent), "access");
+      }
+      expect(restarted.submitTurn(current, command(task.revision), task.id, turn(0)).revision)
+        .toBe(task.revision + 1);
+    },
+  );
+
   it("replays the exact committed receipt after a lost acknowledgement, including across restart", () => {
     const task = service.getGenerationTask(sessionId, connector);
     const input = command(task.revision, "lost-ack");

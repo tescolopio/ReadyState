@@ -298,6 +298,37 @@ describe("local browser / connector boundary", () => {
     expect((await connector({ action: "turn", command: { sessionId: saved.sessionId, expectedRevision: task.revision, key: randomUUID() }, taskId: task.id, candidate: initialTurn }, second.token)).status).toBe(200);
   });
 
+  it("cannot revoke a new pairing or its work when an old cleanup is retried after restart", async () => {
+    const saved = await session();
+    const old = await pair(saved.sessionId);
+    const oldPrincipal = auth.authenticateConnector(old.token, saved.sessionId, true);
+    expect(() => auth.revoke(old.id, (sessionId, principal) => {
+      exercises.setAccess(sessionId, auth.owner, principal, "revoke");
+      throw new Error("Synthetic crash before credential deletion");
+    })).toThrow("Synthetic crash");
+    auth.close();
+    exercises.close();
+    auth = new LocalConnectionAuth(join(directory, "auth.sqlite"), ownerCode, () => now);
+    exercises = new LocalExerciseService(join(directory, "exercise.sqlite"));
+
+    const replacement = await pair(saved.sessionId);
+    const replacementPrincipal = auth.authenticateConnector(replacement.token, saved.sessionId, true);
+    expect(replacementPrincipal).not.toBe(oldPrincipal);
+    const task = generatedTask.parse(await (await connector({ action: "task", sessionId: saved.sessionId }, replacement.token)).json());
+    const before = exercises.getState(saved.sessionId, auth.owner);
+    for (let retry = 0; retry < 3; retry++) {
+      expect((await browser({ action: "revoke", connectionId: old.id })).status).toBe(200);
+      expect(exercises.getState(saved.sessionId, auth.owner)).toEqual(before);
+      expect(auth.authenticateConnector(replacement.token, saved.sessionId, true)).toBe(replacementPrincipal);
+      expect((await connector({ action: "state", sessionId: saved.sessionId }, old.token)).status).toBe(401);
+      expect((await connector({ action: "redeem", code: old.code })).status).toBe(401);
+    }
+    expect(auth.list().map(connection => connection.id)).toEqual([replacement.id]);
+    expect(generatedTask.parse(await (await connector({ action: "task", sessionId: saved.sessionId }, replacement.token)).json())).toEqual(task);
+    expect((await connector({ action: "turn", command: { sessionId: saved.sessionId, expectedRevision: task.revision, key: randomUUID() },
+      taskId: task.id, candidate: initialTurn }, replacement.token)).status).toBe(200);
+  });
+
   it("denies revoked tokens even if cleanup failed, then permits explicit cleanup retry", async () => {
     const created = await session();
     const paired = await pair(created.sessionId);
