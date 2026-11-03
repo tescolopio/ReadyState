@@ -74,6 +74,26 @@ const initial = () => {
 };
 
 describe("authoritative local exercise sessions", () => {
+  it("publishes the final-step exception at Hour 68 and accepts completion without crisis authorization", () => {
+    initial();
+    for (const hour of [12, 24, 36, 48, 58, 68]) {
+      const state = service.getState(sessionId, owner);
+      service.submitApprovedResponse(owner, command(state.revision), approval());
+      const task = service.getGenerationTask(sessionId, connector);
+      service.submitTurn(connector, command(task.revision), task.id, turn(hour));
+    }
+    const state = service.getState(sessionId, owner);
+    service.submitApprovedResponse(owner, command(state.revision), approval());
+    const task = service.getGenerationTask(sessionId, connector);
+    expect(task.clockPolicy.previousHour).toBe(68);
+    expect(task.clockPolicy.allowShortFinalStep).toBe(true);
+    expect(task.clockPolicy.shortStepReason).toBeUndefined();
+    expect(task.instructions.phase).toContain("Local clock policy overrides the general advance rule");
+    expect(task.instructions.phase).toContain("A shorter final step ending exactly at Hour 72 is always allowed without crisis authorization");
+    service.submitTurn(connector, command(task.revision), task.id, turn(72));
+    expect(service.getState(sessionId, owner).phase).toBe("ended");
+  });
+
   it("recovers baseline, full accepted events, approvals and pending task from disk", () => {
     const accepted = initial();
     service.submitApprovedResponse(owner, command(accepted.revision), approval("I check the stored water."));
