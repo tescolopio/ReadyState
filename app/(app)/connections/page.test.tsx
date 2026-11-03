@@ -19,6 +19,7 @@ let writes: string[];
 let requests: unknown[];
 let responseFailure: "uncommitted" | "committed" | undefined;
 let stateWait: Promise<void> | undefined;
+let diagnosticWait: Promise<void> | undefined;
 let stateWaitBySession: Map<string, Promise<void>>;
 let stateWaitQueue: Map<string, Promise<void>[]>;
 let onStateRequest: ((id: string) => void) | undefined;
@@ -61,6 +62,7 @@ beforeEach(() => {
   requests = [];
   responseFailure = undefined;
   stateWait = undefined;
+  diagnosticWait = undefined;
   stateWaitBySession = new Map();
   stateWaitQueue = new Map();
   onStateRequest = undefined;
@@ -84,6 +86,7 @@ beforeEach(() => {
       return Response.json({ installed: true, version: "2.1.300", authentication: "native-subscription", evaluationEnabled: true });
     }
     if (body.action === "claude-diagnostic") {
+      await diagnosticWait;
       saved = {
         ...saved,
         phase: "loop",
@@ -383,6 +386,31 @@ describe("local connection send-time privacy", () => {
 });
 
 describe("local connection refresh races", () => {
+  it("keeps the selected session refresh current when a stale diagnostic callback arrives", async () => {
+    await startDiagnostic();
+    const diagnostic = deferred();
+    const selectedState = deferred();
+    const selectedStateStarted = deferred();
+    diagnosticWait = diagnostic.promise;
+    stateWaitBySession.set(otherSessionId, selectedState.promise);
+    onStateRequest = id => { if (id === otherSessionId) selectedStateStarted.resolve(); };
+    saveLocalSessionPrivacy(localStorage, otherSessionId, newLocalSessionPrivacy(otherBaselineId, []));
+
+    trigger("Send fictional diagnostic to Claude");
+    await click(`Resume ${otherSessionId.slice(0, 8)} · loop`);
+    await selectedStateStarted.promise;
+    expect(container.textContent).not.toContain(`Exercise ${otherSessionId.slice(0, 8)}`);
+    const requestCount = requests.length;
+
+    // The fetch fixture intentionally completes even after the diagnostic component aborts on unmount.
+    await act(async () => { diagnostic.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    await act(async () => { selectedState.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    await waitForText(`Exercise ${otherSessionId.slice(0, 8)}`);
+    expect(container.textContent).not.toContain(`Exercise ${sessionId.slice(0, 8)}`);
+    expect(container.querySelector("#local-response")).not.toBeNull();
+    expect(requests).toHaveLength(requestCount);
+  });
+
   it("ignores an older saved-result response that arrives after a newer refresh", async () => {
     await startDiagnostic();
     const older = deferred();

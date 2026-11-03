@@ -66,6 +66,7 @@ export default function ConnectionsPage() {
     selectedSessionId.current = nextSessionId;
   };
   const refresh = async (sessionId?: string) => {
+    if (sessionId && selectedSessionId.current !== sessionId) return;
     const generation = ++refreshGeneration.current;
     const selectedAtStart = selectedSessionId.current;
     const isCurrent = () => generation === refreshGeneration.current
