@@ -190,6 +190,23 @@ describe("local browser / connector boundary", () => {
     expect(localConnectionStateSchema.parse(await (await browser({ action: "state", sessionId: created.sessionId })).json()).events).toHaveLength(1);
   });
 
+  it("retries cleanup after a crash without invalidating another connection's task", async () => {
+    const saved = await session();
+    const first = await pair(saved.sessionId);
+    const second = await pair(saved.sessionId);
+    expect(() => auth.revoke(first.id, (sessionId, principal) => {
+      exercises.setAccess(sessionId, auth.owner, principal, "revoke");
+      throw new Error("Synthetic crash after grant removal");
+    })).toThrow("Synthetic crash");
+    const task = generatedTask.parse(await (await connector({ action: "task", sessionId: saved.sessionId }, second.token)).json());
+    exercises.close();
+    exercises = new LocalExerciseService(join(directory, "exercise.sqlite"));
+    expect((await browser({ action: "revoke", connectionId: first.id })).status).toBe(200);
+    const retained = generatedTask.parse(await (await connector({ action: "task", sessionId: saved.sessionId }, second.token)).json());
+    expect(retained).toEqual(task);
+    expect((await connector({ action: "turn", command: { sessionId: saved.sessionId, expectedRevision: task.revision, key: randomUUID() }, taskId: task.id, candidate: initialTurn }, second.token)).status).toBe(200);
+  });
+
   it("denies revoked tokens even if cleanup failed, then permits explicit cleanup retry", async () => {
     const created = await session();
     const paired = await pair(created.sessionId);

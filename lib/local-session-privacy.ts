@@ -43,6 +43,20 @@ export type PrivacyLoadResult =
 const sessionKey = (sessionId: string) => `readystate.local-session-privacy.v1.session.${sessionId}`;
 const draftKey = (approvalId: string) => `readystate.local-session-privacy.v1.draft.${approvalId}`;
 
+export function localSessionMaskRules(...lists: MaskTerm[][]): MaskTerm[] {
+  const terms = new Map<string, MaskTerm>();
+  for (const term of lists.flat()) terms.set(JSON.stringify(term), term);
+  return [...terms.values()];
+}
+
+export async function withLocalSessionPrivacyLock<T>(
+  sessionId: string, operation: () => Promise<T>,
+  locks: Pick<LockManager, "request"> | null | undefined = typeof navigator === "undefined" ? undefined : navigator.locks,
+): Promise<T> {
+  if (!locks) throw new Error("Safe cross-tab privacy coordination is unavailable. Use a browser with Web Locks support; no response was saved or sent.");
+  return locks.request(`readystate.local-session-privacy.${sessionId}`, { mode: "exclusive" }, operation);
+}
+
 export function newLocalSessionPrivacy(
   baselineApprovalId: string,
   alwaysMask: MaskTerm[],
@@ -90,6 +104,7 @@ export function saveLocalSessionPrivacy(
 ): boolean {
   try {
     storage.setItem(sessionKey(sessionId), encode(context));
+    storage.removeItem(draftKey(context.baselineApprovalId));
     return true;
   } catch {
     return false;
@@ -119,13 +134,7 @@ export function loadLocalSessionPrivacy(
     const context = decode(draft);
     if (!context || context.baselineApprovalId !== baselineApprovalId) return { status: "corrupt" };
 
-    try {
-      storage.setItem(sessionKey(sessionId), encode(context));
-      storage.removeItem(draftKey(baselineApprovalId));
-      return { status: "ready", context };
-    } catch {
-      return { status: "unavailable" };
-    }
+    return { status: "ready", context };
   } catch {
     return { status: "unavailable" };
   }

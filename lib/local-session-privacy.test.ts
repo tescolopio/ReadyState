@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { loadLocalSessionPrivacy, newLocalSessionPrivacy, saveLocalPrivacyDraft, saveLocalSessionPrivacy, type PrivateStorage } from "@/lib/local-session-privacy";
-import { prepareReview } from "@/lib/outgoing-review";
+import { loadLocalSessionPrivacy, localSessionMaskRules, newLocalSessionPrivacy, saveLocalPrivacyDraft, saveLocalSessionPrivacy, withLocalSessionPrivacyLock, type PrivateStorage } from "@/lib/local-session-privacy";
+import { createApprover, prepareReview } from "@/lib/outgoing-review";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 
 class MemoryStorage implements PrivateStorage {
@@ -92,7 +92,57 @@ describe("local session privacy", () => {
     const draft = newLocalSessionPrivacy(baselineB, ["OriginalTerm"]);
     expect(saveLocalPrivacyDraft(storage, draft)).toBe(true);
     storage.failWrites = true;
-    expect(loadLocalSessionPrivacy(storage, b, baselineB)).toEqual({ status: "unavailable" });
+    expect(loadLocalSessionPrivacy(storage, b, baselineB).status).toBe("ready");
+    expect(saveLocalSessionPrivacy(storage, b, draft)).toBe(false);
     expect(loadLocalSessionPrivacy(storage, a, baselineB)).toEqual({ status: "corrupt" });
+  });
+
+  it("serializes session writes and rebuilds stale previews without overwriting accepted tags", async () => {
+    const storage = new MemoryStorage();
+    const context = newLocalSessionPrivacy(baselineA, []);
+    saveLocalSessionPrivacy(storage, a, context);
+    const first = prepareReview("response", mask => mask("My sister Alice called."), {}, []);
+    const second = prepareReview("response", mask => mask("My sister Beatrice called."), {}, []);
+    let tail: Promise<unknown> = Promise.resolve();
+    const locks: Pick<LockManager, "request"> = {
+      request: ((_name: string, _options: LockOptions, callback: LockGrantedCallback<unknown>) => {
+        const next = tail.then(() => callback(null));
+        tail = next;
+        return next;
+      }) as LockManager["request"],
+    };
+    const submit = (review: typeof first) => withLocalSessionPrivacyLock(a, async () => {
+      const restored = loadLocalSessionPrivacy(storage, a, baselineA);
+      if (restored.status !== "ready") throw new Error("Missing context");
+      const candidate = restored.context;
+      const approve = createApprover({
+        ledger: () => candidate.entityMap, alwaysMask: () => candidate.alwaysMask,
+        addMapping: (value, tag) => { candidate.entityMap[tag] = value; },
+        send: () => { expect(saveLocalSessionPrivacy(storage, a, candidate)).toBe(true); },
+      });
+      await Promise.resolve();
+      return approve(review);
+    }, locks);
+    const results = await Promise.all([submit(first), submit(second)]);
+    expect(results.map(result => result.status)).toEqual(["sent", "review-again"]);
+    const restored = loadLocalSessionPrivacy(storage, a, baselineA);
+    expect(restored.status === "ready" && restored.context.entityMap["[Person 1]"]).toBe("Alice");
+    if (results[1].status !== "review-again") throw new Error("Expected stale review rebuild");
+    expect(results[1].review.text).toContain("[Person 2]");
+  });
+
+  it("requires lock support and applies current explicit rules while preserving original session terms", async () => {
+    await expect(withLocalSessionPrivacyLock(a, async () => {}, null)).rejects.toThrow("no response was saved or sent");
+    const original = ["OriginalPrivateTerm"];
+    const review = prepareReview("response", mask => mask("OriginalPrivateTerm and NewlyPrivateTerm"), {}, original);
+    const rules = localSessionMaskRules(original, ["NewlyPrivateTerm"], original);
+    const result = createApprover({
+      ledger: () => ({}), alwaysMask: () => rules, addMapping: () => {},
+      send: () => { throw new Error("Changed rules must not send"); },
+    })(review);
+    expect(result.status).toBe("review-again");
+    if (result.status !== "review-again") return;
+    expect(result.review.text).not.toContain("NewlyPrivateTerm");
+    expect(result.review.text).not.toContain("OriginalPrivateTerm");
   });
 });

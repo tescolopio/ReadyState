@@ -28,7 +28,7 @@ export function OutgoingReviewPanel({
   blocked?: string[];
   sending: boolean;
   onEdit: (text: string) => void;
-  /** Adds the value to the always-mask list and rebuilds the review. */
+  /** Adds a masking rule and rebuilds the review; scope depends on delivery. */
   onMask: (value: string) => void;
   onSend: () => void;
   onBack: () => void;
@@ -158,8 +158,13 @@ export function OutgoingReviewPanel({
         ) : (
           <div role="group" aria-label="Confirm masking" className="space-y-2 rounded-control border border-line-strong p-3 text-sm">
             <p>
-              Mask <strong className="break-all">&ldquo;{masking.value}&rdquo;</strong> everywhere? It&apos;s added to your
-              always-mask list and this preview is rebuilt.
+              {delivery === "local-connection" ? (
+                <>Mask <strong className="break-all">&ldquo;{masking.value}&rdquo;</strong> in this session only?
+                  This preview is rebuilt. The new rule stays in this tab until Send; it does not change Settings or other sessions.</>
+              ) : (
+                <>Mask <strong className="break-all">&ldquo;{masking.value}&rdquo;</strong> everywhere? It&apos;s added to your
+                  always-mask list and this preview is rebuilt.</>
+              )}
               {edited && <strong> Rebuilding discards your edits to this copy.</strong>}
             </p>
             <div className="flex flex-wrap gap-2">

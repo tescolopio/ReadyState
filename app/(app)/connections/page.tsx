@@ -10,8 +10,9 @@ import { DIAGNOSTIC_BASELINE } from "@/lib/connection-diagnostic.mjs";
 import { privateTerms } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { LOCAL_SHORT_STEP_REASON, localConnectionStateSchema, localConnectionViewSchema, type LocalConnectionState } from "@/lib/local-connection-contracts";
-import { getLocalPrivacyStorage, loadLocalSessionPrivacy, newLocalSessionPrivacy, saveLocalPrivacyDraft, saveLocalSessionPrivacy, type LocalSessionPrivacy } from "@/lib/local-session-privacy";
-import { createApprover, editReview, prepareReview, type OutgoingReview } from "@/lib/outgoing-review";
+import { getLocalPrivacyStorage, loadLocalSessionPrivacy, localSessionMaskRules, newLocalSessionPrivacy, saveLocalPrivacyDraft, saveLocalSessionPrivacy, withLocalSessionPrivacyLock, type LocalSessionPrivacy } from "@/lib/local-session-privacy";
+import { createApprover, editReview, prepareReview, type ApproveResult, type OutgoingReview } from "@/lib/outgoing-review";
+import type { MaskTerm } from "@/utils/obfuscator";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 
@@ -54,6 +55,7 @@ export default function ConnectionsPage() {
   const [sessionPrivacy, setSessionPrivacy] = useState<LocalSessionPrivacy>();
   const [privacyProblem, setPrivacyProblem] = useState<string>();
   const [pending, setPending] = useState<ApprovedWrite>();
+  const [reviewRules, setReviewRules] = useState<MaskTerm[]>([]);
 
   const refresh = async (sessionId?: string) => {
     const next = localConnectionViewSchema.parse(await call({ action: "status" }));
@@ -110,19 +112,40 @@ export default function ConnectionsPage() {
     setInput("");
     await refresh(receipt.sessionId);
   };
-  const approve = (current: OutgoingReview) => {
+  const approve = async (current: OutgoingReview): Promise<ApproveResult> => {
     if ((!sessionPrivacy || privacyProblem) && current.kind === "response") {
       setPrivacyProblem("This session's browser-private privacy context is unavailable. Response submission is blocked.");
       return { status: "blocked" as const, problems: ["Restore or reassociate this session's browser-private privacy context before reviewing a response."] };
     }
-    const candidate: LocalSessionPrivacy = sessionPrivacy
-      ? { ...sessionPrivacy, entityMap: { ...sessionPrivacy.entityMap }, alwaysMask: [...sessionPrivacy.alwaysMask] }
+    let restored = sessionPrivacy;
+    if (current.kind === "response") {
+      const target = reviewTarget.current;
+      const storage = getLocalPrivacyStorage();
+      const privacy = target && storage && session
+        ? loadLocalSessionPrivacy(storage, target.sessionId, session.baseline.id) : undefined;
+      if (!target || !privacy || privacy.status !== "ready") {
+        setPrivacyProblem("This session's browser-private context could not be restored. Nothing was saved or sent.");
+        return { status: "blocked", problems: ["Restore this session's private context before reviewing again."] };
+      }
+      const saved = localConnectionStateSchema.parse(await call({ action: "state", sessionId: target.sessionId }));
+      if (saved.revision !== target.revision || saved.pendingResponse || saved.phase !== "loop") {
+        await refresh(target.sessionId);
+        setReview(undefined);
+        setReviewRules([]);
+        setError("The saved exercise changed in another tab. Review the refreshed state before preparing another response.");
+        return { status: "blocked", problems: ["The saved exercise changed in another tab. Review the refreshed state before preparing another response."] };
+      }
+      restored = privacy.context;
+    }
+    const candidate: LocalSessionPrivacy = restored
+      ? { ...restored, entityMap: { ...restored.entityMap }, alwaysMask: localSessionMaskRules(restored.alwaysMask, usePrivacyStore.getState().alwaysMask, reviewRules) }
       : {
           version: 1,
           baselineApprovalId: baselineApprovalId.current ?? crypto.randomUUID(),
           entityMap: {},
           alwaysMask: current.alwaysMask.map(term => typeof term === "string" ? term : { ...term }),
         };
+    let approvedWrite: ApprovedWrite | undefined;
     const approver = createApprover({
       ledger: () => candidate.entityMap,
       addMapping: (value, tag) => { candidate.entityMap[tag] = value; },
@@ -156,15 +179,21 @@ export default function ConnectionsPage() {
                 sessionId: target.sessionId, expectedRevision: target.revision, key: crypto.randomUUID(),
               } }
             : (() => { throw new Error("The response review has no saved exercise target."); })();
-        setPending(write);
-        setReview(undefined);
-        void run(() => save(write));
+        approvedWrite = write;
       },
     });
-    return approver(current);
+    const result = approver(current);
+    if (approvedWrite) {
+      setPending(approvedWrite);
+      setReview(undefined);
+      setReviewRules([]);
+      await save(approvedWrite);
+    }
+    return result;
   };
   const openReview = (kind: "baseline" | "response") => {
     if (busyRef.current || pending || review) return;
+    setReviewRules([]);
     const profile = useHouseholdStore.getState().profile;
     if (kind === "baseline") {
       setPairing(undefined);
@@ -192,7 +221,8 @@ export default function ConnectionsPage() {
     reviewTarget.current = { sessionId: session.id, revision: session.revision };
     setNotice(undefined);
     setBlocked(undefined);
-    setReview(prepareReview("response", transform => transform(input), sessionPrivacy.entityMap, sessionPrivacy.alwaysMask));
+    setReview(prepareReview("response", transform => transform(input), sessionPrivacy.entityMap,
+      localSessionMaskRules(sessionPrivacy.alwaysMask, usePrivacyStore.getState().alwaysMask)));
   };
   const disabled = busy || !!review || !!pending;
   const diagnostic = session?.baseline.text === DIAGNOSTIC_BASELINE;
@@ -381,33 +411,30 @@ export default function ConnectionsPage() {
       )}
       {review && <OutgoingReviewPanel review={review} notice={notice} blocked={blocked} sending={busy} delivery="local-connection"
         onEdit={text => setReview(editReview(review, text))}
-        onBack={() => setReview(undefined)}
+        onBack={() => { setReview(undefined); setReviewRules([]); }}
         onMask={value => {
           if (!sessionPrivacy) {
             setError("Browser-private masking context is unavailable. This review cannot add a rule or send until its context is restored.");
             return;
           }
-          const nextContext: LocalSessionPrivacy = {
-            ...sessionPrivacy,
-            alwaysMask: [...sessionPrivacy.alwaysMask, value],
-          };
-          if (review.kind === "response") {
-            const storage = getLocalPrivacyStorage();
-            if (!session || !storage || !saveLocalSessionPrivacy(storage, session.id, nextContext)) {
-              setPrivacyProblem("Browser storage could not save this session's updated privacy context. The response was not sent; free or allow local site storage, then review again.");
-              return;
-            }
-          }
-          setSessionPrivacy(nextContext);
-          setPrivacyProblem(undefined);
-          setReview(prepareReview(review.kind, review.build, nextContext.entityMap, nextContext.alwaysMask, review.start));
-          setNotice("Masking rules updated. Review the rebuilt text.");
+          const nextRules = localSessionMaskRules(reviewRules, [value]);
+          setReviewRules(nextRules);
+          setReview(prepareReview(review.kind, review.build, { ...review.base },
+            localSessionMaskRules(sessionPrivacy.alwaysMask, usePrivacyStore.getState().alwaysMask, nextRules), review.start));
+          setNotice("Masking updated for this session only. The new rule stays in this tab until Send. Review the rebuilt text.");
         }}
         onSend={() => {
           if (busyRef.current) return;
-          const result = approve(review);
-          if (result.status === "blocked") setBlocked(result.problems);
-          else if (result.status === "review-again") { setReview(result.review); setNotice(result.reason); }
+          void run(async () => {
+            const operation = async () => {
+              const result = await approve(review);
+              if (result.status === "blocked") setBlocked(result.problems);
+              else if (result.status === "review-again") { setReview(result.review); setNotice(result.reason); }
+            };
+            const target = reviewTarget.current;
+            if (review.kind === "response" && target) await withLocalSessionPrivacyLock(target.sessionId, operation);
+            else await operation();
+          });
         }} />}
     </main>
   );
