@@ -106,7 +106,8 @@ export function OutgoingReviewPanel({
           ref={textRef}
           value={review.text}
           rows={baseline ? 12 : 6}
-          onChange={(event) => onEdit(event.target.value)}
+          disabled={sending}
+          onChange={(event) => { if (!sending) onEdit(event.target.value); }}
           aria-describedby={`${id}-hint${problems.length ? ` ${id}-problems` : ""}`}
           aria-invalid={problems.length > 0}
           spellCheck={false}
@@ -151,7 +152,7 @@ export function OutgoingReviewPanel({
         ) : "problem" in masking ? (
           <div role="status" className="flex flex-wrap items-center gap-2 text-sm text-ink-2">
             <span>{masking.problem}</span>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setMasking(null)}>
+            <Button type="button" variant="ghost" size="sm" disabled={sending} onClick={() => setMasking(null)}>
               OK
             </Button>
           </div>
@@ -171,14 +172,16 @@ export function OutgoingReviewPanel({
               <Button
                 type="button"
                 size="sm"
+                disabled={sending}
                 onClick={() => {
+                  if (sending) return;
                   onMask(masking.value);
                   setMasking(null);
                 }}
               >
                 {edited ? "Discard edits and mask" : "Mask it"}
               </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={() => setMasking(null)}>
+              <Button type="button" size="sm" variant="ghost" disabled={sending} onClick={() => setMasking(null)}>
                 Cancel
               </Button>
             </div>
@@ -190,10 +193,10 @@ export function OutgoingReviewPanel({
         <div role="group" aria-label="Confirm going back" className="space-y-2 rounded-control border border-line-strong p-3 text-sm">
           <p>Go back without sending? Your edits to this copy are discarded{baseline ? "" : "; your typed response is kept"}.</p>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={onBack}>
+            <Button type="button" size="sm" variant="outline" disabled={sending} onClick={onBack}>
               Discard edits and go back
             </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmingBack(false)}>
+            <Button type="button" size="sm" variant="ghost" disabled={sending} onClick={() => setConfirmingBack(false)}>
               Keep reviewing
             </Button>
           </div>
