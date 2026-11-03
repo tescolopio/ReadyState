@@ -6,6 +6,7 @@ import { assertUnlinkedLocalDatabase } from "@/lib/local-database";
 import { LocalConnectionAuth } from "@/lib/local-connection-auth";
 import { handleLocalConnection, localConnectionOrigin, localConnectionRequestAllowed } from "@/lib/local-connection-http";
 import { LocalExerciseService } from "@/lib/local-exercise-service";
+import { ClaudeCli, configuredClaudeExecutable } from "@/lib/claude-cli";
 
 function canonicalPathIncludingMissingParts(filename: string) {
   let current = path.resolve(filename);
@@ -92,7 +93,10 @@ export async function localConnectionRoute(request: Request, client: "browser" |
     }
     auth = new LocalConnectionAuth(credentialsFile, code, Date.now, allowInitialization);
     exercises = new LocalExerciseService(exercisesFile, allowInitialization);
-    return await handleLocalConnection(request, client, { origin, auth, exercises });
+    return await handleLocalConnection(request, client, {
+      origin, auth, exercises,
+      claude: () => new ClaudeCli(configuredClaudeExecutable(), process.env.READYSTATE_CLAUDE_CLI_EVALUATION === "1"),
+    });
   } catch {
     console.error("[local-connection] startup failed; no storage reset was attempted. Check local configuration and storage permissions, then restart.");
     return Response.json({ error: "Local connection startup failed. Check local configuration and storage permissions." }, {

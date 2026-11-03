@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { turnSchema } from "@/lib/exercise-contracts";
+import { claudeCliEvidenceSchema, claudeRequestedModelSchema } from "@/lib/claude-cli-contracts";
 
 const id = z.string().uuid();
 const approval = z.object({ id, text: z.string().min(1).max(65_536) }).strict();
@@ -8,6 +9,8 @@ const command = z.object({ sessionId: id, expectedRevision: z.number().int().non
 export const LOCAL_SHORT_STEP_REASON = "Participant requests a shorter interval for a fast-moving crisis.";
 export const localBrowserCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("status") }).strict(),
+  z.object({ action: z.literal("claude-status") }).strict(),
+  z.object({ action: z.literal("claude-diagnostic"), sessionId: id, model: claudeRequestedModelSchema }).strict(),
   z.object({ action: z.literal("unlock"), code: z.string().regex(/^[a-f0-9]{64}$/) }).strict(),
   z.object({ action: z.literal("lock") }).strict(),
   z.object({ action: z.literal("create"), approval }).strict(),
@@ -38,7 +41,7 @@ export const localConnectionViewSchema = z.object({
 });
 export const localConnectionStateSchema = session.extend({
   baseline: approval,
-  events: z.array(z.object({ id, response: approval.optional(), turn: turnSchema })),
+  events: z.array(z.object({ id, response: approval.optional(), turn: turnSchema, generator: claudeCliEvidenceSchema.optional() })),
   pendingResponse: approval.optional(),
   task: z.object({ id, revision: z.number() }).optional(),
   shortStepReason: z.string().optional(),

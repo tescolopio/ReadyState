@@ -10,6 +10,8 @@ import { LOCAL_SHORT_STEP_REASON, localConnectionStateSchema, localConnectionVie
 import { handleLocalConnection, localConnectionOrigin } from "@/lib/local-connection-http";
 import { localConnectionRoute } from "@/lib/local-connection-runtime";
 import { LocalExerciseService } from "@/lib/local-exercise-service";
+import { ClaudeCliError } from "@/lib/claude-cli";
+import { DIAGNOSTIC_BASELINE, diagnosticTurn, diagnosticTurnSchema } from "@/lib/connection-diagnostic.mjs";
 
 const origin = "http://127.0.0.1:3179";
 const secret = () => randomBytes(32).toString("hex");
@@ -67,6 +69,70 @@ async function pair(sessionId: string, permission: "read" | "write" = "write") {
 }
 
 describe("local browser / connector boundary", () => {
+  it("runs a fictional diagnostic in ReadyState and retains evidence across restart without a duplicate call", async () => {
+    const evidence = {
+      service: "claude-code" as const, runtimeVersion: "2.1.300", requestedModel: "sonnet" as const,
+      reportedModels: ["claude-sonnet-example"], modelEvidence: "cli-reported-unverified" as const,
+    };
+    const diagnostic = vi.fn().mockResolvedValue({ candidate: diagnosticTurn, evidence });
+    const cli = () => ({ status: vi.fn(), diagnostic });
+    const saved = receipt.parse(await (await browser({ action: "create", approval: { id: randomUUID(), text: DIAGNOSTIC_BASELINE } })).json());
+    const body = { action: "claude-diagnostic", sessionId: saved.sessionId, model: "sonnet" };
+    const send = () => handleLocalConnection(request(body, "browser"), "browser", { origin, auth, exercises, claude: cli });
+    const result = localConnectionStateSchema.parse(await (await send()).json());
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].generator).toEqual(evidence);
+    exercises.close();
+    exercises = new LocalExerciseService(join(directory, "exercise.sqlite"));
+    expect(localConnectionStateSchema.parse(await (await send()).json())).toEqual(result);
+    expect(diagnostic).toHaveBeenCalledTimes(1);
+    expect(diagnostic.mock.calls[0][0]).toBe("sonnet");
+    const arbitrary = await session();
+    const refused = await handleLocalConnection(request({ ...body, sessionId: arbitrary.sessionId }, "browser"), "browser", { origin, auth, exercises, claude: cli });
+    expect(refused.status).toBe(409);
+    expect(diagnostic).toHaveBeenCalledTimes(1);
+    const unauthenticated = await handleLocalConnection(request(body, "browser", { Cookie: "" }), "browser", { origin, auth, exercises, claude: cli });
+    expect(unauthenticated.status).toBe(401);
+    expect(diagnostic).toHaveBeenCalledTimes(1);
+  });
+  it("keeps the task after an explicit CLI failure and allows a manual retry", async () => {
+    const saved = receipt.parse(await (await browser({ action: "create", approval: { id: randomUUID(), text: DIAGNOSTIC_BASELINE } })).json());
+    const diagnostic = vi.fn().mockRejectedValue(new ClaudeCliError("Usage limit reached; no fallback."));
+    const send = () => handleLocalConnection(request({ action: "claude-diagnostic", sessionId: saved.sessionId, model: "opus" }, "browser"),
+      "browser", { origin, auth, exercises, claude: () => ({ status: vi.fn(), diagnostic }) });
+    expect((await send()).status).toBe(409);
+    const before = exercises.getState(saved.sessionId, auth.owner);
+    expect(before.events).toHaveLength(0);
+    expect(before.task).toBeDefined();
+    diagnostic.mockResolvedValue({
+      candidate: diagnosticTurnSchema.parse(diagnosticTurn),
+      evidence: { service: "claude-code", runtimeVersion: "2.1.300", requestedModel: "opus", reportedModels: [], modelEvidence: "unavailable" },
+    });
+    expect((await send()).status).toBe(200);
+    expect(exercises.getState(saved.sessionId, auth.owner).events).toHaveLength(1);
+    expect(diagnostic).toHaveBeenCalledTimes(2);
+  });
+  it("rejects concurrent diagnostic requests and does not save after cancellation", async () => {
+    const saved = receipt.parse(await (await browser({ action: "create", approval: { id: randomUUID(), text: DIAGNOSTIC_BASELINE } })).json());
+    let finish!: () => void;
+    const diagnostic = vi.fn(async () => {
+      await new Promise<void>(resolve => { finish = resolve; });
+      return {
+        candidate: diagnosticTurnSchema.parse(diagnosticTurn),
+        evidence: { service: "claude-code" as const, runtimeVersion: "2.1.300", requestedModel: "sonnet" as const, reportedModels: [], modelEvidence: "unavailable" as const },
+      };
+    });
+    const body = { action: "claude-diagnostic", sessionId: saved.sessionId, model: "sonnet" };
+    const dependencies = { origin, auth, exercises, claude: () => ({ status: vi.fn(), diagnostic }) };
+    const controller = new AbortController();
+    const first = handleLocalConnection(new Request(request(body, "browser"), { signal: controller.signal }), "browser", dependencies);
+    await vi.waitFor(() => expect(diagnostic).toHaveBeenCalledTimes(1));
+    expect((await handleLocalConnection(request(body, "browser"), "browser", dependencies)).status).toBe(409);
+    controller.abort();
+    finish();
+    expect((await first).status).toBe(409);
+    expect(exercises.getState(saved.sessionId, auth.owner).events).toHaveLength(0);
+  });
   it("recovers an exact accepted receipt across pairing without granting write access to readers", async () => {
     const saved = await session();
     const first = await pair(saved.sessionId);

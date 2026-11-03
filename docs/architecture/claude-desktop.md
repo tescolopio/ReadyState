@@ -1,4 +1,52 @@
-# Claude Desktop integration
+# Claude integration
+
+## Current primary target: Claude inside ReadyState
+
+The primary experience is now **ReadyState -> local official Claude Code
+process -> validated saved response in ReadyState**, not an exercise conducted
+inside Claude Desktop. The MCP connection below remains an optional,
+assistant-hosted integration. It is not the primary qualification milestone.
+
+An isolated source evaluation adds native executable/version detection,
+native sign-in status, requested model selection and a fixed fictional
+diagnostic in the Connections page. ReadyState never reads credential files,
+offers its own Claude login, reuses tokens, modifies the CLI, or installs a
+Hermes-style request relay. Sign-in remains `claude auth login` in the user's
+terminal. There is no API fallback. See the [updated qualification
+checklist](../testing/claude-connection-checklist.md#in-readystate-cli-diagnostic-primary-gate).
+
+**Inference is disabled by default.** The public permission boundary for this
+particular subscription-backed app-owned interface still needs clarification;
+an evaluation switch is not authorization or a claim of supported use.
+No live runtime, subscription, model, usage-limit or phone behavior has been
+qualified. Automated subprocess fixtures and mocked UI checks are distinct
+from the required live in-ReadyState round trip.
+
+Only a fixed diagnostic baseline may enter this adapter. Tools, MCP discovery,
+skills/commands and hooks are disabled using official CLI flags/settings.
+It runs in an empty temporary directory with an allowlisted environment,
+without inherited API keys, OAuth-token environment variables, provider
+endpoints or Node injection. It retains native home/keychain access for native
+authentication. User/managed native context may still affect the CLI; this is
+not an OS sandbox. A clean non-personal test profile remains required.
+
+Validated events retain requested model, runtime version and any
+CLI-reported `modelUsage` model IDs separately; these IDs are unverified
+service evidence, not proof of routing or weights. Missing evidence is
+explicitly unavailable. Old events remain without provenance, never guessed.
+No account identifiers, auth output, usage costs or raw error output are saved.
+Acceptance and evidence are saved atomically in the existing event; new fields
+are optional so prior events remain readable by this branch. Older branches
+without this field will reject newer saved states: do not downgrade a used
+evaluation data directory.
+
+Cancellation aborts the owned process and refuses acceptance if cancellation
+is observed before commit. A result already committed remains saved. Accepted
+diagnostics are displayed on retry/restart without another model call.
+Pending tasks survive failures for explicit manual retry; after a crash before
+acceptance, the provider may already have consumed usage. There are no
+automatic retries. Concurrent calls for the same session are refused within
+one server process; this local evaluation is not a multi-worker service.
 
 Status: shared foundation, durable sessions and opt-in browser/pairing bridge. **No installable Claude extension
 or Claude-compatible release exists from this work yet.** No live Claude test has
@@ -15,9 +63,9 @@ awaiting re-review and remain blockers,
 not waived by the diagnostic. Live account/model/tool-permission qualification
 and an installable Windows extension remain pending.
 
-## Confirmed first target
+## Earlier optional assistant-hosted target
 
-The user selected **Claude Desktop on Windows**, with **ReadyState handling
+The earlier prototype targeted **Claude Desktop on Windows**, with **ReadyState handling
 setup, privacy review and results, and a Claude conversation generating turns**.
 Other assistant platforms, Claude web/mobile and remote connectors are later
 compatibility projects, not implied support.
@@ -28,7 +76,7 @@ not read Claude sign-in tokens, automate its private endpoints or ask for a
 subscription password. Claude usage limits and organization policies still
 apply. The existing API-provider path remains available separately.
 
-## Intended first installable experience
+## Optional assistant-hosted installable concept
 
 1. Install the local ReadyState application and an accompanying `.mcpb`
    extension in Claude Desktop. Installation must not require a separate model

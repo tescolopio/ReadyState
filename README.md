@@ -7,10 +7,13 @@ For Windows/Linux native, Docker and bundled-runtime portable/per-user installs,
 see [Local installation](docs/deployment/local-installation.md). Ollama support
 is experimental; no model is included with ReadyState.
 
-Claude Desktop integration is development-only, not an installable release.
+Claude integration is development-only, not an installable release.
 Start with the [fictional connection diagnostic and qualification checklist](docs/testing/claude-connection-checklist.md)
-before household scenarios. Automated local MCP evidence does not establish
-live Claude sign-in, model availability or scenario/debrief quality.
+before household scenarios. The primary target keeps interaction in ReadyState
+through the official local Claude Code process; its source evaluation is
+disabled by default pending subscription-use clarification and review.
+Claude Desktop MCP remains optional. Automated subprocess/MCP evidence does
+not establish live sign-in, model availability or scenario/debrief quality.
 
 ## Stack
 
@@ -81,6 +84,7 @@ Scripts: `npm run dev`, `npm run build`, `npm start` (loopback standalone produc
 | `lib/local-exercise-service.ts` / `lib/exercise-turn-validation.ts` / `lib/local-exercise-view.ts` | SQLite exercise sessions, turn-acceptance policy and accepted-state rendering adapter. Used by the opt-in local bridge, not yet by the ordinary API exercise or MCP. |
 | `lib/local-connection-*.ts` / `app/(app)/connections/` | Opt-in local owner setup, scoped pairing/revocation, browser review/resume and authenticated connector HTTP boundary. Source-only fictional diagnostic available; no installable Claude extension yet. Ordinary API exercise remains separate. |
 | `scripts/claude/diagnostic.mjs` / `lib/connection-diagnostic.mjs` | SDK v2 stdio diagnostic with fixed synthetic task, strict validation, safe retries and unavailable-model disclosure; not the household/scenario adapter. |
+| `lib/claude-cli.ts` / `components/claude-cli-diagnostic.tsx` | Default-off official-CLI diagnostic inside ReadyState, native sign-in status, cancellation and persisted requested/reported model evidence. No credential reuse, relay modifications or API fallback; subscription use and live runtime behavior unqualified. |
 | `lib/providers.ts` | Provider presets and `resolveModel`, which picks the model per request from browser settings or server env. |
 | `lib/config.ts` / `lib/hosted.ts` | `READYSTATE_MODE` and the hosted-service integration points (auth, quota, usage metering). |
 | `app/api/ttx/route.ts` | `streamText` route that **forces** the tool matching the current phase, so every response is structured JSON. |
@@ -98,7 +102,7 @@ Further reading:
 - [Work breakdown](docs/roadmap/work-breakdown.md): the roadmap by team, traced to the brief.
 - [Local test checklist](docs/testing/local-test.md): run it yourself and check it by hand in a browser.
 - [Deployment modes](docs/architecture/deployment-modes.md): self-hosted vs hosted, providers, desktop and mobile plans.
-- [Claude Desktop integration](docs/architecture/claude-desktop.md): Windows-first implementation sequence, opt-in local pairing/browser development screen and privacy/release gates. No installable Claude extension yet.
+- [Claude integration](docs/architecture/claude-desktop.md): primary in-ReadyState CLI evaluation, optional assistant-hosted MCP, native sign-in and privacy/release gates. No installable Claude extension yet.
 - [Groq models](docs/architecture/groq-models.md): benchmarks and rate limits.
 - [Rules database](docs/architecture/rules.md): inventory checks, safety rules and look-fors as sourced, reviewable data in `data/rules/`.
 - [Data sources](docs/architecture/datasources.md) and [Dataset bridging](docs/architecture/dataset_bridging.md): official guidance to ground scenarios, and how medical needs become functional constraints.

@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { ClaudeCliError, type ClaudeCli } from "@/lib/claude-cli";
+import { diagnosticStateSchema } from "@/lib/connection-diagnostic.mjs";
 
 import { LocalConnectionAuth, LocalConnectionDenied } from "@/lib/local-connection-auth";
 import { localBrowserCommandSchema, localConnectionStateSchema, localConnectorCommandSchema } from "@/lib/local-connection-contracts";
@@ -7,6 +9,7 @@ import { LocalExerciseError, LocalExerciseService } from "@/lib/local-exercise-s
 const COOKIE = "readystate-local-owner";
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const headers = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
+const runningDiagnostics = new Set<string>();
 const json = (body: unknown, status = 200, extra: Record<string, string> = {}) => Response.json(body, { status, headers: { ...headers, ...extra } });
 const ownerCookie = (token: string, age: number) =>
   `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/api/local-connection; Max-Age=${age}`;
@@ -68,7 +71,7 @@ function command<T>(schema: z.ZodType<T>, input: unknown): T {
 export async function handleLocalConnection(
   request: Request,
   client: "browser" | "connector",
-  dependencies: { origin: string; auth: LocalConnectionAuth; exercises: LocalExerciseService },
+  dependencies: { origin: string; auth: LocalConnectionAuth; exercises: LocalExerciseService; claude?: () => Pick<ClaudeCli, "status" | "diagnostic"> },
 ) {
   try {
     const { auth, exercises } = dependencies;
@@ -87,6 +90,29 @@ export async function handleLocalConnection(
         .find(value => value.startsWith(`${COOKIE}=`))?.slice(COOKIE.length + 1) ?? "";
       const owner = auth.authenticateOwner(cookie);
       switch (action.action) {
+        case "claude-status":
+          if (!dependencies.claude) throw new ClaudeCliError("The local Claude CLI adapter is not configured.");
+          return json(await dependencies.claude().status(request.signal));
+        case "claude-diagnostic": {
+          if (!dependencies.claude) throw new ClaudeCliError("The local Claude CLI adapter is not configured.");
+          const state = diagnosticStateSchema.safeParse(exercises.getState(action.sessionId, owner));
+          if (!state.success) throw new ClaudeCliError("Only a fixed fictional diagnostic session may be sent to Claude.");
+          if (state.data.events.length) {
+            return json(localConnectionStateSchema.parse(exercises.getState(action.sessionId, owner)));
+          }
+          if (runningDiagnostics.has(action.sessionId)) throw new ClaudeCliError("This diagnostic is already running. Wait or cancel it; no second request was started.");
+          runningDiagnostics.add(action.sessionId);
+          try {
+            const task = exercises.getGenerationTask(action.sessionId, owner);
+            const result = await dependencies.claude().diagnostic(action.model, request.signal);
+            auth.authenticateOwner(cookie);
+            if (request.signal.aborted) throw new ClaudeCliError("Claude request cancelled. Refresh saved results before retrying.");
+            exercises.submitTurn(owner, {
+              sessionId: action.sessionId, expectedRevision: task.revision, key: `claude-diagnostic-v1:${task.id}`,
+            }, task.id, result.candidate, result.evidence);
+            return json(localConnectionStateSchema.parse(exercises.getState(action.sessionId, owner)));
+          } finally { runningDiagnostics.delete(action.sessionId); }
+        }
         case "lock":
           auth.lock(cookie);
           return json({ unlocked: false }, 200, { "Set-Cookie": ownerCookie("", 0) });
@@ -131,6 +157,7 @@ export async function handleLocalConnection(
         return json(exercises.recoverTurnReceipt(principal, action.command, action.taskId, action.candidate));
     }
   } catch (error) {
+    if (error instanceof ClaudeCliError) return json({ error: error.message }, 409);
     if (error instanceof LocalConnectionDenied) return json({ error: error.message }, 401);
     if (error instanceof LocalExerciseError) return json({ error: error.message, code: error.code, problems: error.problems }, 409);
     // Do not log request content, credentials, database rows or SQL error values.

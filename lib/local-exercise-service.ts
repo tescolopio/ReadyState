@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { lstatSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
+import { claudeCliEvidenceSchema } from "@/lib/claude-cli-contracts";
 
 import { buildExerciseBriefing, EXERCISE_CONTEXT_VERSION } from "@/lib/exercise-context";
 import { EXERCISE_SCHEMA_VERSION } from "@/lib/exercise-contracts";
@@ -26,6 +27,7 @@ const stateSchema = z.object({
   baseline: approvalSchema,
   events: z.array(z.object({
     id, response: approvalSchema.optional(), turn: exerciseTurnCandidateSchema, task: taskSchema,
+    generator: claudeCliEvidenceSchema.optional(),
   }).strict()),
   pendingResponse: approvalSchema.optional(),
   task: taskSchema.optional(),
@@ -372,7 +374,7 @@ export class LocalExerciseService {
     }, true);
   }
 
-  submitTurn(principal: string, command: ExerciseCommand, taskId: string, candidate: unknown): ExerciseReceipt {
+  submitTurn(principal: string, command: ExerciseCommand, taskId: string, candidate: unknown, generator?: z.infer<typeof claudeCliEvidenceSchema>): ExerciseReceipt {
     parse(id, taskId);
     // Bound serialized input before fingerprinting; never include candidate text in errors.
     let serialized: string | undefined;
@@ -380,7 +382,8 @@ export class LocalExerciseService {
     if (!serialized || Buffer.byteLength(serialized) > 131_072) throw new LocalExerciseError("invalid-input");
     const shaped = exerciseTurnCandidateSchema.safeParse(candidate);
     if (!shaped.success) throw new LocalExerciseError("invalid-turn", [{ field: "", code: "shape" }]);
-    return this.mutate(principal, command, "turn", { taskId, candidate: shaped.data }, state => {
+    const evidence = generator === undefined ? undefined : parse(claudeCliEvidenceSchema, generator);
+    return this.mutate(principal, command, "turn", { taskId, candidate: shaped.data, ...(evidence ? { generator: evidence } : {}) }, state => {
       const task = state.task;
       if (!task || task.id !== taskId || task.revision !== state.revision
         || task.schemaVersion !== EXERCISE_SCHEMA_VERSION || task.promptVersion !== EXERCISE_PROMPT_VERSION
@@ -397,7 +400,7 @@ export class LocalExerciseService {
       });
       if (!validated.ok) throw new LocalExerciseError("invalid-turn", validated.problems);
       const eventId = randomUUID();
-      state.events.push({ id: eventId, response: state.pendingResponse, turn: validated.turn, task });
+      state.events.push({ id: eventId, response: state.pendingResponse, turn: validated.turn, task, ...(evidence ? { generator: evidence } : {}) });
       state.pendingResponse = undefined;
       state.shortStepReason = undefined;
       state.task = undefined;

@@ -1,4 +1,64 @@
-# Claude Desktop connection qualification
+# Claude connection qualification
+
+## In-ReadyState CLI diagnostic primary gate
+
+The next success criterion is a validated request/response entirely inside
+ReadyState's interface. MCP discovery in Claude Desktop is a separate optional
+path, documented below, and does not satisfy this gate.
+
+**Status: source-only, inference OFF, live qualification and subscription-use
+clarification pending.** Do not advertise subscription support, turn this into
+a release, or infer approval from Hermes's implementation. Anthropic documents
+[programmatic CLI operation](https://code.claude.com/docs/en/headless) and
+[conditional hosting of its unmodified CLI](https://code.claude.com/docs/en/legal-and-compliance);
+the exact custom-UI/subscription boundary must be resolved separately.
+
+1. Complete prerequisite bridge/diagnostic review. Use a disposable private
+   local data directory, one server process, no provider API keys and a clean
+   native Claude test profile without personal instructions or managed
+   provider overrides. Existing bridge owner/origin/storage controls apply.
+2. Install the official native Claude Code runtime separately. This source
+   evaluation checks `~/.local/bin/claude` (`claude.exe` on Windows), or an
+   operator-configured absolute `READYSTATE_CLAUDE_EXECUTABLE`. Shell commands,
+   `.cmd` shims and npm launchers are not accepted on Windows. The source
+   adapter currently accepts version 2.1.268+ in major version 2; this is a
+   capability floor, not a tested version list.
+3. Use **Check installed Claude and sign-in** in the diagnostic section.
+   Record the detected version. It runs only `--version` and `auth status`,
+   not inference. Log in using `claude auth login` in the provider's native
+   terminal/browser flow, then check again. ReadyState never receives login
+   credentials. Only the native `claude.ai` authentication method qualifies
+   for this evaluation; API keys/helpers, token env and third-party routing
+   are refused, not substituted.
+4. Once permission and final-head review gates clear, the local operator may
+   separately enable `READYSTATE_CLAUDE_CLI_EVALUATION=1` and restart. Leave it
+   unset otherwise. This may consume subscription allowance or account-
+   configured extra usage; no no-cost claim is made.
+5. In ReadyState, create a new fictional diagnostic, select a requested model,
+   inspect the fixed fictional request/acknowledgement, and explicitly choose
+   **Send fictional diagnostic to Claude**. No pairing/MCP/Claude Desktop chat
+   is needed. The native CLI receives only fixed ReadyState fixture content,
+   plus its own native system context. Record the validated saved event,
+   runtime version, requested model and separately CLI-reported model evidence
+   or unavailable status. Refresh/restart must retain these.
+6. Cancel during an outstanding request. Inspect saved state before retrying:
+   cancellation cannot undo committed writes or provider consumption.
+   Verify expired authentication, usage limits, unavailable models, denied
+   permissions, malformed output, timeout and missing runtime produce explicit
+   errors without silent model changes, API fallback or automatic retries.
+7. Restart after acceptance and retry the same diagnostic: it must display the
+   accepted event without a new inference call. Restart before acceptance:
+   progress must remain, with any further call explicitly authorized. Do not
+   claim exactly-once provider execution across crashes.
+
+Live evidence remains **pending** for runtime version, native sign-in,
+requested/returned model, fixed response, cancellation, expired auth, quota,
+permission denial, restart and Windows/Linux runtime behavior. Automated tests
+use a fake runner and owned Node subprocesses, not Claude inference. The
+deterministic fixture does not test exercise or debrief quality.
+
+The existing MCP source diagnostic below remains intact but is no longer the
+primary qualification target.
 
 Status: **source diagnostic implemented; live Claude Desktop qualification pending**.
 This is not an installable extension, scenario/debrief qualification or release

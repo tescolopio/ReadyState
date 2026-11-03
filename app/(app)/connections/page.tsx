@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
 import { PageHeader } from "@/components/app-shell";
+import { ClaudeCliDiagnostic } from "@/components/claude-cli-diagnostic";
 import { OutgoingReviewPanel } from "@/components/outgoing-review";
 import { Button } from "@/components/ui/button";
 import { DIAGNOSTIC_BASELINE } from "@/lib/connection-diagnostic.mjs";
@@ -268,8 +269,8 @@ export default function ConnectionsPage() {
           <section aria-label="Fictional connection diagnostic" className="space-y-2 rounded-panel border border-line p-4">
             <h2 className="text-lg font-semibold">Test the connection first</h2>
             <p className="text-sm text-ink-2">Creates a separate, fixed fictional test with no household data.
-              Pair the source diagnostic connector with this test only. Claude sign-in and model selection remain in Claude Desktop;
-              ReadyState cannot verify the selected model. No model is called by this button.</p>
+              Use the experimental in-ReadyState Claude diagnostic below, or the optional assistant-hosted MCP connector.
+              No model is called by this creation button.</p>
             <Button className="max-w-full whitespace-normal" disabled={disabled} onClick={() => void run(async () => {
               setPairing(undefined);
               setSession(undefined);
@@ -312,11 +313,13 @@ export default function ConnectionsPage() {
             <h2 className="text-lg font-semibold">Exercise {session.id.slice(0, 8)} · {session.phase}</h2>
             {diagnostic && <div role="status" aria-label="Diagnostic result" className="space-y-2">
               <h3 className="font-semibold">{session.events.length ? "Diagnostic acknowledgement saved" : "Waiting for diagnostic acknowledgement"}</h3>
-              <p>This verifies transport and saving only, not scenario quality, Claude authentication or model identity.
-                Model selection: Claude Desktop. Model evidence: unavailable.</p>
+              <p>This verifies transport and saving only, not scenario quality or independently verified model identity.
+                For the optional MCP connector, model selection stays in the assistant and model evidence is unavailable.</p>
+              <ClaudeCliDiagnostic key={session.id} sessionId={session.id} accepted={session.events.length > 0}
+                onSaved={() => refresh(session.id)} />
               <label htmlFor="diagnostic-session" className="block font-semibold">Diagnostic session ID</label>
               <input id="diagnostic-session" readOnly value={session.id} className="w-full rounded-control border border-line p-2 font-mono" />
-              <p>Configure the source connector for this ID and exact origin, create a write-enabled pairing code below,
+              <p>Optional assistant-hosted MCP path: configure the source connector for this ID and exact origin, create a write-enabled pairing code below,
                 then call readystate_connection_status, readystate_get_diagnostic and readystate_submit_diagnostic in the assistant.
                 Refresh here to inspect the saved acknowledgement.</p>
             </div>}
@@ -331,6 +334,10 @@ export default function ConnectionsPage() {
               {event.response && <p className="whitespace-pre-wrap break-words">Participant: {event.response.text}</p>}
               <p className="whitespace-pre-wrap break-words">{event.turn.narrative_response}</p>
               <p className="whitespace-pre-wrap break-words">{event.turn.new_inject}</p>
+              {event.generator && <p>
+                Service: Claude Code {event.generator.runtimeVersion}. Requested model: {event.generator.requestedModel}.
+                CLI-reported model evidence (unverified): {event.generator.reportedModels.join(", ") || "unavailable"}.
+              </p>}
               {event.turn.feedback && <div>
                 <p>Feedback: {event.turn.feedback.covered.join(" ")} {event.turn.feedback.consider.join(" ")}</p>
                 <p>{event.turn.feedback.why}</p>
