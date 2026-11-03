@@ -1,10 +1,10 @@
 import { createServer } from "node:net";
-import { chmod, copyFile, mkdir, mkdtemp, readFile, writeFile, rm, symlink } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, realpath, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { checkPort, localPort } from "./launch.mjs";
+import { checkPort, localLaunchRoots, localPort } from "./launch.mjs";
 
 describe("local launcher", () => {
   it("requires an explicit valid stable port", () => {
@@ -25,10 +25,31 @@ describe("local launcher", () => {
       await new Promise<void>(resolve => server.close(() => resolve()));
     }
   });
+  it("identifies source and installed package roots for storage protection", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "readystate-launch-roots-"));
+    try {
+      const sourceLauncher = path.join(directory, "source", "scripts", "local", "launch.mjs");
+      const packageLauncher = path.join(directory, "package", "launch.mjs");
+      await mkdir(path.dirname(sourceLauncher), { recursive: true });
+      await mkdir(path.dirname(packageLauncher), { recursive: true });
+      await writeFile(sourceLauncher, "");
+      await writeFile(packageLauncher, "");
+
+      expect(localLaunchRoots(sourceLauncher)).toEqual({
+        sourceRoot: path.join(directory, "source"),
+        installRoot: path.join(directory, "source"),
+      });
+      expect(localLaunchRoots(packageLauncher)).toEqual({
+        sourceRoot: "",
+        installRoot: path.join(directory, "package"),
+      });
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
   it("starts through a package alias and stops without waiting for a Unix browser opener", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "readystate-launch-"));
     const server = path.join(directory, "server.cjs");
-    await writeFile(server, `require("node:http").createServer((req,res)=>res.end("{}")).listen(process.env.PORT,process.env.HOSTNAME); process.on("SIGTERM",()=>process.exit(143));`);
+    const rootsFile = path.join(directory, "launcher-roots.json");
+    await writeFile(server, `require("node:fs").writeFileSync(process.env.READYSTATE_TEST_ROOTS,JSON.stringify({sourceRoot:process.env.READYSTATE_LOCAL_SOURCE_ROOT,installRoot:process.env.READYSTATE_LOCAL_INSTALL_ROOT})); require("node:http").createServer((req,res)=>res.end("{}")).listen(process.env.PORT,process.env.HOSTNAME); process.on("SIGTERM",()=>process.exit(143));`);
     const openerPidFile = path.join(directory, "opener.pid");
     const alias = path.join(directory, "alias");
     const packageDirectory = path.join(directory, "package");
@@ -50,7 +71,10 @@ describe("local launcher", () => {
     if (!address || typeof address === "string") throw new Error("No port");
     await new Promise<void>(resolve => probe.close(() => resolve()));
     const child = spawn(process.platform === "linux" ? "sh" : process.execPath, [path.join(alias, process.platform === "linux" ? "start.sh" : "launch.mjs"), "--server", server, "--no-env"], {
-      env: { ...process.env, PATH: `${directory}${path.delimiter}${process.env.PATH}`, READYSTATE_MODE: "self-hosted", PORT: String(address.port) },
+      env: {
+        ...process.env, PATH: `${directory}${path.delimiter}${process.env.PATH}`, READYSTATE_MODE: "self-hosted",
+        PORT: String(address.port), READYSTATE_TEST_ROOTS: rootsFile,
+      },
       stdio: ["ignore", "pipe", "pipe", "ipc"],
     });
     const ending = new Promise<number | null>((resolve, reject) => { child.once("exit", resolve); child.once("error", reject); });
@@ -67,6 +91,9 @@ describe("local launcher", () => {
         child.once("exit", () => { clearTimeout(timeout); reject(new Error(`Launcher exited before readiness: ${errors}`)); });
         child.once("error", error => { clearTimeout(timeout); reject(error); });
       });
+      const roots = JSON.parse(await readFile(rootsFile, "utf8")) as { sourceRoot: string; installRoot: string };
+      expect(roots.sourceRoot).toBe("");
+      expect(await realpath(roots.installRoot)).toBe(await realpath(packageDirectory));
       if (process.platform === "linux") {
         for (let i = 0; i < 30; i++) {
           try { openerPid = Number(await readFile(openerPidFile, "utf8")); break; }

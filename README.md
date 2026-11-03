@@ -73,7 +73,8 @@ Scripts: `npm run dev`, `npm run build`, `npm start` (loopback standalone produc
 | `utils/obfuscator.ts` | `maskInput` replaces people, pets, places, street addresses, postcodes, phones, emails, URLs and ID numbers with tags (`[Person 1]`, `[Pet 1]`, `[Phone 1]`, …) using patterns, context rules ("my wife Priya", "our dog Max"), compromise NLP and the user's always-mask list. `unmaskOutput` restores them. Tested against `utils/masking-corpus.ts`. |
 | `lib/exercise-contracts.ts` / `lib/exercise-prompts.ts` / `lib/exercise-context.ts` / `lib/exercise-debrief.ts` | Provider-independent schemas/types, versioned prompts, compact briefing and checked-debrief context. |
 | `lib/ttx.ts` | AI SDK tools/UI-message adapter, compatible schema re-exports, `deriveTtxState` and `buildExercisePrompt`. |
-| `lib/local-exercise-service.ts` / `lib/exercise-turn-validation.ts` / `lib/local-exercise-view.ts` | Internal SQLite exercise sessions, turn-acceptance policy and accepted-state rendering adapter for the future Claude integration. Not yet connected to app routes or MCP. |
+| `lib/local-exercise-service.ts` / `lib/exercise-turn-validation.ts` / `lib/local-exercise-view.ts` | SQLite exercise sessions, turn-acceptance policy and accepted-state rendering adapter. Used by the opt-in local bridge, not yet by the ordinary API exercise or MCP. |
+| `lib/local-connection-*.ts` / `app/(app)/connections/` | Opt-in local owner setup, scoped pairing/revocation, browser review/resume and authenticated fixture connector HTTP boundary. No Claude stdio extension yet; ordinary API exercise remains separate. |
 | `lib/providers.ts` | Provider presets and `resolveModel`, which picks the model per request from browser settings or server env. |
 | `lib/config.ts` / `lib/hosted.ts` | `READYSTATE_MODE` and the hosted-service integration points (auth, quota, usage metering). |
 | `app/api/ttx/route.ts` | `streamText` route that **forces** the tool matching the current phase, so every response is structured JSON. |
@@ -91,7 +92,7 @@ Further reading:
 - [Work breakdown](docs/roadmap/work-breakdown.md): the roadmap by team, traced to the brief.
 - [Local test checklist](docs/testing/local-test.md): run it yourself and check it by hand in a browser.
 - [Deployment modes](docs/architecture/deployment-modes.md): self-hosted vs hosted, providers, desktop and mobile plans.
-- [Claude Desktop integration](docs/architecture/claude-desktop.md): Windows-first implementation sequence and privacy/release gates. Internal foundation/sessions only; no installable Claude extension yet.
+- [Claude Desktop integration](docs/architecture/claude-desktop.md): Windows-first implementation sequence, opt-in local pairing/browser development screen and privacy/release gates. No installable Claude extension yet.
 - [Groq models](docs/architecture/groq-models.md): benchmarks and rate limits.
 - [Rules database](docs/architecture/rules.md): inventory checks, safety rules and look-fors as sourced, reviewable data in `data/rules/`.
 - [Data sources](docs/architecture/datasources.md) and [Dataset bridging](docs/architecture/dataset_bridging.md): official guidance to ground scenarios, and how medical needs become functional constraints.

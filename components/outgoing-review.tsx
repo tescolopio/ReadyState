@@ -19,6 +19,7 @@ export function OutgoingReviewPanel({
   onMask,
   onSend,
   onBack,
+  delivery = "api",
 }: {
   review: OutgoingReview;
   /** Why the review was shown again, such as edits that were masked. */
@@ -27,10 +28,11 @@ export function OutgoingReviewPanel({
   blocked?: string[];
   sending: boolean;
   onEdit: (text: string) => void;
-  /** Adds the value to the always-mask list and rebuilds the review. */
+  /** Adds a masking rule and rebuilds the review; scope depends on delivery. */
   onMask: (value: string) => void;
   onSend: () => void;
   onBack: () => void;
+  delivery?: "api" | "local-connection";
 }) {
   const id = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -75,9 +77,13 @@ export function OutgoingReviewPanel({
           </p>
         )}
         <p className="text-sm text-ink-2">
-          The message goes to this ReadyState server, which sends the conversation to the selected model provider.
+          {delivery === "local-connection" ? (
+            <>This approved text is saved on this local ReadyState server and becomes available to a connection you pair for this exercise.
+              When you ask Claude to continue, it retrieves this context for another model call in your Claude conversation.
+              ReadyState does not use or send your provider API keys on this path. The private masking map stays in this browser.</>
+          ) : <>The message goes to this ReadyState server, which sends the conversation to the selected model provider.
           Any API key you entered in Settings also goes to ReadyState&apos;s server to authenticate with that provider;
-          it is not part of the model&apos;s conversation text.
+          it is not part of the model&apos;s conversation text.</>}
         </p>
         <p className="rounded-control border-l-4 border-attention-accent bg-attention-soft px-3 py-2 text-sm text-ink">
           This is a review, not a guarantee of anonymity. Masking can miss details, so read it before sending. Once sent, the
@@ -100,7 +106,8 @@ export function OutgoingReviewPanel({
           ref={textRef}
           value={review.text}
           rows={baseline ? 12 : 6}
-          onChange={(event) => onEdit(event.target.value)}
+          disabled={sending}
+          onChange={(event) => { if (!sending) onEdit(event.target.value); }}
           aria-describedby={`${id}-hint${problems.length ? ` ${id}-problems` : ""}`}
           aria-invalid={problems.length > 0}
           spellCheck={false}
@@ -145,29 +152,36 @@ export function OutgoingReviewPanel({
         ) : "problem" in masking ? (
           <div role="status" className="flex flex-wrap items-center gap-2 text-sm text-ink-2">
             <span>{masking.problem}</span>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setMasking(null)}>
+            <Button type="button" variant="ghost" size="sm" disabled={sending} onClick={() => setMasking(null)}>
               OK
             </Button>
           </div>
         ) : (
           <div role="group" aria-label="Confirm masking" className="space-y-2 rounded-control border border-line-strong p-3 text-sm">
             <p>
-              Mask <strong className="break-all">&ldquo;{masking.value}&rdquo;</strong> everywhere? It&apos;s added to your
-              always-mask list and this preview is rebuilt.
+              {delivery === "local-connection" ? (
+                <>Mask <strong className="break-all">&ldquo;{masking.value}&rdquo;</strong> in this session only?
+                  This preview is rebuilt. The new rule stays in this tab until Send; it does not change Settings or other sessions.</>
+              ) : (
+                <>Mask <strong className="break-all">&ldquo;{masking.value}&rdquo;</strong> everywhere? It&apos;s added to your
+                  always-mask list and this preview is rebuilt.</>
+              )}
               {edited && <strong> Rebuilding discards your edits to this copy.</strong>}
             </p>
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
                 size="sm"
+                disabled={sending}
                 onClick={() => {
+                  if (sending) return;
                   onMask(masking.value);
                   setMasking(null);
                 }}
               >
                 {edited ? "Discard edits and mask" : "Mask it"}
               </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={() => setMasking(null)}>
+              <Button type="button" size="sm" variant="ghost" disabled={sending} onClick={() => setMasking(null)}>
                 Cancel
               </Button>
             </div>
@@ -179,10 +193,10 @@ export function OutgoingReviewPanel({
         <div role="group" aria-label="Confirm going back" className="space-y-2 rounded-control border border-line-strong p-3 text-sm">
           <p>Go back without sending? Your edits to this copy are discarded{baseline ? "" : "; your typed response is kept"}.</p>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={onBack}>
+            <Button type="button" size="sm" variant="outline" disabled={sending} onClick={onBack}>
               Discard edits and go back
             </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmingBack(false)}>
+            <Button type="button" size="sm" variant="ghost" disabled={sending} onClick={() => setConfirmingBack(false)}>
               Keep reviewing
             </Button>
           </div>

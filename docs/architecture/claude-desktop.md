@@ -1,6 +1,6 @@
 # Claude Desktop integration
 
-Status: shared foundation plus internal durable-session implementation. **No installable Claude extension
+Status: shared foundation, durable sessions and opt-in browser/pairing bridge. **No installable Claude extension
 or Claude-compatible release exists from this work yet.** No live Claude test has
 been performed.
 
@@ -75,7 +75,7 @@ the only source of truth. This increment does not expand G6 compression work.
 | --- | --- | --- |
 | 1: shared foundation (this change) | Domain schemas/types, prompt catalog, briefing and debrief-context extraction; no connector endpoint | Exact pre-extraction prompt/schema fingerprints; API regression checks; eight fictional-household context parity/privacy checks; no provider calls |
 | 2: authoritative sessions (internal implementation) | SQLite sessions, immutable approved baseline, revisions, scoped grants, clock policy, version-bound turn tasks, atomic/idempotent acceptance, accepted-state-to-UI-message mapping | Service close/reopen, competing independent database connections, stale tasks, wrong phase, duplicate-key mismatch, lost acknowledgement and forced mid-commit failure; reject without partial writes. Browser/API wiring still pending |
-| 3: local connection | Scoped pairing/revocation, authenticated loopback service and local stdio MCP adapter | Unpaired/revoked access refused; no raw household, private ledger, credentials or retry settings in tools/errors/evidence; initial accepted turn with zero ReadyState model-provider requests |
+| 3: local connection (browser/HTTP implemented; stdio pending) | Opt-in owner setup, scoped one-use pairing/revocation, authenticated loopback service, separate browser session screen; local stdio MCP adapter remains ahead | Unpaired/revoked access refused; no raw household, private ledger, credentials or retry settings in tool responses; fixture turn refresh/restart without ReadyState model-provider requests; real Claude remains unverified |
 | 4: full exercise | Approved participant responses, next-turn tasks, accepted UI updates, evidence retrieval and checked debrief/repair | Full fixture exercise through 72 hours; failed repair withheld; correct omissions and check-status wording; preserve ordinary API route |
 | 5: Windows tester package | App plus `.mcpb`, setup/update/remove guide, checksums/notices/matching source and exact compatibility record | Extracted package startup, restart/revoke/update tests, offline MCP protocol tests, final code review and CI, then a clearly labeled installable tester release |
 | 6: user qualification | User installs extension in their actual Claude Desktop account | Record app/client versions, Windows version, plan/policy availability, operations tested and limits; manually assess scenario/debrief quality separately |
@@ -113,12 +113,13 @@ does not independently edit browser localStorage or maintain a second history.
 Persistence and locking must be verified before exposing mutation tools.
 
 The internal [local exercise service](../../lib/local-exercise-service.ts) now
-owns one SQLite database selected by the future app lifecycle. It uses Node
+owns one exercise SQLite database selected by explicit local configuration. It uses Node
 24's built-in `node:sqlite` (still marked experimental in the pinned runtime),
 so no native npm database dependency or separate database installer is added.
-Normal app startup does not open this database yet. Storage location, OS access
-controls, single-instance lifecycle and extracted-package startup remain
-unimplemented until the bridge is wired.
+Ordinary startup still leaves it disabled. Opted-in connection requests open
+and close the database per operation. Automatic installation paths, Windows ACL
+provisioning, launcher owner-setup automation and extracted-package qualification
+remain release gates.
 
 State includes the exact approved baseline text, approved participant response
 references, complete accepted events and their task versions/context hashes.
@@ -132,10 +133,11 @@ fetch current state separately for its latest revision.
 Per-session read/write grants are enforced by the internal service. Only the
 local owner can grant/revoke access or supply approved baseline/response text.
 Revocation invalidates outstanding work without deleting accepted history.
-Principal IDs are identifiers, **not authentication credentials**; there is no
-network authentication or pairing endpoint in this increment. A future adapter
-must authenticate before supplying a principal and must keep approval methods
-out of assistant tool registration.
+Principal IDs are identifiers, **not authentication credentials**. The
+[HTTP boundary](../../lib/local-connection-http.ts) authenticates owner cookies
+or connector tokens before supplying principals. Connector operations are an
+allowlist: redeem code, read state, obtain task and submit turn. They cannot
+approve responses, create sessions or grant access.
 
 Turn-task retrieval is repeatable and has no wall-clock expiry in this
 user-paced implementation. Cancellation is explicit, increments the revision
@@ -145,9 +147,50 @@ version requires deliberate cancellation/reissue, never silent regeneration.
 
 [The rendering adapter](../../lib/local-exercise-view.ts) maps accepted service
 events to existing UI message shapes without accepting replacement transcripts.
-It is a pure adapter, not browser synchronization: the existing exercise page
-still uses its original session. Debrief-task acceptance/repair, evidence-tool
-pagination, UI review wiring and the MCP adapter remain subsequent increments.
+It is a pure adapter; the ordinary API exercise page still uses its original
+session. The opt-in [connection screen](../../app/(app)/connections/page.tsx)
+instead reads accepted service state on explicit **Refresh accepted results**,
+shows approved masked text, and resumes saved sessions. Briefings/responses
+reuse existing masking, editing, tag checks and send-time re-review. Back sends
+nothing. No model request is made by this screen. An unconfirmed response retry
+first reconciles its approval reference against pending and accepted responses
+under the session lock. Already committed text is not retransmitted. Otherwise
+it reloads current private context and checks the server revision; changed text,
+mappings or rules require another explicit review. Only an unchanged retry uses
+the original approved text, reference and idempotency key from this tab.
+Unreviewed typing/previews/retries do not survive tab closure; refresh saved
+state before repeating an operation with an uncertain result.
+
+Each local session has its own browser-private masking context, associated with
+its approved briefing reference. Its original private terms and tag mappings
+survive reloads without modifying the ordinary API exercise's global ledger.
+Changing the current household does not change an older session's privacy
+context. The context is saved before the approved text can leave the browser;
+blocked/full storage prevents transmission. Missing or corrupt context makes a
+saved session read-only rather than substituting another household's terms.
+Refresh can retry association from an interrupted creation's private draft.
+Otherwise create a new session and review its briefing again. These mappings
+contain private information, remain unencrypted in this browser, and are not
+stored in the exercise database.
+Response approval uses an exclusive per-session Web Lock across tabs, reloads
+the current private context and checks the server revision before saving new
+mappings or transmitting. Changed mappings/rules require a rebuilt review;
+stale exercise state is refreshed without overwriting mappings. Browsers
+without Web Locks fail closed. Current Settings Always Mask terms are combined
+with the session's original terms both when opening and approving a review.
+Selecting an additional mask in this local review applies only to this session,
+stays in tab memory until Send and does not change Settings or other sessions.
+Back discards these unapproved rules. Private-draft recovery reads do not
+promote or overwrite session mappings; the first approved response saves the
+session context under its lock and removes the creation draft.
+The review editor and open mask/Back confirmation controls are disabled
+throughout asynchronous approval, including waits for the lock and server
+state, so the approved preview cannot be changed while submission is pending.
+
+Debrief-task acceptance/repair, evidence-tool pagination, ordinary API migration,
+automatic accepted-state notifications and the MCP adapter remain subsequent
+increments. The optional short-step control sends only a displayed fixed
+statement; it is not an unreviewed free-text channel.
 
 This database contains personal exercise information even when masked and is
 **not encrypted** by this implementation. It must remain outside the
@@ -169,6 +212,136 @@ Claude's sensitive configuration storage; do not include them in logs, exported
 exercise reports or example configuration. Revoke a connection without deleting
 the household or accepted exercise. An extension crash must not stop ordinary
 ReadyState assessment or corrupt sessions.
+
+### Opt-in development setup and pairing
+
+This is a **source-development procedure**, not the promised Windows installer.
+Do not ask testers to configure an imaginary Claude extension: no `.mcpb` exists
+yet. The connector endpoint currently supports deterministic protocol tests only.
+
+The bridge is off unless `READYSTATE_LOCAL_CONNECTIONS=1`. It refuses hosted
+mode, Vercel deployments and private-trial-password deployments. Configure an
+exact HTTP loopback origin, a private absolute data directory outside the
+installation, and a fresh random 32-byte lowercase-hex owner setup code.
+Do not put the directory in a synced/shared folder, repository or app archive.
+New POSIX directories use mode 0700 and existing broadly accessible POSIX
+directories are refused. Windows currently inherits the selected directory's
+ACL: the operator must verify it is private; automatic ACL setup is not yet
+qualified. Same-user malware, browser extensions, compromised app scripts and
+other local processes with access to the owner's environment/files are outside
+this local trust boundary. HTTP cookies are not port-isolated; do not treat this
+prototype as isolation from hostile software on the same machine.
+
+Example in a private PowerShell development session with Node 24 available:
+
+```powershell
+$env:READYSTATE_LOCAL_CONNECTIONS = "1"
+$env:READYSTATE_LOCAL_ORIGIN = "http://localhost:3000"
+$env:READYSTATE_LOCAL_DATA_DIR = Join-Path $env:LOCALAPPDATA "ReadyState-Claude-Development"
+$env:READYSTATE_LOCAL_OWNER_CODE = node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))"
+npm run build
+npm start
+```
+
+In another trusted local window, open the exact configured origin's
+`/connections` page. Enter the generated setup code locally, never in chat or a
+model prompt; do not print it into shared logs. An operator can privately copy
+it from the development session using their normal secret-handling workflow.
+Once setup is unlocked:
+
+1. Review the current household's complete masked briefing. Edit or go Back as
+   needed; only **Send this** creates a durable session.
+2. Select read-only approved-state access or read/context/turn-submission access
+   for that exercise, then create a pairing code. Read-only is the default.
+3. Give this one-use, five-minute code only to the local connector's
+   configuration, **not the assistant conversation**. The future extension will
+   provide this configuration UI. Redemption returns a session-bound credential
+   lasting 30 days. It does not expose a provider API key.
+4. Ask the assistant to continue only once a supported extension exists.
+   Until then, fixture tools can retrieve/submit a candidate and the browser's
+   Refresh shows only accepted results. A ReadyState button does not wake Claude.
+5. Review each participant response before release. Cancel an outstanding task
+   to invalidate it while preserving a pending approved response. Withdraw an
+   approved response to remove it from future context and invalidate its task
+   before reviewing a replacement. Withdrawal cannot recall information a
+   connector or Claude has already retrieved.
+6. Revoke a code/connection to deny future requests and invalidate outstanding
+   work without deleting accepted history. Locking setup ends only the owner
+   browser session, not independently paired connections.
+
+The owner code is single-use. The resulting cookie is HttpOnly, SameSite=Strict,
+scoped to the browser endpoint and expires after 12 hours. For a lost/expired
+owner session, stop the app, configure a new random code and restart; unlocking
+with it invalidates older owner cookies but preserves owner/session identity.
+Do **not** delete either database as a login-recovery shortcut.
+If only one of the two database files exists, startup refuses to create its
+missing counterpart. Inspect/restore the complete local data pair rather than
+silently replacing owner identity or hiding previously saved sessions.
+Existing databases must contain the expected schema, metadata and owner row;
+empty or partially initialized files are refused without initializing them.
+Initialization is reserved for an entirely new pair. The local launcher passes
+the real source/install roots to the standalone process; data-path checks
+resolve junctions/symlinks and missing descendants before directory creation.
+Do not invoke a standalone server directly without supplying the absolute
+`READYSTATE_LOCAL_SOURCE_ROOT` and `READYSTATE_LOCAL_INSTALL_ROOT` protection
+roots. A standalone server's changed working directory is not the install root.
+Before opening either store, database and SQLite sidecar paths must be regular
+files with exactly one hard link and no symbolic link. Directory privacy alone
+cannot protect data reachable through another file path. Existing stores are
+opened with SQLite `mode=rw` (never create) for validation, permitting hot
+rollback-journal recovery after a killed process without reinitializing data.
+This recovery can restore uncommitted pages; it is not a storage reset.
+
+Browser requests must have the exact configured Host and Origin; cross-site
+fetch metadata is refused. Next canonicalizes internal loopback Request URLs,
+so those may use a loopback alias with the same scheme/port; the external Host
+and browser Origin checks remain exact. Connector requests require bearer
+credentials and refuse any Origin/cookies; an owner cookie cannot authenticate
+the connector endpoint or vice versa. No wildcard CORS is enabled.
+
+The separate `connection-credentials.sqlite` contains only credential hashes,
+expiry, consumed-code markers, principal/session/permission metadata and stable
+owner identity. Pairing codes/tokens are generated cryptographically and returned
+only once; raw credentials are not persisted. Revocation denies the credential
+before grant cleanup; a cleanup failure is explicit and can be retried.
+Repeating a revocation after another tab already revoked the connection
+succeeds without logging the owner out.
+Keep this credential database out of exercise exports/backups intended for
+sharing. Safe full backup/delete/restore coordination for both stores, including
+connection revocation after restoration, is still a pre-release requirement.
+
+### Verification boundaries
+
+The automated transport tests exercise real local SQLite stores and synthetic
+credentials: cross-origin/Host refusal, permission separation, code/token
+expiry, one-use redemption, hash-only persistence, close/reopen, setup-code
+recovery, revocation (including cleanup failure), bounded input and disabled
+web/trial/hosted routes. They prohibit provider fetches.
+
+The installed Edge walkthrough uses an isolated key-free production server and
+browser profile. It covers explicit household/response approval and cancellation,
+private-name masking, accepted fixture turns, lost-acknowledgement retry,
+stale-response refresh, task cancellation, 1280/390/320px layouts, keyboard
+focus, reload, actual server process restart and connection revocation. External
+and model requests are intercepted/blocked; none are attempted in the passing
+walkthrough, and no browser runtime errors are observed.
+The review-fix walkthrough also covers approved-response withdrawal and
+replacement, invalidated-task refusal, masking after changing the current
+household, missing/corrupt privacy context, quota refusal before transmission,
+pairing-code hiding on session creation/switching, and repeated revocation
+without owner logout. Storage regressions separately exercise empty/incomplete
+stores, missing owners and source/install-tree confinement including links.
+Returned-review regressions additionally cover actual killed-process journals
+for both stores, hard-linked databases/sidecars, missing-file non-creation,
+grant-cleanup retry after reopen without invalidating another connection's task,
+current Settings mask changes, session-only unsaved selection rules and
+two-tab stale approval without overwriting accepted mappings.
+
+This is **interface inspection**, not human usability or live Claude testing.
+Physical phones, Safari, Firefox, Windows installer ACL provisioning, extension
+installation/credential storage, actual Claude subscription compatibility and
+model/debrief quality remain unverified. A passing build is not extracted
+Claude-package evidence.
 
 ## Release boundary and readiness notice
 
