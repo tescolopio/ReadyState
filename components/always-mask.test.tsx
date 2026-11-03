@@ -86,6 +86,18 @@ it("restores saved Settings rules without restoring private tag mappings", async
   expect(usePrivacyStore.getState().entityMap).toEqual({});
 });
 
+it("reloads persisted Settings changes made while the card is unmounted", async () => {
+  await saveLocalPrivacySettings(localStorage, ["before"]);
+  await act(async () => root.render(<AlwaysMaskCard />));
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await saveLocalPrivacySettings(localStorage, ["after"]);
+
+  await act(async () => root.render(<AlwaysMaskCard />));
+  expect(container.querySelector("input")!.value).toBe("after");
+  expect(usePrivacyStore.getState().alwaysMask).toEqual(["after"]);
+});
+
 it("keeps an API-only exercise mask in memory when Web Locks are unavailable", async () => {
   await saveLocalPrivacySettings(localStorage, ["stale"]);
   vi.stubGlobal("navigator", {});
@@ -112,6 +124,7 @@ it("keeps an exercise-selected mask across card remounts and approval despite st
   const update = await addAlwaysMaskRule(localStorage, usePrivacyStore.getState().alwaysMask, "quietorchid");
   expect(update).toEqual({ rules: ["stale", "quietorchid"], persisted: true });
   await act(async () => usePrivacyStore.getState().setAlwaysMask(update.rules, update.persisted));
+  expect(container.querySelector("input")!.value).toBe("stale, quietorchid");
   expect(loadLocalPrivacySettings(localStorage)).toEqual(["stale", "quietorchid"]);
   await act(async () => root.unmount());
   root = createRoot(container);

@@ -401,7 +401,7 @@ export default function ConnectionsPage() {
               <p>This verifies transport and saving only, not scenario quality or independently verified model identity.
                 For the optional MCP connector, model selection stays in the assistant and model evidence is unavailable.</p>
               <ClaudeCliDiagnostic key={session.id} sessionId={session.id} accepted={session.events.length > 0}
-                onSaved={() => refresh(session.id)} />
+                onSaved={() => run(() => refresh(session.id))} />
               <label htmlFor="diagnostic-session" className="block font-semibold">Diagnostic session ID</label>
               <input id="diagnostic-session" readOnly value={session.id} className="w-full rounded-control border border-line p-2 font-mono" />
               <p>Optional assistant-hosted MCP path: configure the source connector for this ID and exact origin, create a write-enabled pairing code below,

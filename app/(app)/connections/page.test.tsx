@@ -23,6 +23,7 @@ let diagnosticWait: Promise<void> | undefined;
 let stateWaitBySession: Map<string, Promise<void>>;
 let stateWaitQueue: Map<string, Promise<void>[]>;
 let onStateRequest: ((id: string) => void) | undefined;
+let onDiagnosticRequest: (() => void) | undefined;
 let fixtureEvent: LocalConnectionState["events"][number];
 let otherSaved: LocalConnectionState;
 const sessionId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -71,6 +72,7 @@ beforeEach(() => {
   stateWaitBySession = new Map();
   stateWaitQueue = new Map();
   onStateRequest = undefined;
+  onDiagnosticRequest = undefined;
   vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body));
     requests.push(body);
@@ -91,6 +93,7 @@ beforeEach(() => {
       return Response.json({ installed: true, version: "2.1.300", authentication: "native-subscription", evaluationEnabled: true });
     }
     if (body.action === "claude-diagnostic") {
+      onDiagnosticRequest?.();
       await diagnosticWait;
       saved = {
         ...saved,
@@ -416,45 +419,7 @@ describe("local connection refresh races", () => {
     expect(requests).toHaveLength(requestCount);
   });
 
-  it("ignores an older saved-result response that arrives after a newer refresh", async () => {
-    await startDiagnostic();
-    const older = deferred();
-    const newer = deferred();
-    const olderStarted = deferred();
-    const newerStarted = deferred();
-    let stateCalls = 0;
-    stateWaitQueue.set(sessionId, [older.promise, newer.promise]);
-    onStateRequest = id => {
-      if (id !== sessionId) return;
-      stateCalls++;
-      if (stateCalls === 1) olderStarted.resolve();
-      if (stateCalls === 2) newerStarted.resolve();
-    };
-
-    trigger("Send fictional diagnostic to Claude");
-    await olderStarted.promise;
-    saved = {
-      ...saved,
-      events: [{
-        ...fixtureEvent,
-        turn: acceptedDiagnosticTurn,
-        generator: {
-          service: "claude-code", runtimeVersion: "2.1.300", requestedModel: "sonnet",
-          reportedModels: ["newer-saved-model"], modelEvidence: "cli-reported-unverified",
-        },
-      }],
-    };
-    await click("Refresh accepted results");
-    await newerStarted.promise;
-
-    await act(async () => { newer.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
-    await waitForText("newer-saved-model");
-    await act(async () => { older.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
-    expect(container.textContent).toContain("newer-saved-model");
-    expect(container.textContent).not.toContain("initial-saved-model");
-  });
-
-  it("does not restore the previously selected session after a session change during refresh", async () => {
+  it("serializes accepted-result refresh with other page operations", async () => {
     await startDiagnostic();
     const pending = deferred();
     const stateStarted = deferred();
@@ -462,27 +427,49 @@ describe("local connection refresh races", () => {
     onStateRequest = id => { if (id === sessionId) stateStarted.resolve(); };
 
     trigger("Send fictional diagnostic to Claude");
-    await stateStarted.promise;
+    await act(async () => { await stateStarted.promise; await new Promise(resolve => setTimeout(resolve, 0)); });
+    for (const label of ["Refresh accepted results", "Lock setup", `Resume ${otherSessionId.slice(0, 8)} · loop`]) {
+      expect([...container.querySelectorAll("button")].find(button => button.textContent?.trim() === label)?.disabled).toBe(true);
+    }
+
+    await act(async () => { pending.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    await waitForText("Diagnostic acknowledgement saved");
+    expect([...container.querySelectorAll("button")].find(button => button.textContent?.trim() === "Refresh accepted results")?.disabled).toBe(false);
+  });
+
+  it("does not replace another session when the diagnostic finishes after a session change", async () => {
+    await startDiagnostic();
+    const diagnostic = deferred();
+    const diagnosticStarted = deferred();
+    diagnosticWait = diagnostic.promise;
+    onDiagnosticRequest = () => diagnosticStarted.resolve();
+
+    trigger("Send fictional diagnostic to Claude");
+    await diagnosticStarted.promise;
     await click(`Resume ${otherSessionId.slice(0, 8)} · loop`);
     await waitForText(`Exercise ${otherSessionId.slice(0, 8)}`);
-    await act(async () => { pending.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    const stateRequests = requests.filter(request => (request as { action?: string }).action === "state").length;
+    await act(async () => { diagnostic.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
     expect(container.textContent).toContain(`Exercise ${otherSessionId.slice(0, 8)}`);
     expect(container.textContent).not.toContain(`Exercise ${sessionId.slice(0, 8)}`);
+    expect(requests.filter(request => (request as { action?: string }).action === "state")).toHaveLength(stateRequests);
   });
 
-  it("does not unlock setup when a saved-result refresh completes after locking", async () => {
+  it("does not refresh or unlock setup when a diagnostic finishes after locking", async () => {
     await startDiagnostic();
-    const pending = deferred();
-    const stateStarted = deferred();
-    stateWaitBySession.set(sessionId, pending.promise);
-    onStateRequest = id => { if (id === sessionId) stateStarted.resolve(); };
+    const diagnostic = deferred();
+    const diagnosticStarted = deferred();
+    diagnosticWait = diagnostic.promise;
+    onDiagnosticRequest = () => diagnosticStarted.resolve();
 
     trigger("Send fictional diagnostic to Claude");
-    await stateStarted.promise;
+    await diagnosticStarted.promise;
     await click("Lock setup");
     expect(container.querySelector("#owner-code")).not.toBeNull();
-    await act(async () => { pending.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    const statusRequests = requests.filter(request => (request as { action?: string }).action === "status").length;
+    await act(async () => { diagnostic.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
     expect(container.querySelector("#owner-code")).not.toBeNull();
     expect([...container.querySelectorAll("button")].some(value => value.textContent === "Lock setup")).toBe(false);
+    expect(requests.filter(request => (request as { action?: string }).action === "status")).toHaveLength(statusRequests);
   });
 });

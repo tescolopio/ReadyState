@@ -30,12 +30,16 @@ export function AlwaysMaskCard() {
   const [memoryOnly, setMemoryOnly] = useState(false);
   const id = useId();
 
+  useEffect(() => usePrivacyStore.subscribe((state, previous) => {
+    if (state.alwaysMask !== previous.alwaysMask) setDraft(state.alwaysMask.join(", "));
+  }), []);
+
   useEffect(() => {
     const restore = (event?: StorageEvent) => {
       if (event && event.key !== null && event.key !== LOCAL_PRIVACY_SETTINGS_KEY) return;
       try {
         const current = usePrivacyStore.getState();
-        if (!event && current.alwaysMaskInitialized) {
+        if (!event && current.alwaysMaskInitialized && !current.alwaysMaskPersisted) {
           setDraft(current.alwaysMask.join(", "));
           return;
         }
@@ -52,7 +56,12 @@ export function AlwaysMaskCard() {
             effectiveRules = rules;
           }
         } else {
-          effectiveRules = hydrateAlwaysMask(rules);
+          if (current.alwaysMaskInitialized) {
+            setAlwaysMask(rules, true);
+            effectiveRules = rules;
+          } else {
+            effectiveRules = hydrateAlwaysMask(rules);
+          }
         }
         setDraft(effectiveRules.join(", "));
         setMemoryOnly(false);
