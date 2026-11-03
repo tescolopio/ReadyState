@@ -137,14 +137,18 @@ export class LocalExerciseService {
     if (state.id !== sessionId) throw new LocalExerciseError("corrupt-storage");
     const approvals = new Set([state.baseline.id]);
     let previousHour: number | null = null;
+    let previousTaskRevision = -1;
     for (const [index, event] of state.events.entries()) {
       if ((index === 0 && event.response) || (index > 0 && !event.response)
         || (event.response && approvals.has(event.response.id))
+        || event.task.revision <= previousTaskRevision || event.task.revision >= state.revision
+        || event.task.phase !== (index === 0 ? "baseline" : "loop")
         || !validateExerciseTurn(event.turn, { previousHour, shortStepReason: event.task.shortStepReason }).ok) {
         throw new LocalExerciseError("corrupt-storage");
       }
       if (event.response) approvals.add(event.response.id);
       previousHour = event.turn.hours_elapsed;
+      previousTaskRevision = event.task.revision;
     }
     const phase = previousHour === null ? "baseline" : previousHour === 72 ? "ended" : "loop";
     if (state.phase !== phase || (state.pendingResponse && (phase !== "loop" || approvals.has(state.pendingResponse.id)))) {
@@ -323,7 +327,9 @@ export class LocalExerciseService {
     let serialized: string | undefined;
     try { serialized = JSON.stringify(candidate); } catch { throw new LocalExerciseError("invalid-input"); }
     if (!serialized || Buffer.byteLength(serialized) > 131_072) throw new LocalExerciseError("invalid-input");
-    return this.mutate(principal, command, "turn", { taskId, candidate }, state => {
+    const shaped = exerciseTurnCandidateSchema.safeParse(candidate);
+    if (!shaped.success) throw new LocalExerciseError("invalid-turn", [{ field: "", code: "shape" }]);
+    return this.mutate(principal, command, "turn", { taskId, candidate: shaped.data }, state => {
       const task = state.task;
       if (!task || task.id !== taskId || task.revision !== state.revision
         || task.schemaVersion !== EXERCISE_SCHEMA_VERSION || task.promptVersion !== EXERCISE_PROMPT_VERSION

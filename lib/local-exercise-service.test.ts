@@ -304,6 +304,30 @@ describe("authoritative local exercise sessions", () => {
     refused(() => service.submitTurn(connector, command(0), task.id, { ...turn(0), new_inject: "x".repeat(132_000) }), "invalid-input");
     refused(() => service.submitTurn(connector, command(0), task.id, { ...turn(0), apiKey: "not-an-approved-field" }), "invalid-turn");
   });
+
+  it("refuses deeply nested unknown candidate fields before recursive fingerprinting", () => {
+    const task = service.getGenerationTask(sessionId, connector);
+    let nested: unknown = null;
+    for (let index = 0; index < 2_000; index++) nested = { nested };
+    const before = service.getState(sessionId, owner);
+    refused(() => service.submitTurn(connector, command(0), task.id, { ...turn(0), nested }), "invalid-turn");
+    expect(service.getState(sessionId, owner)).toEqual(before);
+  });
+
+  it.each(["session", "repeated", "future"])("refuses inconsistent %s revisions without mutations", kind => {
+    initial();
+    service.submitApprovedResponse(owner, command(1), approval("I check water."));
+    const task = service.getGenerationTask(sessionId, connector);
+    service.submitTurn(connector, command(task.revision), task.id, turn(12));
+    const fixture = openFixture();
+    const path = kind === "session" ? "$.revision" : "$.events[1].task.revision";
+    fixture.prepare("UPDATE exercise_sessions SET state = json_set(state, ?, ?) WHERE id = ?")
+      .run(path, kind === "future" ? 99 : 0, sessionId);
+    const before = fixture.prepare("SELECT state FROM exercise_sessions WHERE id = ?").get(sessionId)?.state;
+    refused(() => service.getState(sessionId, owner), "corrupt-storage");
+    refused(() => service.submitApprovedResponse(owner, command(0), approval()), "corrupt-storage");
+    expect(fixture.prepare("SELECT state FROM exercise_sessions WHERE id = ?").get(sessionId)?.state).toBe(before);
+  });
 });
 
 describe("explicit exercise clock and shape policy", () => {
