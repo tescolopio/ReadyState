@@ -53,8 +53,10 @@ export function validateExerciseTurn(candidate: unknown, policy: TurnClockPolicy
   } else {
     const previous = policy.previousHour;
     const delta = turn.hours_elapsed - previous;
-    if (!Number.isFinite(previous) || previous < 0 || previous >= TARGET_DURATION_HOURS || delta <= 0 || delta > 12
-      || (delta < 6 && !complete && !policy.shortStepReason)) issue("hours_elapsed", "clock");
+    // Decimal-hour subtraction may land a few representable values off 6 or 12.
+    const roundoff = Number.EPSILON * Math.max(1, Math.abs(previous), Math.abs(turn.hours_elapsed)) * 4;
+    if (!Number.isFinite(previous) || previous < 0 || previous >= TARGET_DURATION_HOURS || delta <= 0 || delta > 12 + roundoff
+      || (delta < 6 - roundoff && !complete && !policy.shortStepReason)) issue("hours_elapsed", "clock");
     if (turn.feedback === null) issue("feedback", "phase");
   }
   if (turn.scenario_status !== (complete ? "complete" : "ongoing")) issue("scenario_status", "phase");

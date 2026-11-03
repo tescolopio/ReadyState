@@ -229,6 +229,19 @@ describe("authoritative local exercise sessions", () => {
     expect(accepted.revision).toBe(task.revision + 1);
   });
 
+  it.each([[6.2, 12.2], [6.1, 18.1]])("accepts and reloads a fractional interval %s to %s", (first, next) => {
+    initial();
+    for (const hour of [first, next]) {
+      const state = service.getState(sessionId, owner);
+      service.submitApprovedResponse(owner, command(state.revision), approval("I check supplies."));
+      const task = service.getGenerationTask(sessionId, connector);
+      service.submitTurn(connector, command(task.revision), task.id, turn(hour));
+    }
+    const reopened = new LocalExerciseService(filename);
+    services.push(reopened);
+    expect(reopened.getState(sessionId, owner).events.map(event => event.turn.hours_elapsed)).toEqual([0, first, next]);
+  });
+
   it.each(TEST_HOUSEHOLDS)("keeps $id full accepted log and UI adapter aligned without provider calls", ({ profile }) => {
     usePrivacyStore.getState().clearMappings();
     const baseline = engineBaseline(profile, text => maskInput(text, { alwaysMask: privateTerms(profile), dryRun: true }));
@@ -351,11 +364,14 @@ describe("explicit exercise clock and shape policy", () => {
     ["missing feedback", { ...turn(12), feedback: null }, 0],
     ["after completion", turn(72), 72],
     ["unapproved short step", turn(1), 0],
+    ["genuinely short fractional interval", turn(12.199999), 6.2],
+    ["genuinely excessive fractional interval", turn(18.100001), 6.1],
+    ["tiny target overshoot", turn(72.00000000000001), 66],
   ] as const)("rejects %s", (_name, candidate, previousHour) => {
     expect(validateExerciseTurn(candidate, { previousHour }).ok).toBe(false);
   });
 
-  it.each([[6, 0], [12, 0], [72, 60], [72, 71], [72, 66.5]])("accepts Hour %s after Hour %s", (hour, previousHour) => {
+  it.each([[6, 0], [12, 0], [72, 60], [72, 71], [72, 66.5], [12.2, 6.2], [18.1, 6.1]])("accepts Hour %s after Hour %s", (hour, previousHour) => {
     expect(validateExerciseTurn(turn(hour), { previousHour })).toEqual({ ok: true, turn: turn(hour) });
   });
 });
