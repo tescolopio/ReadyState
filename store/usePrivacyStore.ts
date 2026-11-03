@@ -13,7 +13,12 @@ interface PrivacyState {
   clearMappings: () => void;
   /** Names the user wants masked wherever they appear, even if no detector catches them. */
   alwaysMask: string[];
-  setAlwaysMask: (names: string[]) => void;
+  /** Whether this tab has loaded or explicitly changed its masking rules. */
+  alwaysMaskInitialized: boolean;
+  /** Whether the current complete rule list was saved to browser storage. */
+  alwaysMaskPersisted: boolean;
+  setAlwaysMask: (names: string[], persisted?: boolean) => void;
+  hydrateAlwaysMask: (names: string[]) => string[];
 }
 
 export const usePrivacyStore = create<PrivacyState>()((set) => ({
@@ -22,6 +27,24 @@ export const usePrivacyStore = create<PrivacyState>()((set) => ({
     set((state) => ({ entityMap: { ...state.entityMap, [tag]: realValue } })),
   clearMappings: () => set({ entityMap: {} }),
   alwaysMask: [],
-  setAlwaysMask: (names) =>
-    set({ alwaysMask: [...new Set(names.map((name) => name.trim()).filter(Boolean))] }),
+  alwaysMaskInitialized: false,
+  alwaysMaskPersisted: false,
+  setAlwaysMask: (names, persisted = false) =>
+    set({
+      alwaysMask: [...new Set(names.map((name) => name.trim()).filter(Boolean))],
+      alwaysMaskInitialized: true,
+      alwaysMaskPersisted: persisted,
+    }),
+  hydrateAlwaysMask: (names) => {
+    let rules: string[] = [];
+    set((state) => {
+      if (state.alwaysMaskInitialized) {
+        rules = state.alwaysMask;
+        return state;
+      }
+      rules = [...new Set(names.map((name) => name.trim()).filter(Boolean))];
+      return { alwaysMask: rules, alwaysMaskInitialized: true, alwaysMaskPersisted: true };
+    });
+    return rules;
+  },
 }));

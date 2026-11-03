@@ -39,7 +39,12 @@ function deferred() {
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
-  usePrivacyStore.setState({ alwaysMask: [], entityMap: {} });
+  usePrivacyStore.setState({
+    alwaysMask: [],
+    alwaysMaskInitialized: false,
+    alwaysMaskPersisted: false,
+    entityMap: {},
+  });
   fixtureEvent = {
     id: randomUUID(),
     turn: {
