@@ -2,15 +2,18 @@
 
 ## Verified source-only baseline (PR #41)
 
-Evidence applies to commit `a2436fd78fbdc739548a47332d0abe51f081d994`:
+Local evidence applies to code commit
+`16d4ed67ed73a17f96ff57f1e063c99e6e9a6676`:
 
-- Source-only tests: **770 passed, 1 skipped, 1 todo across 41 test files**;
+- Source-only tests: **773 passed, 1 skipped, 1 todo across 41 test files**;
   lint, typecheck and production build **PASS**.
-- GitHub CI **PASS**, including Docker build/smoke test, Windows/Linux native
-  bundles and Vercel deployment.
 - Windows Node 24 / Microsoft Edge fictional CLI harness **PASS**: cancellation,
   usage-limit failure, explicit retry, exactly one saved SQLite event, restart
   recovery and responsive widths; **zero model calls**.
+- The new regressions cover serialized saved-result refreshes, current-session
+  preservation, persisted mask-rule reload on remount and mask-draft
+  synchronization.
+- GitHub CI for this code commit is pending.
 
 This is **fiction-only evidence, not live Claude qualification**. Subsequent
 code changes invalidate affected evidence and require the affected checks to
