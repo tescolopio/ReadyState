@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ClaudeCli, claudeEnvironment, configuredClaudeExecutable, runClaudeProcess, type ClaudeRunner } from "@/lib/claude-cli";
+import { ClaudeCli, claudeEnvironment, configuredClaudeExecutable, createClaudeProcessRunner, runClaudeProcess, type ClaudeRunner } from "@/lib/claude-cli";
 import { DIAGNOSTIC_CLI_REQUEST, diagnosticTurn } from "@/lib/connection-diagnostic.mjs";
 
 const signal = () => new AbortController().signal;
@@ -112,6 +112,17 @@ describe("official Claude CLI diagnostic adapter (no live model)", () => {
     expect(JSON.parse(result.stdout)).toMatchObject({ cwd: expect.stringContaining("readystate-claude-") });
     expect(result.stdout).not.toContain("secret");
   });
+  it("preserves fixed diagnostic arguments and UTF-8 input without shell interpolation", async () => {
+    const execute = runner();
+    await new ClaudeCli("native-executable", true, execute).diagnostic("sonnet", signal());
+    const args = [...execute.mock.calls[2][1], "", "space value", 'quoted"value', "trailing\\", "$env:PATH; exit 77", "é🎈"];
+    const result = await runClaudeProcess(process.execPath, ["-e",
+      "let input='';process.stdin.setEncoding('utf8');process.stdin.on('data',c=>input+=c);process.stdin.on('end',()=>console.log(JSON.stringify({args:process.argv.slice(1),input})))",
+      "--", ...args,
+    ], "fictional é🎈 input", signal());
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ args, input: "fictional é🎈 input" });
+  });
   it("terminates an owned subprocess on cancellation", async () => {
     const controller = new AbortController();
     const result = runClaudeProcess(process.execPath, ["-e", "setInterval(()=>{},1000)"], "", controller.signal);
@@ -127,11 +138,10 @@ describe("official Claude CLI diagnostic adapter (no live model)", () => {
     await expect(runClaudeProcess("readystate-fictional-missing-executable", [], "", signal())).rejects.toThrow("could not start");
   });
   it("terminates an owned subprocess at its deadline", async () => {
-    vi.useFakeTimers();
-    const result = runClaudeProcess(process.execPath, ["-e", "setInterval(()=>{},1000)"], "", signal());
-    const assertion = expect(result).rejects.toThrow("timed out");
-    await vi.advanceTimersByTimeAsync(91_001);
-    await assertion;
+    const started = Date.now();
+    await expect(createClaudeProcessRunner(100)(process.execPath, ["-e", "setInterval(()=>{},1000)"], "", signal()))
+      .rejects.toThrow("timed out");
+    expect(Date.now() - started).toBeLessThan(2_000);
   });
   it("refuses oversized output", async () => {
     await expect(runClaudeProcess(process.execPath, ["-e", "process.stdout.write('x'.repeat(160000));setInterval(()=>{},1000)"], "", signal()))

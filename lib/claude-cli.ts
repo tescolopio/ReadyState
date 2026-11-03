@@ -5,6 +5,7 @@ import path from "node:path";
 import { z } from "zod";
 
 import { claudeCliEvidenceSchema, claudeRequestedModelSchema } from "@/lib/claude-cli-contracts";
+import { claudeProcessCommand, killClaudeProcessTree } from "@/lib/claude-owned-process";
 import { DIAGNOSTIC_CLI_REQUEST, diagnosticTurn, diagnosticTurnSchema } from "@/lib/connection-diagnostic.mjs";
 
 export class ClaudeCliError extends Error {}
@@ -17,28 +18,62 @@ export function claudeEnvironment(source: Record<string, string | undefined>): N
   return { ...Object.fromEntries(Object.entries(source).filter(([key]) => allowed.has(key.toUpperCase()))), NODE_ENV: "production" };
 }
 
-export const runClaudeProcess: ClaudeRunner = async (executable, args, input, signal) => {
+export function createClaudeProcessRunner(timeoutMs = 90_000): ClaudeRunner {
+  return (executable, args, input, signal) => runClaudeInvocation(timeoutMs, executable, args, input, signal);
+}
+
+async function runClaudeInvocation(
+  timeoutMs: number, executable: string, args: string[], input: string, signal: AbortSignal,
+): Promise<ProcessResult> {
   if (signal.aborted) throw new ClaudeCliError("Claude request cancelled. Refresh saved results before retrying.");
   const directory = mkdtempSync(path.join(tmpdir(), "readystate-claude-"));
   try {
     return await new Promise<ProcessResult>((resolve, reject) => {
-      const child = spawn(executable, args, {
+      const command = claudeProcessCommand(executable, args);
+      const child = spawn(command.executable, command.args, {
         cwd: directory, env: claudeEnvironment(process.env), shell: false, windowsHide: true,
-        stdio: ["pipe", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"], detached: command.detached,
       });
       const stdout: Buffer[] = [];
       const stderr: Buffer[] = [];
       let bytes = 0;
       let failure: ClaudeCliError | undefined;
-      let killTimer: ReturnType<typeof setTimeout> | undefined;
+      let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+      let settled = false;
+      let exited = false;
+      let code: number | null = null;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        clearTimeout(cleanupTimer);
+        signal.removeEventListener("abort", abort);
+        child.stdin.destroy();
+        child.stdout.destroy();
+        child.stderr.destroy();
+        if (failure) reject(failure);
+        else resolve({ code, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") });
+      };
+      const cleanup = () => {
+        if (cleanupTimer || settled) return;
+        // close can be delayed indefinitely by inherited pipes. Never use it
+        // as the sole settlement trigger, even if tree termination fails.
+        cleanupTimer = setTimeout(() => {
+          failure ??= new ClaudeCliError("Claude output streams did not close. Nothing was accepted; retry explicitly.");
+          finish();
+        }, 1_000);
+        if (child.pid && (command.detached || !exited)) {
+          try { killClaudeProcessTree(child.pid); }
+          catch { failure ??= new ClaudeCliError("Claude process cleanup failed. Nothing was accepted; check the installed runtime."); }
+        }
+      };
       const stop = (message: string) => {
         if (failure) return;
         failure = new ClaudeCliError(message);
-        child.kill();
-        killTimer = setTimeout(() => child.kill("SIGKILL"), 1_000);
+        cleanup();
       };
       const abort = () => stop("Claude request cancelled. Refresh saved results before retrying.");
-      const timer = setTimeout(() => stop("Claude timed out. Refresh saved results before an explicit retry."), 90_000);
+      const timer = setTimeout(() => stop("Claude timed out. Refresh saved results before an explicit retry."), timeoutMs);
       signal.addEventListener("abort", abort, { once: true });
       if (signal.aborted) abort();
       const collect = (chunk: Buffer, target: "stdout" | "stderr") => {
@@ -49,18 +84,25 @@ export const runClaudeProcess: ClaudeRunner = async (executable, args, input, si
       child.stdout.on("data", (chunk: Buffer) => collect(chunk, "stdout"));
       child.stderr.on("data", (chunk: Buffer) => collect(chunk, "stderr"));
       child.stdin.on("error", () => stop("Claude input failed. Check the installed runtime and retry explicitly."));
-      child.on("error", () => { failure = new ClaudeCliError("Claude could not start. Check the native executable installation."); });
-      child.on("close", code => {
-        clearTimeout(timer);
-        if (killTimer) clearTimeout(killTimer);
-        signal.removeEventListener("abort", abort);
-        if (failure) reject(failure);
-        else resolve({ code, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") });
+      child.on("error", () => {
+        failure ??= new ClaudeCliError("Claude could not start. Check the native executable installation.");
+        cleanup();
       });
+      child.on("exit", exitCode => {
+        exited = true;
+        code = exitCode;
+        if (!command.detached && code === 127) {
+          failure ??= new ClaudeCliError("Claude could not start. Check the native executable installation.");
+        }
+        cleanup();
+      });
+      child.on("close", exitCode => { code = exitCode; finish(); });
       child.stdin.end(input);
     });
-  } finally { rmSync(directory, { recursive: true, force: true }); }
-};
+  } finally { rmSync(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }); }
+}
+
+export const runClaudeProcess = createClaudeProcessRunner();
 
 function decode(text: string): unknown {
   try { return JSON.parse(text); }

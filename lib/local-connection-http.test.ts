@@ -10,7 +10,7 @@ import { LOCAL_SHORT_STEP_REASON, localConnectionStateSchema, localConnectionVie
 import { handleLocalConnection, localConnectionOrigin } from "@/lib/local-connection-http";
 import { localConnectionRoute } from "@/lib/local-connection-runtime";
 import { LocalExerciseService } from "@/lib/local-exercise-service";
-import { ClaudeCliError } from "@/lib/claude-cli";
+import { ClaudeCli, ClaudeCliError, createClaudeProcessRunner, type ClaudeRunner } from "@/lib/claude-cli";
 import { DIAGNOSTIC_BASELINE, diagnosticTurn, diagnosticTurnSchema } from "@/lib/connection-diagnostic.mjs";
 
 const origin = "http://127.0.0.1:3179";
@@ -69,6 +69,54 @@ async function pair(sessionId: string, permission: "read" | "write" = "write") {
 }
 
 describe("local browser / connector boundary", () => {
+  it.each(["cancel", "timeout", "leader-exit"])("clears the running diagnostic after inherited-stream %s cleanup", async mode => {
+    const saved = receipt.parse(await (await browser({ action: "create", approval: { id: randomUUID(), text: DIAGNOSTIC_BASELINE } })).json());
+    const filename = join(directory, "owned-tree.json");
+    const execute = createClaudeProcessRunner(mode === "timeout" ? 3_000 : 10_000);
+    const runner = vi.fn<ClaudeRunner>()
+      .mockResolvedValueOnce({ code: 0, stdout: "2.1.300", stderr: "" })
+      .mockResolvedValueOnce({ code: 0, stdout: '{"loggedIn":true,"authMethod":"claude.ai"}', stderr: "" })
+      .mockImplementation((_executable, _args, input, signal) =>
+        execute(process.execPath, [join(process.cwd(), "scripts", "testing", "claude-process-tree.mjs"), mode, filename], input, signal));
+    const diagnostic = vi.fn((model: "sonnet" | "opus" | "haiku", signal: AbortSignal) =>
+      new ClaudeCli(process.execPath, true, runner).diagnostic(model, signal));
+    const body = { action: "claude-diagnostic", sessionId: saved.sessionId, model: "sonnet" };
+    const send = (signal?: AbortSignal) => handleLocalConnection(new Request(request(body, "browser"), { signal }),
+      "browser", { origin, auth, exercises, claude: () => ({ status: vi.fn(), diagnostic }) });
+    const controller = new AbortController();
+    let settled = false;
+    const first = send(controller.signal).finally(() => { settled = true; });
+    try {
+      await expect.poll(() => existsSync(filename), { timeout: 5_000 }).toBe(true);
+      if (mode !== "leader-exit") {
+        expect(await (await send()).json()).toMatchObject({ error: expect.stringContaining("already running") });
+      }
+      if (mode === "cancel") controller.abort();
+      const started = Date.now();
+      await expect.poll(() => settled, { timeout: 5_000 }).toBe(true);
+      expect((await first).status).toBe(409);
+      expect(Date.now() - started).toBeLessThan(5_000);
+      expect(exercises.getState(saved.sessionId, auth.owner).events).toHaveLength(0);
+      diagnostic.mockResolvedValue({
+        candidate: diagnosticTurnSchema.parse(diagnosticTurn),
+        evidence: { service: "claude-code", runtimeVersion: "2.1.300", requestedModel: "sonnet", reportedModels: [], modelEvidence: "unavailable" },
+      });
+      expect((await send()).status).toBe(200);
+      expect(exercises.getState(saved.sessionId, auth.owner).events).toHaveLength(1);
+      expect(diagnostic).toHaveBeenCalledTimes(2);
+    } finally {
+      controller.abort();
+      if (!settled && existsSync(filename)) {
+        const pids: Record<string, number> = JSON.parse(readFileSync(filename, "utf8"));
+        for (const pid of Object.values(pids)) {
+          try { process.kill(pid, "SIGKILL"); }
+          catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error; }
+        }
+      }
+      await expect.poll(() => settled, { timeout: 3_000 }).toBe(true);
+      await first;
+    }
+  }, 15_000);
   it("runs a fictional diagnostic in ReadyState and retains evidence across restart without a duplicate call", async () => {
     const evidence = {
       service: "claude-code" as const, runtimeVersion: "2.1.300", requestedModel: "sonnet" as const,

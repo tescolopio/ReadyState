@@ -57,6 +57,29 @@ permission denial, restart and Windows/Linux runtime behavior. Automated tests
 use a fake runner and owned Node subprocesses, not Claude inference. The
 deterministic fixture does not test exercise or debrief quality.
 
+### Owned CLI process cleanup
+
+Each invocation owns a POSIX process group or a Windows kill-on-close Job
+Object. Windows requires Windows 10+ and Windows PowerShell/.NET Framework;
+the native executable is created atomically in the job, without shell command
+interpolation. Job setup failure refuses execution rather than launching an
+unowned CLI. Cancellation, the 90-second deadline, excessive output and input
+failure terminate that owned scope. Leader exit also terminates descendants,
+including those still holding inherited stdout/stderr. A one-second cleanup
+deadline destroys local streams and settles the request even if stream close
+never arrives, allowing the running-diagnostic guard to clear. This is not a
+claim that POSIX processes deliberately escaping their group are contained.
+
+Run the no-model regressions with:
+
+```powershell
+npm test -- lib/claude-cli.test.ts lib/claude-process-tree.test.ts lib/claude-process-settlement.test.ts lib/local-connection-http.test.ts
+```
+
+The process-tree fixture holds either stdout or stderr open in a child and
+grandchild, and verifies cancellation, timeout and leader exit settle within
+a bound with the owned processes no longer running.
+
 ### Reproducible Windows in-app fixture
 
 The repo-owned browser/native-executable fixture runs the production ReadyState
