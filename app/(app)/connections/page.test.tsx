@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ConnectionsPage from "@/app/(app)/connections/page";
-import { DIAGNOSTIC_BASELINE } from "@/lib/connection-diagnostic.mjs";
+import { DIAGNOSTIC_BASELINE, diagnosticTurn } from "@/lib/connection-diagnostic.mjs";
 import { loadLocalSessionPrivacy, LOCAL_PRIVACY_SETTINGS_KEY, newLocalSessionPrivacy, saveLocalPrivacySettings, saveLocalSessionPrivacy } from "@/lib/local-session-privacy";
 import type { LocalConnectionState } from "@/lib/local-connection-contracts";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
@@ -84,9 +84,18 @@ beforeEach(() => {
     if (body.action === "claude-diagnostic") {
       saved = {
         ...saved,
-        events: [{ ...fixtureEvent, turn: { ...fixtureEvent.turn, narrative_response: "Diagnostic result." } }],
+        phase: "loop",
+        events: [{
+          ...fixtureEvent,
+          turn: diagnosticTurn,
+          generator: {
+            service: "claude-code", runtimeVersion: "2.1.300", requestedModel: "sonnet",
+            reportedModels: ["initial-saved-model"], modelEvidence: "cli-reported-unverified",
+          },
+        }],
       };
       return Response.json(saved);
+    }
     if (body.action === "create") {
       writes.push(body.approval.text);
       if (responseFailure === "uncommitted") throw new Error("Fixture lost request");
@@ -121,6 +130,11 @@ async function click(label: string) {
   if (!button) throw new Error(`Missing button: ${label}`);
   await act(async () => { button.click(); });
 }
+function trigger(label: string) {
+  const button = [...container.querySelectorAll("button")].find(button => button.textContent?.trim() === label);
+  if (!button) throw new Error(`Missing button: ${label}`);
+  act(() => { button.click(); });
+}
 async function start(text: string) {
   await act(async () => root.render(<ConnectionsPage />));
   await click(`Resume ${sessionId.slice(0, 8)} · loop`);
@@ -132,9 +146,9 @@ async function start(text: string) {
   await click("Review response");
 }
 async function startDiagnostic() {
-  saved = { ...saved, baseline: { ...saved.baseline, text: DIAGNOSTIC_BASELINE }, events: [] };
+  saved = { ...saved, phase: "baseline", baseline: { ...saved.baseline, text: DIAGNOSTIC_BASELINE }, events: [] };
   await act(async () => root.render(<ConnectionsPage />));
-  await click(`Resume ${sessionId.slice(0, 8)} · loop`);
+  await click(`Resume ${sessionId.slice(0, 8)} · baseline`);
   await click("Check installed Claude and sign-in");
 }
 async function waitForText(text: string) {
@@ -382,20 +396,27 @@ describe("local connection refresh races", () => {
       if (stateCalls === 2) newerStarted.resolve();
     };
 
-    await click("Send fictional diagnostic to Claude");
+    trigger("Send fictional diagnostic to Claude");
     await olderStarted.promise;
     saved = {
       ...saved,
-      events: [{ ...fixtureEvent, turn: { ...fixtureEvent.turn, narrative_response: "Newer saved result." } }],
+      events: [{
+        ...fixtureEvent,
+        turn: diagnosticTurn,
+        generator: {
+          service: "claude-code", runtimeVersion: "2.1.300", requestedModel: "sonnet",
+          reportedModels: ["newer-saved-model"], modelEvidence: "cli-reported-unverified",
+        },
+      }],
     };
     await click("Refresh accepted results");
     await newerStarted.promise;
 
     await act(async () => { newer.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
-    await waitForText("Newer saved result.");
+    await waitForText("newer-saved-model");
     await act(async () => { older.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
-    expect(container.textContent).toContain("Newer saved result.");
-    expect(container.textContent).not.toContain("Diagnostic result.");
+    expect(container.textContent).toContain("newer-saved-model");
+    expect(container.textContent).not.toContain("initial-saved-model");
   });
 
   it("does not restore the previously selected session after a session change during refresh", async () => {
@@ -405,7 +426,7 @@ describe("local connection refresh races", () => {
     stateWaitBySession.set(sessionId, pending.promise);
     onStateRequest = id => { if (id === sessionId) stateStarted.resolve(); };
 
-    await click("Send fictional diagnostic to Claude");
+    trigger("Send fictional diagnostic to Claude");
     await stateStarted.promise;
     await click(`Resume ${otherSessionId.slice(0, 8)} · loop`);
     await waitForText(`Exercise ${otherSessionId.slice(0, 8)}`);
@@ -421,7 +442,7 @@ describe("local connection refresh races", () => {
     stateWaitBySession.set(sessionId, pending.promise);
     onStateRequest = id => { if (id === sessionId) stateStarted.resolve(); };
 
-    await click("Send fictional diagnostic to Claude");
+    trigger("Send fictional diagnostic to Claude");
     await stateStarted.promise;
     await click("Lock setup");
     expect(container.querySelector("#owner-code")).not.toBeNull();
