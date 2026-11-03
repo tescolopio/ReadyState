@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/app-shell";
 import { ClaudeCliDiagnostic } from "@/components/claude-cli-diagnostic";
 import { OutgoingReviewPanel } from "@/components/outgoing-review";
 import { Button } from "@/components/ui/button";
-import { DIAGNOSTIC_BASELINE } from "@/lib/connection-diagnostic.mjs";
+import { DIAGNOSTIC_BASELINE, diagnosticStateSchema } from "@/lib/connection-diagnostic.mjs";
 import { privateTerms } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { LOCAL_SHORT_STEP_REASON, localConnectionStateSchema, localConnectionViewSchema, type LocalConnectionState } from "@/lib/local-connection-contracts";
@@ -252,7 +252,8 @@ export default function ConnectionsPage() {
       localSessionMaskRules(sessionPrivacy.alwaysMask, usePrivacyStore.getState().alwaysMask)));
   };
   const disabled = busy || !!review || !!pending;
-  const diagnostic = session?.baseline.text === DIAGNOSTIC_BASELINE;
+  const diagnosticCandidate = session?.baseline.text === DIAGNOSTIC_BASELINE;
+  const diagnostic = diagnosticCandidate && diagnosticStateSchema.safeParse(session).success;
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 space-y-5 px-4 py-6">
       <PageHeader title="Local assistant connection" />
@@ -338,6 +339,9 @@ export default function ConnectionsPage() {
           </section>}
           {session && <section className="space-y-4 rounded-panel border border-line p-4">
             <h2 className="text-lg font-semibold">Exercise {session.id.slice(0, 8)} · {session.phase}</h2>
+            {diagnosticCandidate && !diagnostic && <div role="alert" aria-label="Incompatible diagnostic session">
+              This session is incompatible with the ReadyState diagnostic protocol. No diagnostic result was accepted.
+            </div>}
             {diagnostic && <div role="status" aria-label="Diagnostic result" className="space-y-2">
               <h3 className="font-semibold">{session.events.length ? "Diagnostic acknowledgement saved" : "Waiting for diagnostic acknowledgement"}</h3>
               <p>This verifies transport and saving only, not scenario quality or independently verified model identity.
@@ -356,7 +360,7 @@ export default function ConnectionsPage() {
               <p>If this session was just created, use &ldquo;Refresh accepted results&rdquo; to retry browser-local association. If the context is still missing or corrupt, this saved session is read-only; create a new local session after reviewing its briefing.</p>
             </div>}
             <details><summary>Approved masked briefing</summary><p className="whitespace-pre-wrap break-words">{session.baseline.text}</p></details>
-            {session.events.map(event => <article key={event.id} className="space-y-2 border-t border-line pt-3">
+            {(!diagnosticCandidate || diagnostic) && session.events.map(event => <article key={event.id} className="space-y-2 border-t border-line pt-3">
               <h3 className="font-semibold">{event.turn.time_elapsed} · Accepted simulated event</h3>
               {event.response && <p className="whitespace-pre-wrap break-words">Participant: {event.response.text}</p>}
               <p className="whitespace-pre-wrap break-words">{event.turn.narrative_response}</p>

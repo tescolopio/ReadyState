@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ClaudeCliError, type ClaudeCli } from "@/lib/claude-cli";
-import { diagnosticStateSchema } from "@/lib/connection-diagnostic.mjs";
+import { diagnosticStateSchema, diagnosticTurnSchema } from "@/lib/connection-diagnostic.mjs";
 
 import { LocalConnectionAuth, LocalConnectionDenied } from "@/lib/local-connection-auth";
 import { localBrowserCommandSchema, localConnectionStateSchema, localConnectorCommandSchema } from "@/lib/local-connection-contracts";
@@ -95,8 +95,9 @@ export async function handleLocalConnection(
           return json(await dependencies.claude().status(request.signal));
         case "claude-diagnostic": {
           if (!dependencies.claude) throw new ClaudeCliError("The local Claude CLI adapter is not configured.");
-          const state = diagnosticStateSchema.safeParse(exercises.getState(action.sessionId, owner));
-          if (!state.success) throw new ClaudeCliError("Only a fixed fictional diagnostic session may be sent to Claude.");
+          const localState = localConnectionStateSchema.safeParse(exercises.getState(action.sessionId, owner));
+          const state = localState.success ? diagnosticStateSchema.safeParse(localState.data) : undefined;
+          if (!state?.success) throw new ClaudeCliError("This session is incompatible with the ReadyState diagnostic protocol. No diagnostic result was accepted.");
           if (state.data.events.length) {
             return json(localConnectionStateSchema.parse(exercises.getState(action.sessionId, owner)));
           }
@@ -107,9 +108,11 @@ export async function handleLocalConnection(
             const result = await dependencies.claude().diagnostic(action.model, request.signal);
             auth.authenticateOwner(cookie);
             if (request.signal.aborted) throw new ClaudeCliError("Claude request cancelled. Refresh saved results before retrying.");
+            const candidate = diagnosticTurnSchema.safeParse(result.candidate);
+            if (!candidate.success) throw new ClaudeCliError("Claude did not return the exact diagnostic acknowledgement. Nothing was accepted.");
             exercises.submitTurn(owner, {
               sessionId: action.sessionId, expectedRevision: task.revision, key: `claude-diagnostic-v1:${task.id}`,
-            }, task.id, result.candidate, result.evidence);
+            }, task.id, candidate.data, result.evidence);
             return json(localConnectionStateSchema.parse(exercises.getState(action.sessionId, owner)));
           } finally { runningDiagnostics.delete(action.sessionId); }
         }

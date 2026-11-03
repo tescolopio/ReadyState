@@ -95,6 +95,30 @@ describe("local browser / connector boundary", () => {
     expect(unauthenticated.status).toBe(401);
     expect(diagnostic).toHaveBeenCalledTimes(1);
   });
+  it("refuses an ordinary connector event in a diagnostic session before creating diagnostic acceptance", async () => {
+    const saved = receipt.parse(await (await browser({ action: "create", approval: { id: randomUUID(), text: DIAGNOSTIC_BASELINE } })).json());
+    const connection = await pair(saved.sessionId);
+    const task = generatedTask.parse(await (await connector({ action: "task", sessionId: saved.sessionId }, connection.token)).json());
+    const ordinary = await connector({
+      action: "turn",
+      command: { sessionId: saved.sessionId, expectedRevision: task.revision, key: "ordinary-event" },
+      taskId: task.id,
+      candidate: initialTurn,
+    }, connection.token);
+    expect(ordinary.status).toBe(200);
+    const diagnostic = vi.fn();
+    const incompatible = await handleLocalConnection(
+      request({ action: "claude-diagnostic", sessionId: saved.sessionId, model: "sonnet" }, "browser"),
+      "browser", { origin, auth, exercises, claude: () => ({ status: vi.fn(), diagnostic }) },
+    );
+    expect(incompatible.status).toBe(409);
+    expect(await incompatible.json()).toMatchObject({ error: expect.stringContaining("incompatible with the ReadyState diagnostic protocol") });
+    const state = exercises.getState(saved.sessionId, auth.owner);
+    expect(state.events).toHaveLength(1);
+    expect(state.events[0].turn).toEqual(initialTurn);
+    expect(state.events[0].generator).toBeUndefined();
+    expect(diagnostic).not.toHaveBeenCalled();
+  });
   it("keeps the task after an explicit CLI failure and allows a manual retry", async () => {
     const saved = receipt.parse(await (await browser({ action: "create", approval: { id: randomUUID(), text: DIAGNOSTIC_BASELINE } })).json());
     const diagnostic = vi.fn().mockRejectedValue(new ClaudeCliError("Usage limit reached; no fallback."));

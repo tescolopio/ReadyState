@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { claudeCliStatusSchema, claudeRequestedModelSchema } from "@/lib/claude-cli-contracts";
 import { localConnectionStateSchema } from "@/lib/local-connection-contracts";
-import { DIAGNOSTIC_CLI_REQUEST, diagnosticTurn } from "@/lib/connection-diagnostic.mjs";
+import { DIAGNOSTIC_CLI_REQUEST, diagnosticStateSchema, diagnosticTurn } from "@/lib/connection-diagnostic.mjs";
 
 async function request(input: unknown, signal?: AbortSignal): Promise<unknown> {
   const response = await fetch("/api/local-connection", {
@@ -38,7 +38,10 @@ export function ClaudeCliDiagnostic({ sessionId, accepted, onSaved }: {
     setError("");
     try {
       if (send) {
-        localConnectionStateSchema.parse(await request({ action: "claude-diagnostic", sessionId, model }, controller.signal));
+        const state = localConnectionStateSchema.parse(await request({ action: "claude-diagnostic", sessionId, model }, controller.signal));
+        if (!diagnosticStateSchema.safeParse(state).success) {
+          throw new Error("This session is incompatible with the ReadyState diagnostic protocol. No diagnostic result was accepted.");
+        }
         await onSaved();
       } else {
         setStatus(claudeCliStatusSchema.parse(await request({ action: "claude-status" }, controller.signal)));

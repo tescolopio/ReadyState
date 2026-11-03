@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ConnectionsPage from "@/app/(app)/connections/page";
+import { DIAGNOSTIC_BASELINE } from "@/lib/connection-diagnostic.mjs";
 import { loadLocalSessionPrivacy, newLocalSessionPrivacy, saveLocalSessionPrivacy } from "@/lib/local-session-privacy";
 import type { LocalConnectionState } from "@/lib/local-connection-contracts";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
@@ -84,6 +85,18 @@ async function start(text: string) {
 }
 
 describe("local connection send-time privacy", () => {
+  it("shows incompatibility instead of diagnostic success for an ordinary connector event", async () => {
+    saved = {
+      ...saved,
+      baseline: { id: baselineId, text: DIAGNOSTIC_BASELINE },
+    };
+    saveLocalSessionPrivacy(localStorage, sessionId, newLocalSessionPrivacy(baselineId, []));
+    await act(async () => root.render(<ConnectionsPage />));
+    await click(`Resume ${sessionId.slice(0, 8)} · loop`);
+    expect(container.textContent).toContain("This session is incompatible with the ReadyState diagnostic protocol.");
+    expect(container.textContent).not.toContain("Diagnostic acknowledgement saved");
+    expect(container.textContent).not.toContain("Accepted simulated event");
+  });
   it("uses newly added Settings rules and requires another review when they change", async () => {
     usePrivacyStore.getState().setAlwaysMask(["firstprivateword"]);
     await start("firstprivateword and secondprivateword with originalprivateterm");

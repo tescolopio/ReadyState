@@ -69,6 +69,27 @@ it("sends a selected model from ReadyState and refreshes the saved acknowledgeme
   expect(button("Send fictional diagnostic to Claude").disabled).toBe(true);
   expect(container.textContent).toContain("Saved result retained");
 });
+it.each([
+  ["ordinary connector event", { ...diagnosticTurn, narrative_response: "Ordinary assistant response." }, undefined],
+  ["malformed diagnostic event", diagnosticTurn, { id: sessionId, text: "Unexpected approved response." }],
+])("reports an incompatible session for a %s without refreshing it as accepted", async (_label, turn, response) => {
+  vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(String(init.body));
+    if (body.action === "claude-status") {
+      return Response.json({ installed: true, version: "2.1.300", authentication: "native-subscription", evaluationEnabled: true });
+    }
+    return Response.json({
+      id: sessionId, revision: 1, phase: "loop", baseline: { id: sessionId, text: DIAGNOSTIC_BASELINE },
+      events: [{ id: sessionId, turn, ...(response ? { response } : {}) }],
+    });
+  }));
+  await render();
+  await click("Check installed Claude and sign-in");
+  await click("Send fictional diagnostic to Claude");
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain("incompatible with the ReadyState diagnostic protocol");
+  expect(container.textContent).toContain("No diagnostic result was accepted.");
+  expect(onSaved).not.toHaveBeenCalled();
+});
 it("cancels the request and warns to inspect saved state without auto-retry", async () => {
   const send = vi.fn(async (_url: string, init: RequestInit) => {
     const body = JSON.parse(String(init.body));
