@@ -303,9 +303,14 @@ export class LocalExerciseService {
         || Object.entries(versions).some(([key, value]) => task[key as keyof typeof versions] !== value)) {
         throw new LocalExerciseError("stale-task");
       }
-      return { ...task, sessionId, briefing, instructions: exercisePrompt(task.phase),
+      const instructions = exercisePrompt(task.phase);
+      return { ...task, sessionId, briefing, instructions: {
+        ...instructions,
+        phase: `${instructions.phase}\nLocal clock policy overrides the general advance rule: start at Hour 0. Later turns must advance strictly and never exceed Hour 72. Normally advance 6-12 hours; a shorter positive crisis step requires the supplied shortStepReason. A shorter final step ending exactly at Hour 72 is always allowed without crisis authorization. At Hour 72 set scenario_status to "complete" and response_options to [].`,
+      },
         outputSchema: z.toJSONSchema(exerciseTurnCandidateSchema),
         clockPolicy: { targetHour: 72, maximumAdvance: 12, normalMinimumAdvance: 6,
+          allowShortFinalStep: true,
           previousHour: state.events.at(-1)?.turn.hours_elapsed ?? null,
           shortStepReason: task.shortStepReason },
       };
