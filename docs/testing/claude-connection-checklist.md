@@ -57,6 +57,28 @@ permission denial, restart and Windows/Linux runtime behavior. Automated tests
 use a fake runner and owned Node subprocesses, not Claude inference. The
 deterministic fixture does not test exercise or debrief quality.
 
+### Reproducible Windows in-app fixture
+
+The repo-owned browser/native-executable fixture runs the production ReadyState
+UI against a compiled, fictional CLI and real local SQLite. From the repository
+root, with dependencies restored and a production build:
+
+```powershell
+npm run build
+node scripts\testing\claude-in-app\run.mjs
+```
+
+Requires Windows, Node 24, Microsoft Edge and .NET Framework `csc.exe`. It makes
+no network downloads and uses no browser profile or credentials. Playwright
+Core is a pinned development dependency. The harness stages its own build,
+fictional executable, private database and browser profile in one uniquely
+named directory under `scripts\testing\claude-in-app`; cleanup removes only
+that directory. It verifies usage-limit refusal, process cancellation,
+explicit retry, one accepted SQLite event, model-evidence display and server
+restart/re-display, with zero model calls and blocked external browser requests.
+This harness has only been verified on Windows; it does not qualify Linux or
+the official Claude runtime.
+
 The existing MCP source diagnostic below remains intact but is no longer the
 primary qualification target.
 

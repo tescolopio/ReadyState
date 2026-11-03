@@ -103,6 +103,7 @@ Further reading:
 - [Local test checklist](docs/testing/local-test.md): run it yourself and check it by hand in a browser.
 - [Deployment modes](docs/architecture/deployment-modes.md): self-hosted vs hosted, providers, desktop and mobile plans.
 - [Claude integration](docs/architecture/claude-desktop.md): primary in-ReadyState CLI evaluation, optional assistant-hosted MCP, native sign-in and privacy/release gates. No installable Claude extension yet.
+- [In-app Claude diagnostic qualification](docs/testing/claude-connection-checklist.md): the Windows-only, model-call-free production browser/native fixture and the separate live Claude qualification gate.
 - [Groq models](docs/architecture/groq-models.md): benchmarks and rate limits.
 - [Rules database](docs/architecture/rules.md): inventory checks, safety rules and look-fors as sourced, reviewable data in `data/rules/`.
 - [Data sources](docs/architecture/datasources.md) and [Dataset bridging](docs/architecture/dataset_bridging.md): official guidance to ground scenarios, and how medical needs become functional constraints.
