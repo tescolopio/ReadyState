@@ -55,6 +55,7 @@ export default function ConnectionsPage() {
   const [sessionPrivacy, setSessionPrivacy] = useState<LocalSessionPrivacy>();
   const [privacyProblem, setPrivacyProblem] = useState<string>();
   const [pending, setPending] = useState<ApprovedWrite>();
+  const pendingReview = useRef<OutgoingReview | undefined>(undefined);
   const [reviewRules, setReviewRules] = useState<MaskTerm[]>([]);
 
   const refresh = async (sessionId?: string) => {
@@ -109,31 +110,41 @@ export default function ConnectionsPage() {
   const save = async (write: ApprovedWrite) => {
     const receipt = receiptSchema.parse(await call(write));
     setPending(undefined);
+    pendingReview.current = undefined;
     setInput("");
     await refresh(receipt.sessionId);
   };
-  const approve = async (current: OutgoingReview): Promise<ApproveResult> => {
-    if ((!sessionPrivacy || privacyProblem) && current.kind === "response") {
+  const approve = async (current: OutgoingReview, retry?: Extract<ApprovedWrite, { action: "response" }>): Promise<ApproveResult> => {
+    if (!retry && (!sessionPrivacy || privacyProblem) && current.kind === "response") {
       setPrivacyProblem("This session's browser-private privacy context is unavailable. Response submission is blocked.");
       return { status: "blocked" as const, problems: ["Restore or reassociate this session's browser-private privacy context before reviewing a response."] };
     }
     let restored = sessionPrivacy;
     if (current.kind === "response") {
       const target = reviewTarget.current;
-      const storage = getLocalPrivacyStorage();
-      const privacy = target && storage && session
-        ? loadLocalSessionPrivacy(storage, target.sessionId, session.baseline.id) : undefined;
-      if (!target || !privacy || privacy.status !== "ready") {
-        setPrivacyProblem("This session's browser-private context could not be restored. Nothing was saved or sent.");
-        return { status: "blocked", problems: ["Restore this session's private context before reviewing again."] };
-      }
+      if (!target) return { status: "blocked", problems: ["The response review has no saved exercise target."] };
       const saved = localConnectionStateSchema.parse(await call({ action: "state", sessionId: target.sessionId }));
+      if (retry && [saved.pendingResponse, ...saved.events.map(event => event.response)]
+        .some(response => response?.id === retry.approval.id && response.text === retry.approval.text)) {
+        await refresh(target.sessionId);
+        setPending(undefined);
+        pendingReview.current = undefined;
+        setInput("");
+        return { status: "sent" };
+      }
       if (saved.revision !== target.revision || saved.pendingResponse || saved.phase !== "loop") {
         await refresh(target.sessionId);
         setReview(undefined);
         setReviewRules([]);
+        if (retry) { setPending(undefined); pendingReview.current = undefined; }
         setError("The saved exercise changed in another tab. Review the refreshed state before preparing another response.");
         return { status: "blocked", problems: ["The saved exercise changed in another tab. Review the refreshed state before preparing another response."] };
+      }
+      const storage = getLocalPrivacyStorage();
+      const privacy = storage ? loadLocalSessionPrivacy(storage, target.sessionId, saved.baseline.id) : undefined;
+      if (!privacy || privacy.status !== "ready") {
+        setPrivacyProblem("This session's browser-private context could not be restored. Nothing was saved or sent.");
+        return { status: "blocked", problems: ["Restore this session's private context before reviewing again."] };
       }
       restored = privacy.context;
     }
@@ -172,13 +183,14 @@ export default function ConnectionsPage() {
           setPrivacyProblem(undefined);
         }
 
-        const write: ApprovedWrite = approved.kind === "baseline"
+        const write: ApprovedWrite = retry ?? (approved.kind === "baseline"
           ? { action: "create", approval }
           : target
             ? { action: "response", approval, command: {
                 sessionId: target.sessionId, expectedRevision: target.revision, key: crypto.randomUUID(),
               } }
-            : (() => { throw new Error("The response review has no saved exercise target."); })();
+            : (() => { throw new Error("The response review has no saved exercise target."); })());
+        pendingReview.current = { ...approved, base: { ...candidate.entityMap }, pending: {}, alwaysMask: candidate.alwaysMask };
         approvedWrite = write;
       },
     });
@@ -190,6 +202,20 @@ export default function ConnectionsPage() {
       await save(approvedWrite);
     }
     return result;
+  };
+  const retrySave = async (write: ApprovedWrite) => {
+    if (write.action === "create") { await save(write); return; }
+    const approved = pendingReview.current;
+    if (!approved) throw new Error("The approved response review is unavailable. Clear retry and review saved state.");
+    await withLocalSessionPrivacyLock(write.command.sessionId, async () => {
+      const result = await approve(approved, write);
+      if (result.status === "review-again") {
+        setPending(undefined);
+        pendingReview.current = undefined;
+        setReview(result.review);
+        setNotice(result.reason);
+      } else if (result.status === "blocked") setError(result.problems.join(" "));
+    });
   };
   const openReview = (kind: "baseline" | "response") => {
     if (busyRef.current || pending || review) return;
@@ -299,12 +325,13 @@ export default function ConnectionsPage() {
             ))}
           </section>
           {pending && <section className="space-y-2" aria-label="Unconfirmed save">
-            <p role="status">This approved save has not been confirmed. Retry uses the same text and approval reference.
-              Do not assume the previous attempt failed.</p>
-            <Button disabled={busy} onClick={() => void run(() => save(pending))}>Retry approved save</Button>
+            <p role="status">This approved save has not been confirmed. Response retry checks saved state and current privacy rules first.
+              An unchanged retry uses the same text and approval reference; changes require another review. Do not assume the previous attempt failed.</p>
+            <Button disabled={busy} onClick={() => void run(() => retrySave(pending))}>Retry approved save</Button>
             <Button disabled={busy} variant="outline" onClick={() => void run(async () => {
               await refresh(pending.action === "response" ? pending.command.sessionId : session?.id);
               setPending(undefined);
+              pendingReview.current = undefined;
               setError("Retry cleared from this tab. Review the refreshed saved sessions before preparing another response.");
             })}>Clear retry and review saved state</Button>
           </section>}
@@ -410,9 +437,10 @@ export default function ConnectionsPage() {
         </>
       )}
       {review && <OutgoingReviewPanel review={review} notice={notice} blocked={blocked} sending={busy} delivery="local-connection"
-        onEdit={text => setReview(editReview(review, text))}
-        onBack={() => { setReview(undefined); setReviewRules([]); }}
+        onEdit={text => { if (!busyRef.current) setReview(editReview(review, text)); }}
+        onBack={() => { if (!busyRef.current) { setReview(undefined); setReviewRules([]); } }}
         onMask={value => {
+          if (busyRef.current) return;
           if (!sessionPrivacy) {
             setError("Browser-private masking context is unavailable. This review cannot add a rule or send until its context is restored.");
             return;

@@ -163,8 +163,12 @@ session. The opt-in [connection screen](../../app/(app)/connections/page.tsx)
 instead reads accepted service state on explicit **Refresh accepted results**,
 shows approved masked text, and resumes saved sessions. Briefings/responses
 reuse existing masking, editing, tag checks and send-time re-review. Back sends
-nothing. No model request is made by this screen. A failed/unconfirmed save can
-retry the exact approved text, reference and revision from this tab.
+nothing. No model request is made by this screen. An unconfirmed response retry
+first reconciles its approval reference against pending and accepted responses
+under the session lock. Already committed text is not retransmitted. Otherwise
+it reloads current private context and checks the server revision; changed text,
+mappings or rules require another explicit review. Only an unchanged retry uses
+the original approved text, reference and idempotency key from this tab.
 Unreviewed typing/previews/retries do not survive tab closure; refresh saved
 state before repeating an operation with an uncertain result.
 
@@ -190,6 +194,9 @@ stays in tab memory until Send and does not change Settings or other sessions.
 Back discards these unapproved rules. Private-draft recovery reads do not
 promote or overwrite session mappings; the first approved response saves the
 session context under its lock and removes the creation draft.
+The review editor and open mask/Back confirmation controls are disabled
+throughout asynchronous approval, including waits for the lock and server
+state, so the approved preview cannot be changed while submission is pending.
 
 Debrief-task acceptance/repair, evidence-tool pagination, ordinary API migration,
 automatic accepted-state notifications and the household-scenario MCP adapter remain subsequent
