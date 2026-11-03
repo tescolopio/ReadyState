@@ -1,6 +1,6 @@
 # Claude Desktop integration
 
-Status: shared-foundation implementation only. **No installable Claude extension
+Status: shared foundation plus internal durable-session implementation. **No installable Claude extension
 or Claude-compatible release exists from this work yet.** No live Claude test has
 been performed.
 
@@ -74,14 +74,31 @@ the only source of truth. This increment does not expand G6 compression work.
 | Increment | Deliverable | Required evidence before moving on |
 | --- | --- | --- |
 | 1: shared foundation (this change) | Domain schemas/types, prompt catalog, briefing and debrief-context extraction; no connector endpoint | Exact pre-extraction prompt/schema fingerprints; API regression checks; eight fictional-household context parity/privacy checks; no provider calls |
-| 2: authoritative sessions | Durable local sessions, immutable approved baseline, revisions, phase/clock ownership, tasks and atomic/idempotent acceptance; shared web UI adapter | Restart recovery, concurrent submissions, stale tasks, wrong phase, duplicate-key mismatch and lost acknowledgement; reject without partial writes |
+| 2: authoritative sessions (internal implementation) | SQLite sessions, immutable approved baseline, revisions, scoped grants, clock policy, version-bound turn tasks, atomic/idempotent acceptance, accepted-state-to-UI-message mapping | Service close/reopen, competing independent database connections, stale tasks, wrong phase, duplicate-key mismatch, lost acknowledgement and forced mid-commit failure; reject without partial writes. Browser/API wiring still pending |
 | 3: local connection | Scoped pairing/revocation, authenticated loopback service and local stdio MCP adapter | Unpaired/revoked access refused; no raw household, private ledger, credentials or retry settings in tools/errors/evidence; initial accepted turn with zero ReadyState model-provider requests |
 | 4: full exercise | Approved participant responses, next-turn tasks, accepted UI updates, evidence retrieval and checked debrief/repair | Full fixture exercise through 72 hours; failed repair withheld; correct omissions and check-status wording; preserve ordinary API route |
 | 5: Windows tester package | App plus `.mcpb`, setup/update/remove guide, checksums/notices/matching source and exact compatibility record | Extracted package startup, restart/revoke/update tests, offline MCP protocol tests, final code review and CI, then a clearly labeled installable tester release |
 | 6: user qualification | User installs extension in their actual Claude Desktop account | Record app/client versions, Windows version, plan/policy availability, operations tested and limits; manually assess scenario/debrief quality separately |
 
-Acceptance rules must explicitly define the final-turn time policy and supported
-short crisis intervals before increment 2 changes progression behavior. An
+The user confirmed the following turn policy for the new session service:
+
+- Initial turn: exactly Hour 0, null feedback, no suggested actions, ongoing.
+- Later turns: advance normally by 6-12 hours, never backward or above Hour 72.
+- A shorter positive step is permitted for a crisis only when the local owner
+  has approved a short-step reason before task issuance. This authorization is
+  stored with the accepted event's task; an assistant cannot grant it.
+- The final interval may be shorter than six hours when it ends exactly at 72.
+  Overshoots are rejected, not silently clamped. Readable time must equal
+  `Hour ${hours_elapsed}`. Only Hour 72 is complete.
+- Ongoing turns require 3-4 response choices, completed turns none; at most
+  two suggested actions. Post-initial turns require feedback.
+
+[Turn validation](../../lib/exercise-turn-validation.ts) is explicit, bounded and
+rejects unknown structural fields. This is a new acceptance-policy version,
+not a change to the original wire-schema/prompt versions.
+The existing API path remains behavior-compatible and is **not yet routed
+through this service or these stricter checks**. API-to-service migration and
+policy parity are release gates, not already completed work. An
 already accepted report ends generation. Session authorization, expected
 revision, bounded candidate shape, clock agreement and phase/cardinality checks
 must run before atomic commit. Deterministic validation is not safety
@@ -94,6 +111,50 @@ runtime, connected to the bundled ReadyState app's authenticated loopback
 service. The application owns the durable exercise repository; the extension
 does not independently edit browser localStorage or maintain a second history.
 Persistence and locking must be verified before exposing mutation tools.
+
+The internal [local exercise service](../../lib/local-exercise-service.ts) now
+owns one SQLite database selected by the future app lifecycle. It uses Node
+24's built-in `node:sqlite` (still marked experimental in the pinned runtime),
+so no native npm database dependency or separate database installer is added.
+Normal app startup does not open this database yet. Storage location, OS access
+controls, single-instance lifecycle and extracted-package startup remain
+unimplemented until the bridge is wired.
+
+State includes the exact approved baseline text, approved participant response
+references, complete accepted events and their task versions/context hashes.
+Reads validate stored progression; unknown database formats, malformed state
+and missing initialized tables are refused rather than reset. Transactional
+receipts support retry after a lost acknowledgement. Reusing an idempotency
+key for a different command, content or revision is refused. Repeating creation
+with the same owner/approval reference returns its original creation receipt;
+fetch current state separately for its latest revision.
+
+Per-session read/write grants are enforced by the internal service. Only the
+local owner can grant/revoke access or supply approved baseline/response text.
+Revocation invalidates outstanding work without deleting accepted history.
+Principal IDs are identifiers, **not authentication credentials**; there is no
+network authentication or pairing endpoint in this increment. A future adapter
+must authenticate before supplying a principal and must keep approval methods
+out of assistant tool registration.
+
+Turn-task retrieval is repeatable and has no wall-clock expiry in this
+user-paced implementation. Cancellation is explicit, increments the revision
+and retains a pending approved response for another task. A disconnected
+assistant can retrieve its unchanged task after the service restarts. A stale
+version requires deliberate cancellation/reissue, never silent regeneration.
+
+[The rendering adapter](../../lib/local-exercise-view.ts) maps accepted service
+events to existing UI message shapes without accepting replacement transcripts.
+It is a pure adapter, not browser synchronization: the existing exercise page
+still uses its original session. Debrief-task acceptance/repair, evidence-tool
+pagination, UI review wiring and the MCP adapter remain subsequent increments.
+
+This database contains personal exercise information even when masked and is
+**not encrypted** by this implementation. It must remain outside the
+installation directory so updates do not overwrite it. Before release, include
+it in explicit backup/restore/delete behavior (coordinating with #33), test
+upgrades with populated databases, and document its location and permissions.
+An app/database copy is not automatically a consistent full backup while open.
 
 Household/settings browser storage remains local. The service receives only
 explicitly approved session snapshots/responses, never bulk access to saved
