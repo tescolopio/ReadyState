@@ -10,6 +10,8 @@ import { loadLocalSessionPrivacy, LOCAL_PRIVACY_SETTINGS_KEY, newLocalSessionPri
 import type { LocalConnectionState } from "@/lib/local-connection-contracts";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 
+const acceptedDiagnosticTurn = { ...diagnosticTurn, scenario_status: "ongoing" as const };
+
 let container: HTMLDivElement;
 let root: Root;
 let saved: LocalConnectionState;
@@ -87,7 +89,7 @@ beforeEach(() => {
         phase: "loop",
         events: [{
           ...fixtureEvent,
-          turn: diagnosticTurn,
+          turn: acceptedDiagnosticTurn,
           generator: {
             service: "claude-code", runtimeVersion: "2.1.300", requestedModel: "sonnet",
             reportedModels: ["initial-saved-model"], modelEvidence: "cli-reported-unverified",
@@ -402,7 +404,7 @@ describe("local connection refresh races", () => {
       ...saved,
       events: [{
         ...fixtureEvent,
-        turn: diagnosticTurn,
+        turn: acceptedDiagnosticTurn,
         generator: {
           service: "claude-code", runtimeVersion: "2.1.300", requestedModel: "sonnet",
           reportedModels: ["newer-saved-model"], modelEvidence: "cli-reported-unverified",
