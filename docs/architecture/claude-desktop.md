@@ -349,7 +349,10 @@ files with exactly one hard link and no symbolic link. Directory privacy alone
 cannot protect data reachable through another file path. Existing stores are
 opened with SQLite `mode=rw` (never create) for validation, permitting hot
 rollback-journal recovery after a killed process without reinitializing data.
-This recovery can restore uncommitted pages; it is not a storage reset.
+The existing-store opener rechecks file/sidecar links and forces a SQLite read
+with a bounded busy timeout before validating either schema. Recovery rolls back
+interrupted writes to committed data; it never accepts uncommitted pages,
+initializes a missing/empty store, or bypasses storage-root validation.
 
 Browser requests must have the exact configured Host and Origin; cross-site
 fetch metadata is refused. Next canonicalizes internal loopback Request URLs,
@@ -395,7 +398,9 @@ pairing-code hiding on session creation/switching, and repeated revocation
 without owner logout. Storage regressions separately exercise empty/incomplete
 stores, missing owners and source/install-tree confinement including links.
 Returned-review regressions additionally cover actual killed-process journals
-for both stores, hard-linked databases/sidecars, missing-file non-creation,
+for both stores, preserving committed owner/connector credentials, approved
+exercise state, access and pending tasks while rejecting interrupted mutations
+and inserts. They also cover hard-linked databases/sidecars, missing-file non-creation,
 grant-cleanup retry after reopen without invalidating another connection's task,
 current Settings mask changes, session-only unsaved selection rules and
 two-tab stale approval without overwriting accepted mappings.

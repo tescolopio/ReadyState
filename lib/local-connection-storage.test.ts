@@ -1,9 +1,8 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -40,13 +39,17 @@ function configure(dataDirectory: string, root = sourceRoot) {
 }
 
 beforeEach(() => {
-  directory = mkdtempSync(path.join(tmpdir(), "readystate-storage-"));
+  directory = mkdtempSync(path.join(process.cwd(), ".readystate-storage-fixture-"));
   sourceRoot = path.join(directory, "source");
   mkdirSync(path.join(sourceRoot, "public"), { recursive: true });
+  vi.spyOn(process, "cwd").mockReturnValue(sourceRoot);
+  vi.stubGlobal("fetch", vi.fn(() => { throw new Error("No model calls allowed"); }));
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
+  expect(fetch).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   rmSync(directory, { recursive: true, force: true });
@@ -57,6 +60,20 @@ describe("local connection storage initialization", () => {
     const filename = path.join(directory, "absent.sqlite");
     expect(() => openExistingLocalDatabase(filename)).toThrow();
     expect(existsSync(filename)).toBe(false);
+  });
+
+  it.each(["", "-journal", "-wal", "-shm"])("the recovery opener itself refuses linked %s files", suffix => {
+    const filename = path.join(directory, "existing.sqlite");
+    const db = new DatabaseSync(filename);
+    db.exec("CREATE TABLE committed (value TEXT); INSERT INTO committed VALUES ('preserve');");
+    db.close();
+    if (suffix) writeFileSync(filename + suffix, "must not change");
+    const linked = filename + suffix;
+    linkSync(linked, path.join(directory, "exposed"));
+    const before = readFileSync(linked);
+
+    expect(() => openExistingLocalDatabase(filename)).toThrow(/without symbolic or hard links/);
+    expect(readFileSync(linked)).toEqual(before);
   });
 
   it.each(["connection-credentials.sqlite", "exercises.sqlite"])("refuses a hard-linked %s before either store is used", async filename => {
@@ -112,22 +129,36 @@ describe("local connection storage initialization", () => {
     const exercises = path.join(data, "exercises.sqlite");
     const auth = new LocalConnectionAuth(credentials, ownerCode);
     const owner = auth.owner;
-    auth.close();
     const service = new LocalExerciseService(exercises);
+    const sessionId = service.createApprovedSession(owner, {
+      id: randomUUID(), text: "Committed approved household.",
+    }).sessionId;
+    const pairing = auth.issue(sessionId, "write", principal =>
+      service.setAccess(sessionId, owner, principal, "write"));
+    const connector = auth.redeem(pairing.code);
+    const principal = auth.authenticateConnector(connector.token, sessionId, true);
+    const committedTask = service.getGenerationTask(sessionId, principal);
+    const committedState = service.getState(sessionId, owner);
+    const committedConnections = auth.list();
+    auth.close();
     service.close();
     const target = path.join(data, filename);
+    const committedBytes = readFileSync(target);
     const child = spawn(process.execPath, ["-e", `
       const {DatabaseSync}=require("node:sqlite");
       const db=new DatabaseSync(process.argv[1]);
       db.exec("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA cache_size=1; BEGIN IMMEDIATE;");
       if(process.argv[2]==="connection-credentials.sqlite"){
         db.exec("UPDATE connection_meta SET value='uncommitted';");
+        db.exec("DELETE FROM connections;");
         const insert=db.prepare("INSERT INTO connection_codes VALUES (?)");
         for(let i=0;i<200;i++) insert.run(i+"x".repeat(8192));
       }else{
+        db.exec("UPDATE exercise_sessions SET state=json_set(state, '$.baseline.text', 'uncommitted'); DELETE FROM exercise_access; DELETE FROM exercise_receipts;");
         const insert=db.prepare("INSERT INTO exercise_sessions VALUES (?,?)");
         for(let i=0;i<200;i++) insert.run(String(i),JSON.stringify({padding:"x".repeat(8192)}));
       }
+      db.exec("PRAGMA application_id=0; PRAGMA user_version=99;");
       process.stdout.write("ready\\n");
       setInterval(()=>{},1000);
     `, target, filename], { stdio: ["ignore", "pipe", "ignore"] });
@@ -141,17 +172,34 @@ describe("local connection storage initialization", () => {
       child.kill("SIGKILL");
       await exited;
       expect(existsSync(target + "-journal")).toBe(true);
+      expect(readFileSync(target)).not.toEqual(committedBytes);
       const readOnly = new DatabaseSync(target, { readOnly: true });
       try { expect(() => readOnly.prepare("SELECT name FROM sqlite_master").all()).toThrow(); }
       finally { readOnly.close(); }
       configure(data);
       expect((await localConnectionRoute(request(), "browser")).status).toBe(200);
       const restored = new LocalConnectionAuth(credentials, ownerCode);
-      try { expect(restored.owner).toBe(owner); }
+      try {
+        expect(restored.owner).toBe(owner);
+        expect(restored.list()).toEqual(committedConnections);
+        expect(restored.authenticateConnector(connector.token, sessionId, true)).toBe(principal);
+      }
       finally { restored.close(); }
       const restoredService = new LocalExerciseService(exercises);
-      try { expect(restoredService.listOwnedSessions(owner)).toEqual([]); }
+      try {
+        expect(restoredService.listOwnedSessions(owner).map(session => session.id)).toEqual([sessionId]);
+        expect(restoredService.getState(sessionId, owner)).toEqual(committedState);
+        expect(restoredService.getState(sessionId, principal)).toEqual(committedState);
+        expect(restoredService.getGenerationTask(sessionId, principal)).toEqual(committedTask);
+      }
       finally { restoredService.close(); }
+      const recovered = new DatabaseSync(target, { readOnly: true });
+      try {
+        const table = filename === "connection-credentials.sqlite" ? "connection_codes" : "exercise_sessions";
+        expect(recovered.prepare(`SELECT count(*) AS count FROM ${table}`).get()?.count).toBe(1);
+        expect(recovered.prepare("PRAGMA user_version").get()?.user_version).toBe(1);
+        expect(recovered.prepare("PRAGMA integrity_check").get()?.integrity_check).toBe("ok");
+      } finally { recovered.close(); }
     } finally {
       if (child.exitCode === null && child.signalCode === null) {
         const exited = once(child, "exit");

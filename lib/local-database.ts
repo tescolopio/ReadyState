@@ -4,9 +4,21 @@ import { pathToFileURL } from "node:url";
 
 /** Recovery may write rollback pages, but must never create a missing store. */
 export function openExistingLocalDatabase(filename: string) {
+  for (const suffix of ["", "-journal", "-wal", "-shm"]) {
+    assertUnlinkedLocalDatabase(filename + suffix);
+  }
   const uri = pathToFileURL(filename);
   uri.searchParams.set("mode", "rw");
-  return new DatabaseSync(uri.href);
+  const db = new DatabaseSync(uri.href);
+  try {
+    db.exec("PRAGMA busy_timeout = 5000;");
+    // Opening is lazy: a read forces hot-journal rollback before schema validation.
+    db.prepare("PRAGMA schema_version").get();
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 }
 
 export function assertUnlinkedLocalDatabase(filename: string) {
