@@ -7,14 +7,18 @@ const text = z.string().min(1).max(8_000).refine(value => value.trim().length > 
 const items = z.array(text).max(20);
 
 export const exerciseTurnCandidateSchema = turnSchema.extend({
-  narrative_response: text,
-  new_inject: text,
-  time_elapsed: z.string().max(40),
-  hours_elapsed: z.number().min(0).max(TARGET_DURATION_HOURS),
-  feedback: feedbackSchema.extend({ covered: items, consider: items, why: text }).strict().nullable(),
-  critical_alerts: items,
-  suggested_actions: z.array(text).max(2),
-  response_options: z.array(text).max(4),
+  narrative_response: text.meta({ description: turnSchema.shape.narrative_response.description }),
+  new_inject: text.meta({ description: turnSchema.shape.new_inject.description }),
+  time_elapsed: z.string().max(40).meta({ description: turnSchema.shape.time_elapsed.description }),
+  hours_elapsed: z.number().min(0).max(TARGET_DURATION_HOURS).meta({ description: turnSchema.shape.hours_elapsed.description }),
+  feedback: feedbackSchema.extend({
+    covered: items.meta({ description: feedbackSchema.shape.covered.description }),
+    consider: items.meta({ description: feedbackSchema.shape.consider.description }),
+    why: text.meta({ description: feedbackSchema.shape.why.description }),
+  }).strict().nullable().meta({ description: turnSchema.shape.feedback.description }),
+  critical_alerts: items.meta({ description: turnSchema.shape.critical_alerts.description }),
+  suggested_actions: z.array(text).max(2).meta({ description: turnSchema.shape.suggested_actions.description }),
+  response_options: z.array(text).max(4).meta({ description: turnSchema.shape.response_options.description }),
 }).strict();
 
 export interface TurnClockPolicy {
