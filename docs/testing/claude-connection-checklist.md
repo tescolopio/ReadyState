@@ -29,6 +29,36 @@ a release, or infer approval from Hermes's implementation. Anthropic documents
 [conditional hosting of its unmodified CLI](https://code.claude.com/docs/en/legal-and-compliance);
 the exact custom-UI/subscription boundary must be resolved separately.
 
+### Subscription-use decision (separate from engineering qualification)
+
+**Decision owner:** ReadyState product owner. **Status: unresolved; no live
+subscription call or distributed support is authorized by this checklist.**
+
+Anthropic's [Claude Code legal terms](https://code.claude.com/docs/en/legal-and-compliance)
+say that offering/running Claude Code in a product or service requires the
+applicable Commercial Terms and preserving the unmodified binary and its
+built-in authentication; each end user must authenticate with their own
+credentials, with no reselling or intermediation. The same page bars third
+parties from offering Claude.ai login or collecting credentials/tokens, but
+allows an end user to sign in to the unmodified CLI, including on a hosted
+platform described by those conditions. The [Consumer Terms](https://www.anthropic.com/legal/consumer-terms)
+also restrict automated access except where Anthropic explicitly permits it.
+
+**Question for Anthropic, through its listed Contact Sales channel, or qualified
+counsel:** Does this exact ReadyState-owned UI invoking the unmodified local
+Claude Code CLI, with authentication completed only in Anthropic's native
+flow and no credential handling by ReadyState, qualify for the described
+platform-hosting exception when used for (a) the maintainer's private local
+feasibility test and (b) a product distributed to end users? What terms or
+commercial agreement apply separately to each?
+
+Keep those decisions separate: permission for one private, user-authorized
+feasibility test would not establish permission to ship or advertise
+subscription-based support. Until clarified, do not enable inference or
+distribute this path. A future live test would use one fixed fictional request;
+it may consume the user's included subscription allowance or trigger
+account-configured extra usage. No charge amount or no-cost status is assumed.
+
 1. Complete prerequisite bridge/diagnostic review. Use a disposable private
    local data directory, one server process, no provider API keys and a clean
    native Claude test profile without personal instructions or managed
