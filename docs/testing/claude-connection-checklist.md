@@ -3,7 +3,7 @@
 ## Verified source-only baseline (PR #41)
 
 Local evidence applies to code commit
-`16d4ed67ed73a17f96ff57f1e063c99e6e9a6676`:
+`16d4ed61ae914bab00d1a55905ccd966419b9fbe`:
 
 - Source-only tests: **773 passed, 1 skipped, 1 todo across 41 test files**;
   lint, typecheck and production build **PASS**.
