@@ -6,6 +6,7 @@ import { z } from "zod";
 import { PageHeader } from "@/components/app-shell";
 import { OutgoingReviewPanel } from "@/components/outgoing-review";
 import { Button } from "@/components/ui/button";
+import { DIAGNOSTIC_BASELINE } from "@/lib/connection-diagnostic.mjs";
 import { privateTerms } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { LOCAL_SHORT_STEP_REASON, localConnectionStateSchema, localConnectionViewSchema, type LocalConnectionState } from "@/lib/local-connection-contracts";
@@ -250,6 +251,7 @@ export default function ConnectionsPage() {
       localSessionMaskRules(sessionPrivacy.alwaysMask, usePrivacyStore.getState().alwaysMask)));
   };
   const disabled = busy || !!review || !!pending;
+  const diagnostic = session?.baseline.text === DIAGNOSTIC_BASELINE;
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 space-y-5 px-4 py-6">
       <PageHeader title="Local assistant connection" />
@@ -289,6 +291,23 @@ export default function ConnectionsPage() {
             })}>Lock setup</Button>
             <Button variant="outline" disabled={disabled} onClick={() => openReview("baseline")}>Review new household briefing</Button>
           </div>
+          <section aria-label="Fictional connection diagnostic" className="space-y-2 rounded-panel border border-line p-4">
+            <h2 className="text-lg font-semibold">Test the connection first</h2>
+            <p className="text-sm text-ink-2">Creates a separate, fixed fictional test with no household data.
+              Pair the source diagnostic connector with this test only. Claude sign-in and model selection remain in Claude Desktop;
+              ReadyState cannot verify the selected model. No model is called by this button.</p>
+            <Button className="max-w-full whitespace-normal" disabled={disabled} onClick={() => void run(async () => {
+              setPairing(undefined);
+              setSession(undefined);
+              setSessionPrivacy(undefined);
+              setPrivacyProblem(undefined);
+              setInput("");
+              setPermission("write");
+              const write: ApprovedWrite = { action: "create", approval: { id: crypto.randomUUID(), text: DIAGNOSTIC_BASELINE } };
+              setPending(write);
+              await save(write);
+            })}>Create fictional connection diagnostic</Button>
+          </section>
           <section aria-label="Saved local sessions" className="space-y-2">
             <h2 className="text-lg font-semibold">Saved local sessions</h2>
             {view?.sessions.length === 0 && <p>No local assistant exercises yet.</p>}
@@ -318,7 +337,17 @@ export default function ConnectionsPage() {
           </section>}
           {session && <section className="space-y-4 rounded-panel border border-line p-4">
             <h2 className="text-lg font-semibold">Exercise {session.id.slice(0, 8)} · {session.phase}</h2>
-            {privacyProblem && <div role="alert" aria-label="Privacy context unavailable" className="space-y-2 rounded-control border border-line p-3">
+            {diagnostic && <div role="status" aria-label="Diagnostic result" className="space-y-2">
+              <h3 className="font-semibold">{session.events.length ? "Diagnostic acknowledgement saved" : "Waiting for diagnostic acknowledgement"}</h3>
+              <p>This verifies transport and saving only, not scenario quality, Claude authentication or model identity.
+                Model selection: Claude Desktop. Model evidence: unavailable.</p>
+              <label htmlFor="diagnostic-session" className="block font-semibold">Diagnostic session ID</label>
+              <input id="diagnostic-session" readOnly value={session.id} className="w-full rounded-control border border-line p-2 font-mono" />
+              <p>Configure the source connector for this ID and exact origin, create a write-enabled pairing code below,
+                then call readystate_connection_status, readystate_get_diagnostic and readystate_submit_diagnostic in the assistant.
+                Refresh here to inspect the saved acknowledgement.</p>
+            </div>}
+            {!diagnostic && privacyProblem && <div role="alert" aria-label="Privacy context unavailable" className="space-y-2 rounded-control border border-line p-3">
               <h3 className="font-semibold">Privacy context unavailable</h3>
               <p>{privacyProblem} Responses are blocked. ReadyState will not infer safety from the current household or another exercise&apos;s privacy map.</p>
               <p>If this session was just created, use &ldquo;Refresh accepted results&rdquo; to retry browser-local association. If the context is still missing or corrupt, this saved session is read-only; create a new local session after reviewing its briefing.</p>
@@ -360,7 +389,7 @@ export default function ConnectionsPage() {
               })}>Authorize a shorter crisis step</Button>
               {session.shortStepReason && <p className="break-words">Authorized for the next task: {session.shortStepReason}</p>}
             </details>}
-            {session.phase === "loop" && !session.pendingResponse && <div className="space-y-2">
+            {!diagnostic && session.phase === "loop" && !session.pendingResponse && <div className="space-y-2">
               <label htmlFor="local-response" className="block font-semibold">Your next decision</label>
               <textarea id="local-response" value={input} disabled={disabled} onChange={event => setInput(event.target.value)}
                 className="min-h-28 w-full rounded-control border border-line p-2" />

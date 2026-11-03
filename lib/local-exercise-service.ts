@@ -388,6 +388,7 @@ export class LocalExerciseService {
         || task.phase !== state.phase || task.contextHash !== digest(this.briefing(state))) {
         throw new LocalExerciseError("stale-task");
       }
+
       if (state.phase === "loop" && !state.pendingResponse) {
         throw new LocalExerciseError("wrong-phase");
       }
@@ -402,6 +403,28 @@ export class LocalExerciseService {
       state.task = undefined;
       state.phase = validated.turn.scenario_status === "complete" ? "ended" : "loop";
       return { eventId };
+    });
+  }
+
+  /** A freshly paired writer may recover only an exactly matching accepted turn's receipt. */
+  recoverTurnReceipt(principal: string, command: ExerciseCommand, taskId: string, candidate: unknown): ExerciseReceipt {
+    parse(commandSchema, command);
+    parse(id, taskId);
+    const shaped = exerciseTurnCandidateSchema.safeParse(candidate);
+    if (!shaped.success) throw new LocalExerciseError("invalid-turn", [{ field: "", code: "shape" }]);
+    return this.transaction(() => {
+      const state = this.access(command.sessionId, principal, true);
+      const event = state.events.find(event => event.task.id === taskId);
+      if (!event || event.task.revision !== command.expectedRevision || canonical(event.turn) !== canonical(shaped.data)) {
+        throw new LocalExerciseError("stale-task");
+      }
+      const fingerprint = digest({ operation: "turn", payload: { taskId, candidate: shaped.data }, expectedRevision: command.expectedRevision });
+      const rows = this.db.prepare("SELECT result FROM exercise_receipts WHERE session_id = ? AND key = ? AND fingerprint = ?")
+        .all(state.id, command.key, fingerprint);
+      const receipt = rows.map(row => decode(receiptSchema, row.result))
+        .find(receipt => receipt.eventId === event.id && receipt.revision === event.task.revision + 1);
+      if (!receipt) throw new LocalExerciseError("stale-task");
+      return receipt;
     });
   }
 }

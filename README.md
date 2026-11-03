@@ -7,6 +7,11 @@ For Windows/Linux native, Docker and bundled-runtime portable/per-user installs,
 see [Local installation](docs/deployment/local-installation.md). Ollama support
 is experimental; no model is included with ReadyState.
 
+Claude Desktop integration is development-only, not an installable release.
+Start with the [fictional connection diagnostic and qualification checklist](docs/testing/claude-connection-checklist.md)
+before household scenarios. Automated local MCP evidence does not establish
+live Claude sign-in, model availability or scenario/debrief quality.
+
 ## Stack
 
 Next.js (App Router) · TypeScript · Tailwind CSS · Vercel AI SDK (`ai`, `@ai-sdk/react`, `@ai-sdk/openai`, `@ai-sdk/google`) · Zod · Zustand · compromise · lucide-react · Dexie · Supabase (hosted service).
@@ -74,7 +79,8 @@ Scripts: `npm run dev`, `npm run build`, `npm start` (loopback standalone produc
 | `lib/exercise-contracts.ts` / `lib/exercise-prompts.ts` / `lib/exercise-context.ts` / `lib/exercise-debrief.ts` | Provider-independent schemas/types, versioned prompts, compact briefing and checked-debrief context. |
 | `lib/ttx.ts` | AI SDK tools/UI-message adapter, compatible schema re-exports, `deriveTtxState` and `buildExercisePrompt`. |
 | `lib/local-exercise-service.ts` / `lib/exercise-turn-validation.ts` / `lib/local-exercise-view.ts` | SQLite exercise sessions, turn-acceptance policy and accepted-state rendering adapter. Used by the opt-in local bridge, not yet by the ordinary API exercise or MCP. |
-| `lib/local-connection-*.ts` / `app/(app)/connections/` | Opt-in local owner setup, scoped pairing/revocation, browser review/resume and authenticated fixture connector HTTP boundary. No Claude stdio extension yet; ordinary API exercise remains separate. |
+| `lib/local-connection-*.ts` / `app/(app)/connections/` | Opt-in local owner setup, scoped pairing/revocation, browser review/resume and authenticated connector HTTP boundary. Source-only fictional diagnostic available; no installable Claude extension yet. Ordinary API exercise remains separate. |
+| `scripts/claude/diagnostic.mjs` / `lib/connection-diagnostic.mjs` | SDK v2 stdio diagnostic with fixed synthetic task, strict validation, safe retries and unavailable-model disclosure; not the household/scenario adapter. |
 | `lib/providers.ts` | Provider presets and `resolveModel`, which picks the model per request from browser settings or server env. |
 | `lib/config.ts` / `lib/hosted.ts` | `READYSTATE_MODE` and the hosted-service integration points (auth, quota, usage metering). |
 | `app/api/ttx/route.ts` | `streamText` route that **forces** the tool matching the current phase, so every response is structured JSON. |

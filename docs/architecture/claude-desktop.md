@@ -4,6 +4,17 @@ Status: shared foundation, durable sessions and opt-in browser/pairing bridge. *
 or Claude-compatible release exists from this work yet.** No live Claude test has
 been performed.
 
+The [connection qualification checklist](../testing/claude-connection-checklist.md)
+adds a source-only stdio diagnostic using SDK v2. It exposes only status, a
+fixed fictional acknowledgement task and validated submission; it cannot run
+household scenarios or debriefs. The browser can explicitly create and display
+this synthetic session without reading a household or calling a model.
+Model selection belongs to Claude; this adapter reports model evidence as
+unavailable. The local bridge's returned findings have correction commits
+awaiting re-review and remain blockers,
+not waived by the diagnostic. Live account/model/tool-permission qualification
+and an installable Windows extension remain pending.
+
 ## Confirmed first target
 
 The user selected **Claude Desktop on Windows**, with **ReadyState handling
@@ -75,7 +86,7 @@ the only source of truth. This increment does not expand G6 compression work.
 | --- | --- | --- |
 | 1: shared foundation (this change) | Domain schemas/types, prompt catalog, briefing and debrief-context extraction; no connector endpoint | Exact pre-extraction prompt/schema fingerprints; API regression checks; eight fictional-household context parity/privacy checks; no provider calls |
 | 2: authoritative sessions (internal implementation) | SQLite sessions, immutable approved baseline, revisions, scoped grants, clock policy, version-bound turn tasks, atomic/idempotent acceptance, accepted-state-to-UI-message mapping | Service close/reopen, competing independent database connections, stale tasks, wrong phase, duplicate-key mismatch, lost acknowledgement and forced mid-commit failure; reject without partial writes. Browser/API wiring still pending |
-| 3: local connection (browser/HTTP implemented; stdio pending) | Opt-in owner setup, scoped one-use pairing/revocation, authenticated loopback service, separate browser session screen; local stdio MCP adapter remains ahead | Unpaired/revoked access refused; no raw household, private ledger, credentials or retry settings in tool responses; fixture turn refresh/restart without ReadyState model-provider requests; real Claude remains unverified |
+| 3: local connection (browser/HTTP and source diagnostic implemented) | Opt-in owner setup, scoped one-use pairing/revocation, authenticated loopback service, separate browser session screen and fictional stdio diagnostic; full scenario adapter remains ahead | Unpaired/revoked access refused; no raw household, private ledger, credentials or retry settings in tool responses; fixture turn refresh/restart without ReadyState model-provider requests; real Claude remains unverified |
 | 4: full exercise | Approved participant responses, next-turn tasks, accepted UI updates, evidence retrieval and checked debrief/repair | Full fixture exercise through 72 hours; failed repair withheld; correct omissions and check-status wording; preserve ordinary API route |
 | 5: Windows tester package | App plus `.mcpb`, setup/update/remove guide, checksums/notices/matching source and exact compatibility record | Extracted package startup, restart/revoke/update tests, offline MCP protocol tests, final code review and CI, then a clearly labeled installable tester release |
 | 6: user qualification | User installs extension in their actual Claude Desktop account | Record app/client versions, Windows version, plan/policy availability, operations tested and limits; manually assess scenario/debrief quality separately |
@@ -188,7 +199,7 @@ throughout asynchronous approval, including waits for the lock and server
 state, so the approved preview cannot be changed while submission is pending.
 
 Debrief-task acceptance/repair, evidence-tool pagination, ordinary API migration,
-automatic accepted-state notifications and the MCP adapter remain subsequent
+automatic accepted-state notifications and the household-scenario MCP adapter remain subsequent
 increments. The optional short-step control sends only a displayed fixed
 statement; it is not an unreviewed free-text channel.
 
@@ -306,6 +317,10 @@ only once; raw credentials are not persisted. Revocation denies the credential
 before grant cleanup; a cleanup failure is explicit and can be retried.
 Repeating a revocation after another tab already revoked the connection
 succeeds without logging the owner out.
+The source diagnostic supports authenticated matching-receipt recovery after
+fresh pairing: only a writer for that same exercise can recover the original
+receipt by its accepted task/revision/key/candidate. This read does not alter
+history, grant access or repeat acceptance.
 Keep this credential database out of exercise exports/backups intended for
 sharing. Safe full backup/delete/restore coordination for both stores, including
 connection revocation after restoration, is still a pre-release requirement.
@@ -376,5 +391,6 @@ Checked 2026-11-02; installation labels and account policies may change.
   local client-launched stdio versus remote Streamable HTTP. Earlier protocol
   compatibility must be tested, not inferred from SDK version alone.
 - [TypeScript SDK v2](https://github.com/modelcontextprotocol/typescript-sdk):
-  current stable server/client packages. No MCP SDK dependency is needed or
-  introduced until the local adapter implementation.
+  current stable server/client packages. The source diagnostic uses pinned
+  server/client v2 dependencies; that does not qualify the installed Claude
+  host or its bundled runtime.
