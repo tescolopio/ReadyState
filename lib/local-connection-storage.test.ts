@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocalConnectionAuth } from "@/lib/local-connection-auth";
 import { localConnectionRoute } from "@/lib/local-connection-runtime";
 import { LocalExerciseService } from "@/lib/local-exercise-service";
+import { openExistingLocalDatabase } from "@/lib/local-database";
 
 const origin = "http://127.0.0.1:3179";
 const ownerCode = randomBytes(32).toString("hex");
@@ -50,6 +53,113 @@ afterEach(() => {
 });
 
 describe("local connection storage initialization", () => {
+  it("non-creating recovery never creates a missing database", () => {
+    const filename = path.join(directory, "absent.sqlite");
+    expect(() => openExistingLocalDatabase(filename)).toThrow();
+    expect(existsSync(filename)).toBe(false);
+  });
+
+  it.each(["connection-credentials.sqlite", "exercises.sqlite"])("refuses a hard-linked %s before either store is used", async filename => {
+    const data = path.join(directory, "private-data");
+    mkdirSync(data, { mode: 0o700 });
+    const auth = new LocalConnectionAuth(path.join(data, "connection-credentials.sqlite"), ownerCode);
+    auth.close();
+    const service = new LocalExerciseService(path.join(data, "exercises.sqlite"));
+    service.close();
+    const target = path.join(data, filename);
+    linkSync(target, path.join(directory, "exposed.sqlite"));
+    const before = readFileSync(target);
+    configure(data);
+    expect((await localConnectionRoute(request(), "browser")).status).toBe(503);
+    expect(readFileSync(target)).toEqual(before);
+  });
+
+  it("refuses symbolic database and journal links without following them", async () => {
+    const data = path.join(directory, "private-data");
+    mkdirSync(data, { mode: 0o700 });
+    const exposed = path.join(directory, "exposed.sqlite");
+    writeFileSync(exposed, "must not change");
+    // A directory junction is a Windows unprivileged symlink-equivalent refusal.
+    const target = path.join(data, "connection-credentials.sqlite");
+    symlinkSync(directory, target, process.platform === "win32" ? "junction" : "dir");
+    configure(data);
+    expect((await localConnectionRoute(request(), "browser")).status).toBe(503);
+    expect(readFileSync(exposed, "utf8")).toBe("must not change");
+  });
+
+  it.each(["-journal", "-wal", "-shm"])("refuses linked %s sidecars before recovery opens a store", async suffix => {
+    const data = path.join(directory, "private-data");
+    mkdirSync(data, { mode: 0o700 });
+    const credentials = path.join(data, "connection-credentials.sqlite");
+    const auth = new LocalConnectionAuth(credentials, ownerCode);
+    auth.close();
+    const service = new LocalExerciseService(path.join(data, "exercises.sqlite"));
+    service.close();
+    const exposed = path.join(directory, "exposed-sidecar");
+    writeFileSync(exposed, "not a private file");
+    linkSync(exposed, credentials + suffix);
+    const before = readFileSync(credentials);
+    configure(data);
+    expect((await localConnectionRoute(request(), "browser")).status).toBe(503);
+    expect(readFileSync(credentials)).toEqual(before);
+    expect(readFileSync(exposed, "utf8")).toBe("not a private file");
+  });
+
+  it.each(["connection-credentials.sqlite", "exercises.sqlite"])("recovers a real hot rollback journal for %s without resetting data", async filename => {
+    const data = path.join(directory, "private-data");
+    mkdirSync(data, { mode: 0o700 });
+    const credentials = path.join(data, "connection-credentials.sqlite");
+    const exercises = path.join(data, "exercises.sqlite");
+    const auth = new LocalConnectionAuth(credentials, ownerCode);
+    const owner = auth.owner;
+    auth.close();
+    const service = new LocalExerciseService(exercises);
+    service.close();
+    const target = path.join(data, filename);
+    const child = spawn(process.execPath, ["-e", `
+      const {DatabaseSync}=require("node:sqlite");
+      const db=new DatabaseSync(process.argv[1]);
+      db.exec("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA cache_size=1; BEGIN IMMEDIATE;");
+      if(process.argv[2]==="connection-credentials.sqlite"){
+        db.exec("UPDATE connection_meta SET value='uncommitted';");
+        const insert=db.prepare("INSERT INTO connection_codes VALUES (?)");
+        for(let i=0;i<200;i++) insert.run(i+"x".repeat(8192));
+      }else{
+        const insert=db.prepare("INSERT INTO exercise_sessions VALUES (?,?)");
+        for(let i=0;i<200;i++) insert.run(String(i),JSON.stringify({padding:"x".repeat(8192)}));
+      }
+      process.stdout.write("ready\\n");
+      setInterval(()=>{},1000);
+    `, target, filename], { stdio: ["ignore", "pipe", "ignore"] });
+    try {
+      await Promise.race([
+        once(child.stdout!, "data"),
+        once(child, "exit").then(() => { throw new Error("Crash fixture exited before writing"); }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Crash fixture timed out")), 5000).unref()),
+      ]);
+      const exited = once(child, "exit");
+      child.kill("SIGKILL");
+      await exited;
+      expect(existsSync(target + "-journal")).toBe(true);
+      const readOnly = new DatabaseSync(target, { readOnly: true });
+      try { expect(() => readOnly.prepare("SELECT name FROM sqlite_master").all()).toThrow(); }
+      finally { readOnly.close(); }
+      configure(data);
+      expect((await localConnectionRoute(request(), "browser")).status).toBe(200);
+      const restored = new LocalConnectionAuth(credentials, ownerCode);
+      try { expect(restored.owner).toBe(owner); }
+      finally { restored.close(); }
+      const restoredService = new LocalExerciseService(exercises);
+      try { expect(restoredService.listOwnedSessions(owner)).toEqual([]); }
+      finally { restoredService.close(); }
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) {
+        const exited = once(child, "exit");
+        child.kill("SIGKILL");
+        await exited;
+      }
+    }
+  }, 10_000);
   it("creates a fresh database pair only when neither file exists", async () => {
     const dataDirectory = path.join(directory, "private-data");
     configure(dataDirectory);

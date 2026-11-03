@@ -168,6 +168,17 @@ Refresh can retry association from an interrupted creation's private draft.
 Otherwise create a new session and review its briefing again. These mappings
 contain private information, remain unencrypted in this browser, and are not
 stored in the exercise database.
+Response approval uses an exclusive per-session Web Lock across tabs, reloads
+the current private context and checks the server revision before saving new
+mappings or transmitting. Changed mappings/rules require a rebuilt review;
+stale exercise state is refreshed without overwriting mappings. Browsers
+without Web Locks fail closed. Current Settings Always Mask terms are combined
+with the session's original terms both when opening and approving a review.
+Selecting an additional mask in this local review applies only to this session,
+stays in tab memory until Send and does not change Settings or other sessions.
+Back discards these unapproved rules. Private-draft recovery reads do not
+promote or overwrite session mappings; the first approved response saves the
+session context under its lock and removes the creation draft.
 
 Debrief-task acceptance/repair, evidence-tool pagination, ordinary API migration,
 automatic accepted-state notifications and the MCP adapter remain subsequent
@@ -267,6 +278,12 @@ resolve junctions/symlinks and missing descendants before directory creation.
 Do not invoke a standalone server directly without supplying the absolute
 `READYSTATE_LOCAL_SOURCE_ROOT` and `READYSTATE_LOCAL_INSTALL_ROOT` protection
 roots. A standalone server's changed working directory is not the install root.
+Before opening either store, database and SQLite sidecar paths must be regular
+files with exactly one hard link and no symbolic link. Directory privacy alone
+cannot protect data reachable through another file path. Existing stores are
+opened with SQLite `mode=rw` (never create) for validation, permitting hot
+rollback-journal recovery after a killed process without reinitializing data.
+This recovery can restore uncommitted pages; it is not a storage reset.
 
 Browser requests must have the exact configured Host and Origin; cross-site
 fetch metadata is refused. Next canonicalizes internal loopback Request URLs,
@@ -307,6 +324,11 @@ household, missing/corrupt privacy context, quota refusal before transmission,
 pairing-code hiding on session creation/switching, and repeated revocation
 without owner logout. Storage regressions separately exercise empty/incomplete
 stores, missing owners and source/install-tree confinement including links.
+Returned-review regressions additionally cover actual killed-process journals
+for both stores, hard-linked databases/sidecars, missing-file non-creation,
+grant-cleanup retry after reopen without invalidating another connection's task,
+current Settings mask changes, session-only unsaved selection rules and
+two-tab stale approval without overwriting accepted mappings.
 
 This is **interface inspection**, not human usability or live Claude testing.
 Physical phones, Safari, Firefox, Windows installer ACL provisioning, extension

@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import { lstatSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
+import { openExistingLocalDatabase } from "@/lib/local-database";
 
 export class LocalConnectionDenied extends Error {
   constructor() { super("Local connection access refused. Unlock locally or pair again."); }
@@ -47,7 +48,7 @@ export class LocalConnectionAuth {
     allowInitialization = fileIsAbsent(filename),
   ) {
     if (!validSecret(ownerCode)) throw new Error("Local owner setup requires a random 32-byte hexadecimal code.");
-    this.db = new DatabaseSync(filename);
+    this.db = allowInitialization ? new DatabaseSync(filename) : openExistingLocalDatabase(filename);
     try {
       this.db.exec("PRAGMA busy_timeout = 5000; BEGIN IMMEDIATE;");
       const version = this.db.prepare("PRAGMA user_version").get()?.user_version;
@@ -78,8 +79,8 @@ export class LocalConnectionAuth {
   }
 
   static assertInitialized(filename: string) {
-    const db = new DatabaseSync(filename, { readOnly: true });
-    try { validateCredentialDatabase(db); }
+    const db = openExistingLocalDatabase(filename);
+    try { db.exec("PRAGMA busy_timeout = 5000;"); validateCredentialDatabase(db); }
     finally { db.close(); }
   }
 

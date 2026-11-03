@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { buildExerciseBriefing, EXERCISE_CONTEXT_VERSION } from "@/lib/exercise-context";
 import { EXERCISE_SCHEMA_VERSION } from "@/lib/exercise-contracts";
+import { openExistingLocalDatabase } from "@/lib/local-database";
 import { exercisePrompt, EXERCISE_PROMPT_VERSION } from "@/lib/exercise-prompts";
 import { EXERCISE_ACCEPTANCE_VERSION, exerciseTurnCandidateSchema, validateExerciseTurn, type TurnProblem } from "@/lib/exercise-turn-validation";
 
@@ -101,7 +102,7 @@ export class LocalExerciseService {
   private readonly db: DatabaseSync;
 
   constructor(filename: string, allowInitialization = fileIsAbsent(filename)) {
-    this.db = new DatabaseSync(filename);
+    this.db = allowInitialization ? new DatabaseSync(filename) : openExistingLocalDatabase(filename);
     try {
       this.db.exec("PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
       this.transaction(() => {
@@ -136,8 +137,8 @@ export class LocalExerciseService {
   }
 
   static assertInitialized(filename: string) {
-    const db = new DatabaseSync(filename, { readOnly: true });
-    try { validateExerciseDatabase(db); }
+    const db = openExistingLocalDatabase(filename);
+    try { db.exec("PRAGMA busy_timeout = 5000;"); validateExerciseDatabase(db); }
     finally { db.close(); }
   }
 
@@ -246,7 +247,8 @@ export class LocalExerciseService {
       const state = this.owner(sessionId, owner);
       if (principal === owner) throw new LocalExerciseError("access");
       if (permission === "revoke") {
-        this.db.prepare("DELETE FROM exercise_access WHERE session_id = ? AND principal = ?").run(sessionId, principal);
+        const result = this.db.prepare("DELETE FROM exercise_access WHERE session_id = ? AND principal = ?").run(sessionId, principal);
+        if (result.changes === 0) return;
         // A task released to this connection must not survive revocation/re-pairing.
         state.task = undefined;
         state.revision++;

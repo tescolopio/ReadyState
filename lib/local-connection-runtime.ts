@@ -2,6 +2,7 @@ import { lstatSync, mkdirSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { getAppMode } from "@/lib/config";
+import { assertUnlinkedLocalDatabase } from "@/lib/local-database";
 import { LocalConnectionAuth } from "@/lib/local-connection-auth";
 import { handleLocalConnection, localConnectionOrigin, localConnectionRequestAllowed } from "@/lib/local-connection-http";
 import { LocalExerciseService } from "@/lib/local-exercise-service";
@@ -74,6 +75,11 @@ export async function localConnectionRoute(request: Request, client: "browser" |
     const exercisesFile = path.join(directory, "exercises.sqlite");
     assertLocalDataDirectoryOutsideRoots(credentialsFile, roots);
     assertLocalDataDirectoryOutsideRoots(exercisesFile, roots);
+    for (const filename of [credentialsFile, exercisesFile]) {
+      for (const suffix of ["", "-journal", "-wal", "-shm"]) {
+        assertUnlinkedLocalDatabase(filename + suffix);
+      }
+    }
     const credentialsExist = fileExists(credentialsFile);
     const exercisesExist = fileExists(exercisesFile);
     if (credentialsExist !== exercisesExist) {
