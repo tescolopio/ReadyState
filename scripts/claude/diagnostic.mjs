@@ -17,7 +17,7 @@ export function createDiagnosticServer(client) {
     modelEvidence: z.literal("unavailable"), disclosure: z.string(),
   });
   const receiptSchema = z.object({
-    sessionId: z.string().uuid(), revision: z.number().int(), saved: z.literal(true), modelEvidence: z.literal("unavailable"),
+    sessionId: z.string().uuid(), revision: z.number().int(), eventId: z.string().uuid(), saved: z.literal(true), modelEvidence: z.literal("unavailable"),
   });
   const taskSchema = diagnosticSubmissionSchema;
   /** @param {() => Promise<object>} operation */

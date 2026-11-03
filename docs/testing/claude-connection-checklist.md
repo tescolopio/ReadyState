@@ -2,8 +2,9 @@
 
 Status: **source diagnostic implemented; live Claude Desktop qualification pending**.
 This is not an installable extension, scenario/debrief qualification or release
-authorization. The prerequisite local bridge (#39) still has review findings,
-including cross-tab privacy and storage/recovery concerns. Do not use personal
+authorization. Corrections for the prerequisite local bridge's (#39) returned
+cross-tab privacy and storage/recovery findings are pushed for re-review;
+they are not yet cleared. Do not use personal
 households, distribute this branch as a release or describe the connection as
 qualified until those findings and final-head checks clear.
 
@@ -147,9 +148,21 @@ Revoke old connections. Never generate a new exercise just to retry a write.
 An unconfirmed submission can be retried with its **original** task ID and
 expected revision. The adapter derives a stable idempotency key from that task;
 ReadyState returns the original receipt instead of appending another event.
+After a restart requires fresh pairing, a newly authorized writer can recover
+that same receipt (including its original accepted event ID) only when the
+task, original revision, key and exact accepted candidate match the stored
+event and receipt. Recovery does not write or advance the session. Read-only,
+revoked and wrong-session connections cannot recover a write receipt.
 Inspect status first. After cancellation/revocation invalidates work, retrieve
 a fresh task rather than altering the old task or claiming it succeeded.
 Completed diagnostic sessions do not expose another task.
+
+For the live evidence record, include the installed Claude version, operating
+system, selected model as observed in Claude's interface (unverified), each
+tool's allow/deny behavior, sanitized saved receipt and display, and disconnect/
+reconnect outcome. Do not fill these from automated-client evidence. Until
+observed in the installed app, each remains **pending**; model evidence stays
+**unavailable** when the integration cannot verify it.
 
 ## Exit gate and next connections
 

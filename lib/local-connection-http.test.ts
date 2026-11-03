@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -28,7 +29,7 @@ let exercises: LocalExerciseService;
 let cookie: string;
 let now: number;
 beforeEach(async () => {
-  directory = mkdtempSync(join(process.cwd(), ".readystate-connection-"));
+  directory = mkdtempSync(join(tmpdir(), "readystate-connection-"));
   ownerCode = secret();
   now = Date.now();
   auth = new LocalConnectionAuth(join(directory, "auth.sqlite"), ownerCode, () => now);
@@ -66,6 +67,30 @@ async function pair(sessionId: string, permission: "read" | "write" = "write") {
 }
 
 describe("local browser / connector boundary", () => {
+  it("recovers an exact accepted receipt across pairing without granting write access to readers", async () => {
+    const saved = await session();
+    const first = await pair(saved.sessionId);
+    const task = generatedTask.parse(await (await connector({ action: "task", sessionId: saved.sessionId }, first.token)).json());
+    const command = { sessionId: saved.sessionId, expectedRevision: task.revision, key: randomUUID() };
+    const submit = { action: "turn", command, taskId: task.id, candidate: initialTurn };
+    const accepted = await (await connector(submit, first.token)).json();
+    await browser({ action: "revoke", connectionId: first.id });
+    const replacement = await pair(saved.sessionId);
+    const before = exercises.getState(saved.sessionId, auth.owner);
+    const recover = { ...submit, action: "turn-receipt" };
+    expect(await (await connector(recover, replacement.token)).json()).toEqual(accepted);
+    expect((await connector(recover, first.token)).status).toBe(401);
+    const reader = await pair(saved.sessionId, "read");
+    expect((await connector(recover, reader.token)).status).toBe(401);
+    for (const changed of [
+      { ...recover, taskId: randomUUID() },
+      { ...recover, command: { ...command, expectedRevision: command.expectedRevision + 1 } },
+      { ...recover, command: { ...command, key: "not-the-original-key" } },
+      { ...recover, candidate: { ...initialTurn, narrative_response: "Different valid-shaped candidate" } },
+    ]) expect((await connector(changed, replacement.token)).status).toBe(409);
+    expect(exercises.getState(saved.sessionId, auth.owner)).toEqual(before);
+  });
+
   it("uses a one-time owner code and an HttpOnly, SameSite scoped cookie", async () => {
     const denied = await browser({ action: "unlock", code: ownerCode }, "");
     expect(denied.status).toBe(401);

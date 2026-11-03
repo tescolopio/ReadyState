@@ -8,7 +8,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { DIAGNOSTIC_BASELINE, diagnosticTurn, diagnosticSubmissionSchema } from "@/lib/connection-diagnostic.mjs";
+import { DIAGNOSTIC_BASELINE, diagnosticTurn, diagnosticSubmissionSchema, diagnosticReceiptSchema } from "@/lib/connection-diagnostic.mjs";
 import { LocalConnectionAuth } from "@/lib/local-connection-auth";
 import { handleLocalConnection } from "@/lib/local-connection-http";
 import { LocalExerciseService } from "@/lib/local-exercise-service";
@@ -83,10 +83,12 @@ describe("isolated fictional diagnostic connector", () => {
   });
   it("recovers a committed lost acknowledgement without a duplicate write", async () => {
     let loseAck = true;
+    let originalReceipt: unknown;
     const request: typeof fetch = async (input, init) => {
       const response = await dispatch(input, init);
       if (JSON.parse(String(init?.body)).action === "turn" && loseAck) {
         loseAck = false;
+        originalReceipt = await response.json();
         throw new Error("Synthetic lost acknowledgement");
       }
       return response;
@@ -95,7 +97,19 @@ describe("isolated fictional diagnostic connector", () => {
     const task = await bridge.task(signal());
     await expect(bridge.submit(args(task), signal())).rejects.toThrow("inspect saved state");
     expect(await client().status(signal())).toMatchObject({ diagnostic: "accepted" });
-    await bridge.submit(args(task), signal());
+    exercises.close();
+    exercises = new LocalExerciseService(path.join(directory, "exercises.sqlite"));
+    auth.revoke(auth.list()[0].id, (id, value) => exercises.setAccess(id, auth.owner, value, "revoke"));
+    const issued = auth.issue(sessionId, "write", value => exercises.setAccess(sessionId, auth.owner, value, "write"));
+    const restarted = createDiagnosticClient(diagnosticConfig({ origin, sessionId, pairingCode: issued.code }), dispatch);
+    const recovered = await restarted.submit(args(task), signal());
+    expect(recovered).toMatchObject(diagnosticReceiptSchema.parse(originalReceipt));
+    expect(await restarted.submit(args(task), signal())).toEqual(recovered);
+    for (const altered of [
+      { ...args(task), taskId: randomUUID() },
+      { ...args(task), expectedRevision: task.revision + 1 },
+    ]) await expect(restarted.submit(altered, signal())).rejects.toThrow("refused");
+    await expect(client(dispatch, pair("read")).submit(args(task), signal())).rejects.toThrow("lacks permission");
     expect(exercises.getState(sessionId, auth.owner).events).toHaveLength(1);
   });
   it("rejects incorrect output before a network request or write", async () => {

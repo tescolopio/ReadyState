@@ -118,7 +118,7 @@ export async function handleLocalConnection(
     if (action.action === "redeem") return json(auth.redeem(action.code));
     const match = /^Bearer ([a-f0-9]{64})$/.exec(request.headers.get("authorization") ?? "");
     if (!match) throw new LocalConnectionDenied();
-    const sessionId = action.action === "turn" ? action.command.sessionId : action.sessionId;
+    const sessionId = action.action === "turn" || action.action === "turn-receipt" ? action.command.sessionId : action.sessionId;
     const principal = auth.authenticateConnector(match[1], sessionId, action.action !== "state");
     switch (action.action) {
       case "state":
@@ -127,6 +127,8 @@ export async function handleLocalConnection(
         return json(exercises.getGenerationTask(sessionId, principal));
       case "turn":
         return json(exercises.submitTurn(principal, action.command, action.taskId, action.candidate));
+      case "turn-receipt":
+        return json(exercises.recoverTurnReceipt(principal, action.command, action.taskId, action.candidate));
     }
   } catch (error) {
     if (error instanceof LocalConnectionDenied) return json({ error: error.message }, 401);

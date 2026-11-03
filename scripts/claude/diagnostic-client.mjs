@@ -137,10 +137,11 @@ export function createDiagnosticClient(config, request = fetch) {
     async submit(input, signal) {
       const parsed = diagnosticSubmissionSchema.safeParse(input);
       if (!parsed.success) throw new DiagnosticError("Invalid diagnostic output. Return exactly the fixed fictional acknowledgement from readystate_get_diagnostic; no free text or household data is accepted.");
-      await state(signal);
+      const saved = await state(signal);
       const { taskId, expectedRevision, candidate } = parsed.data;
       const result = diagnosticReceiptSchema.safeParse(await authenticated({
-        action: "turn", command: { sessionId: config.sessionId, expectedRevision, key: `diagnostic-v1:${taskId}` }, taskId, candidate,
+        action: saved.events.length ? "turn-receipt" : "turn",
+        command: { sessionId: config.sessionId, expectedRevision, key: `diagnostic-v1:${taskId}` }, taskId, candidate,
       }, signal));
       if (!result.success || result.data.sessionId !== config.sessionId) throw new DiagnosticError("ReadyState returned an incompatible receipt. Inspect saved state before retrying.");
       return { ...result.data, saved: true, modelEvidence: "unavailable" };

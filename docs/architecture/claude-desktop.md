@@ -10,7 +10,8 @@ fixed fictional acknowledgement task and validated submission; it cannot run
 household scenarios or debriefs. The browser can explicitly create and display
 this synthetic session without reading a household or calling a model.
 Model selection belongs to Claude; this adapter reports model evidence as
-unavailable. The local bridge's outstanding review findings remain blockers,
+unavailable. The local bridge's returned findings have correction commits
+awaiting re-review and remain blockers,
 not waived by the diagnostic. Live account/model/tool-permission qualification
 and an installable Windows extension remain pending.
 
@@ -309,6 +310,10 @@ only once; raw credentials are not persisted. Revocation denies the credential
 before grant cleanup; a cleanup failure is explicit and can be retried.
 Repeating a revocation after another tab already revoked the connection
 succeeds without logging the owner out.
+The source diagnostic supports authenticated matching-receipt recovery after
+fresh pairing: only a writer for that same exercise can recover the original
+receipt by its accepted task/revision/key/candidate. This read does not alter
+history, grant access or repeat acceptance.
 Keep this credential database out of exercise exports/backups intended for
 sharing. Safe full backup/delete/restore coordination for both stores, including
 connection revocation after restoration, is still a pre-release requirement.

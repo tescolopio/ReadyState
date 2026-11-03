@@ -24,6 +24,7 @@ export const localConnectorCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("state"), sessionId: id }).strict(),
   z.object({ action: z.literal("task"), sessionId: id }).strict(),
   z.object({ action: z.literal("turn"), command, taskId: id, candidate: z.unknown() }).strict(),
+  z.object({ action: z.literal("turn-receipt"), command, taskId: id, candidate: z.unknown() }).strict(),
 ]);
 const session = z.object({
   id, revision: z.number().int().nonnegative(), phase: z.enum(["baseline", "loop", "ended"]),
