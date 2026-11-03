@@ -3,7 +3,7 @@
  * server's debrief checks (work item G9). Heuristics: passing means "passed
  * the implemented checks", not that the story is consistent.
  */
-import type { TurnOutput } from "@/lib/ttx";
+import type { TurnOutput } from "@/lib/exercise-contracts";
 
 const sentences = (texts: string[]) => texts.flatMap((text) => text.split(/(?<=[.!?])\s+/));
 
