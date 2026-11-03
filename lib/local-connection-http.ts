@@ -98,6 +98,8 @@ export async function handleLocalConnection(
           return json(exercises.createApprovedSession(owner, action.approval));
         case "response":
           return json(exercises.submitApprovedResponse(owner, action.command, action.approval));
+        case "withdraw-response":
+          return json(exercises.withdrawApprovedResponse(owner, action.command));
         case "cancel":
           return json(exercises.cancelTask(owner, action.command));
         case "short-step":

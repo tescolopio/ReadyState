@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { privateTerms } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { LOCAL_SHORT_STEP_REASON, localConnectionStateSchema, localConnectionViewSchema, type LocalConnectionState } from "@/lib/local-connection-contracts";
+import { getLocalPrivacyStorage, loadLocalSessionPrivacy, newLocalSessionPrivacy, saveLocalPrivacyDraft, saveLocalSessionPrivacy, type LocalSessionPrivacy } from "@/lib/local-session-privacy";
 import { createApprover, editReview, prepareReview, type OutgoingReview } from "@/lib/outgoing-review";
 import { useHouseholdStore } from "@/store/useHouseholdStore";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
@@ -48,13 +49,34 @@ export default function ConnectionsPage() {
   const [notice, setNotice] = useState<string>();
   const [blocked, setBlocked] = useState<string[]>();
   const reviewTarget = useRef<{ sessionId: string; revision: number } | undefined>(undefined);
+  const baselineApprovalId = useRef<string | undefined>(undefined);
+  const [sessionPrivacy, setSessionPrivacy] = useState<LocalSessionPrivacy>();
+  const [privacyProblem, setPrivacyProblem] = useState<string>();
   const [pending, setPending] = useState<ApprovedWrite>();
 
   const refresh = async (sessionId?: string) => {
     const next = localConnectionViewSchema.parse(await call({ action: "status" }));
     setView(next);
     setUnlocked(true);
-    if (sessionId) setSession(localConnectionStateSchema.parse(await call({ action: "state", sessionId })));
+    if (sessionId) {
+      const restored = localConnectionStateSchema.parse(await call({ action: "state", sessionId }));
+      setSession(restored);
+      setSessionPrivacy(undefined);
+      const storage = getLocalPrivacyStorage();
+      const privacy = storage
+        ? loadLocalSessionPrivacy(storage, restored.id, restored.baseline.id)
+        : { status: "unavailable" as const };
+      if (privacy.status === "ready") {
+        setSessionPrivacy(privacy.context);
+        setPrivacyProblem(undefined);
+      } else {
+        setPrivacyProblem(privacy.status === "missing"
+          ? "No browser-private privacy context is saved for this session."
+          : privacy.status === "corrupt"
+            ? "The browser-private privacy context for this session is invalid or does not match its saved briefing."
+            : "Browser storage could not restore or associate this session's privacy context.");
+      }
+    }
   };
   useEffect(() => {
     let active = true;
@@ -75,6 +97,7 @@ export default function ConnectionsPage() {
     catch (failure) {
       if (failure instanceof LocalRequestError && failure.status === 401) {
         setUnlocked(false); setView(undefined); setSession(undefined); setPairing(undefined);
+        setSessionPrivacy(undefined); setPrivacyProblem(undefined);
       }
       setError(failure instanceof Error ? failure.message : "Local connection operation failed.");
     }
@@ -86,45 +109,89 @@ export default function ConnectionsPage() {
     setInput("");
     await refresh(receipt.sessionId);
   };
-  const rules = (current: OutgoingReview) => [
-    ...usePrivacyStore.getState().alwaysMask,
-    ...privateTerms(current.start?.profile ?? useHouseholdStore.getState().profile),
-  ];
-  const approver = useRef<ReturnType<typeof createApprover> | null>(null);
   const approve = (current: OutgoingReview) => {
-    approver.current ??= createApprover({
-    ledger: () => usePrivacyStore.getState().entityMap,
-    addMapping: (value, tag) => usePrivacyStore.getState().addMapping(value, tag),
-    alwaysMask: rules,
-    send: (text, approved) => {
-      const approval = { id: crypto.randomUUID(), text };
-      const target = reviewTarget.current;
-      let write: ApprovedWrite;
-      if (approved.kind === "baseline") write = { action: "create", approval };
-      else {
-        if (!target) throw new Error("The response review has no saved exercise target.");
-        write = { action: "response", approval, command: {
-          sessionId: target.sessionId, expectedRevision: target.revision, key: crypto.randomUUID(),
-        } };
-      }
-      setPending(write);
-      setReview(undefined);
-      void run(() => save(write));
-    },
+    if ((!sessionPrivacy || privacyProblem) && current.kind === "response") {
+      setPrivacyProblem("This session's browser-private privacy context is unavailable. Response submission is blocked.");
+      return { status: "blocked" as const, problems: ["Restore or reassociate this session's browser-private privacy context before reviewing a response."] };
+    }
+    const candidate: LocalSessionPrivacy = sessionPrivacy
+      ? { ...sessionPrivacy, entityMap: { ...sessionPrivacy.entityMap }, alwaysMask: [...sessionPrivacy.alwaysMask] }
+      : {
+          version: 1,
+          baselineApprovalId: baselineApprovalId.current ?? crypto.randomUUID(),
+          entityMap: {},
+          alwaysMask: current.alwaysMask.map(term => typeof term === "string" ? term : { ...term }),
+        };
+    const approver = createApprover({
+      ledger: () => candidate.entityMap,
+      addMapping: (value, tag) => { candidate.entityMap[tag] = value; },
+      alwaysMask: () => candidate.alwaysMask,
+      send: (text, approved) => {
+        const storage = getLocalPrivacyStorage();
+        const approval = {
+          id: approved.kind === "baseline" ? candidate.baselineApprovalId : crypto.randomUUID(),
+          text,
+        };
+        const target = reviewTarget.current;
+        if (approved.kind === "baseline") {
+          if (!storage || !saveLocalPrivacyDraft(storage, candidate)) {
+            setError("Browser-private masking context could not be saved (storage may be blocked or full). No briefing was sent. Allow local site storage and review again.");
+            return;
+          }
+          setSessionPrivacy(candidate);
+        } else {
+          if (!target || !storage || !saveLocalSessionPrivacy(storage, target.sessionId, candidate)) {
+            setPrivacyProblem("Browser storage could not save this session's updated privacy context. The response was not sent; free or allow local site storage, then review again.");
+            return;
+          }
+          setSessionPrivacy(candidate);
+          setPrivacyProblem(undefined);
+        }
+
+        const write: ApprovedWrite = approved.kind === "baseline"
+          ? { action: "create", approval }
+          : target
+            ? { action: "response", approval, command: {
+                sessionId: target.sessionId, expectedRevision: target.revision, key: crypto.randomUUID(),
+              } }
+            : (() => { throw new Error("The response review has no saved exercise target."); })();
+        setPending(write);
+        setReview(undefined);
+        void run(() => save(write));
+      },
     });
-    return approver.current(current);
+    return approver(current);
   };
   const openReview = (kind: "baseline" | "response") => {
     if (busyRef.current || pending || review) return;
     const profile = useHouseholdStore.getState().profile;
-    const privacy = usePrivacyStore.getState();
-    const mask = [...privacy.alwaysMask, ...privateTerms(profile)];
-    reviewTarget.current = session ? { sessionId: session.id, revision: session.revision } : undefined;
+    if (kind === "baseline") {
+      setPairing(undefined);
+      setSession(undefined);
+      setSessionPrivacy(undefined);
+      setPrivacyProblem(undefined);
+      setInput("");
+      reviewTarget.current = undefined;
+      baselineApprovalId.current = crypto.randomUUID();
+      const privacy = usePrivacyStore.getState();
+      const context = newLocalSessionPrivacy(baselineApprovalId.current, [
+        ...privacy.alwaysMask,
+        ...privateTerms(profile),
+      ]);
+      setSessionPrivacy(context);
+      setReview(prepareReview("baseline", transform => engineBaseline(profile, transform), context.entityMap, context.alwaysMask, { profile }));
+      setNotice(undefined);
+      setBlocked(undefined);
+      return;
+    }
+    if (!session || !sessionPrivacy || privacyProblem) {
+      setPrivacyProblem("This session's browser-private privacy context is unavailable. Response submission is blocked; current household details will not be used as a substitute.");
+      return;
+    }
+    reviewTarget.current = { sessionId: session.id, revision: session.revision };
     setNotice(undefined);
     setBlocked(undefined);
-    setReview(kind === "baseline"
-      ? prepareReview("baseline", transform => engineBaseline(profile, transform), privacy.entityMap, mask, { profile })
-      : prepareReview("response", transform => transform(input), privacy.entityMap, mask));
+    setReview(prepareReview("response", transform => transform(input), sessionPrivacy.entityMap, sessionPrivacy.alwaysMask));
   };
   const disabled = busy || !!review || !!pending;
   return (
@@ -137,7 +204,9 @@ export default function ConnectionsPage() {
       </p>
       <p className="text-sm text-ink-2">
         This is a separate exercise from the ordinary API exercise screen. Accepted results stay masked here,
-        including after restart. Masking is not guaranteed anonymity. Data is not encrypted.
+        including after restart. Its private masking context is kept separately in this browser. If that context
+        is missing or damaged, responses are blocked rather than guessed from the current household or global map.
+        Masking is not guaranteed anonymity. Data is not encrypted.
       </p>
       <p className="text-sm text-ink-2">Unreviewed typing, previews and unconfirmed retry copies stay in this tab only.
         Refresh saved sessions before repeating an operation whose result is uncertain. Locking setup does not revoke paired connections;
@@ -171,6 +240,11 @@ export default function ConnectionsPage() {
               <Button key={value.id} variant="outline" disabled={disabled} onClick={() => {
                 setPairing(undefined);
                 setInput("");
+                setSession(undefined);
+                setSessionPrivacy(undefined);
+                setPrivacyProblem(undefined);
+                setReview(undefined);
+                reviewTarget.current = undefined;
                 void run(() => refresh(value.id));
               }}>Resume {value.id.slice(0, 8)} · {value.phase}</Button>
             ))}
@@ -187,6 +261,11 @@ export default function ConnectionsPage() {
           </section>}
           {session && <section className="space-y-4 rounded-panel border border-line p-4">
             <h2 className="text-lg font-semibold">Exercise {session.id.slice(0, 8)} · {session.phase}</h2>
+            {privacyProblem && <div role="alert" aria-label="Privacy context unavailable" className="space-y-2 rounded-control border border-line p-3">
+              <h3 className="font-semibold">Privacy context unavailable</h3>
+              <p>{privacyProblem} Responses are blocked. ReadyState will not infer safety from the current household or another exercise&apos;s privacy map.</p>
+              <p>If this session was just created, use &ldquo;Refresh accepted results&rdquo; to retry browser-local association. If the context is still missing or corrupt, this saved session is read-only; create a new local session after reviewing its briefing.</p>
+            </div>}
             <details><summary>Approved masked briefing</summary><p className="whitespace-pre-wrap break-words">{session.baseline.text}</p></details>
             {session.events.map(event => <article key={event.id} className="space-y-2 border-t border-line pt-3">
               <h3 className="font-semibold">{event.turn.time_elapsed} · Accepted simulated event</h3>
@@ -201,7 +280,17 @@ export default function ConnectionsPage() {
               <ul>{event.turn.suggested_actions.map((text, index) => <li key={index}>Suggested step: {text}</li>)}</ul>
               <ul>{event.turn.response_options.map((text, index) => <li key={index}>{text}</li>)}</ul>
             </article>)}
-            {session.pendingResponse && <p className="whitespace-pre-wrap break-words">Approved response waiting for the assistant: {session.pendingResponse.text}</p>}
+            {session.pendingResponse && <div className="space-y-2">
+              <p className="whitespace-pre-wrap break-words">Approved response waiting for the assistant: {session.pendingResponse.text}</p>
+              <p className="text-sm text-ink-2">Withdrawing removes this response from future context and invalidates its outstanding task.
+                It cannot recall information the connector or Claude has already retrieved.</p>
+              <Button className="max-w-full whitespace-normal" variant="outline" disabled={disabled} onClick={() => void run(async () => {
+                await call({ action: "withdraw-response", command: { sessionId: session.id, expectedRevision: session.revision, key: crypto.randomUUID() } });
+                setInput("");
+                setPairing(undefined);
+                await refresh(session.id);
+              })}>Withdraw approved response</Button>
+            </div>}
             {session.pendingResponse && !session.task && <details className="space-y-2">
               <summary>Optional shorter crisis interval</summary>
               <p className="text-sm text-ink-2">Normally the clock advances 6-12 hours. This authorizes one shorter crisis step;
@@ -218,7 +307,7 @@ export default function ConnectionsPage() {
               <label htmlFor="local-response" className="block font-semibold">Your next decision</label>
               <textarea id="local-response" value={input} disabled={disabled} onChange={event => setInput(event.target.value)}
                 className="min-h-28 w-full rounded-control border border-line p-2" />
-              <Button disabled={disabled || !input.trim()} onClick={() => openReview("response")}>Review response</Button>
+              <Button disabled={disabled || !input.trim() || !sessionPrivacy || !!privacyProblem} onClick={() => openReview("response")}>Review response</Button>
             </div>}
             {session.task && <Button className="max-w-full whitespace-normal" variant="outline" disabled={disabled} onClick={() => void run(async () => {
               await call({ action: "cancel", command: { sessionId: session.id, expectedRevision: session.revision, key: crypto.randomUUID() } });
@@ -236,6 +325,7 @@ export default function ConnectionsPage() {
               <p className="text-sm text-ink-2">Write access does not permit approving participant responses, changing the household,
                 replacing history or granting more connections. Share the pairing code only with your local connector.</p>
               <Button className="max-w-full whitespace-normal" disabled={disabled} onClick={() => void run(async () => {
+                setPairing(undefined);
                 const next = z.object({ code: z.string(), expiresAt: z.number() }).parse(await call({ action: "pair", sessionId: session.id, permission }));
                 setPairing(next); await refresh(session.id);
               })}>Create five-minute pairing code</Button>
@@ -264,9 +354,24 @@ export default function ConnectionsPage() {
         onEdit={text => setReview(editReview(review, text))}
         onBack={() => setReview(undefined)}
         onMask={value => {
-          const store = usePrivacyStore.getState();
-          store.setAlwaysMask([...store.alwaysMask, value]);
-          setReview(prepareReview(review.kind, review.build, store.entityMap, rules(review), review.start));
+          if (!sessionPrivacy) {
+            setError("Browser-private masking context is unavailable. This review cannot add a rule or send until its context is restored.");
+            return;
+          }
+          const nextContext: LocalSessionPrivacy = {
+            ...sessionPrivacy,
+            alwaysMask: [...sessionPrivacy.alwaysMask, value],
+          };
+          if (review.kind === "response") {
+            const storage = getLocalPrivacyStorage();
+            if (!session || !storage || !saveLocalSessionPrivacy(storage, session.id, nextContext)) {
+              setPrivacyProblem("Browser storage could not save this session's updated privacy context. The response was not sent; free or allow local site storage, then review again.");
+              return;
+            }
+          }
+          setSessionPrivacy(nextContext);
+          setPrivacyProblem(undefined);
+          setReview(prepareReview(review.kind, review.build, nextContext.entityMap, nextContext.alwaysMask, review.start));
           setNotice("Masking rules updated. Review the rebuilt text.");
         }}
         onSend={() => {

@@ -157,6 +157,18 @@ retry the exact approved text, reference and revision from this tab.
 Unreviewed typing/previews/retries do not survive tab closure; refresh saved
 state before repeating an operation with an uncertain result.
 
+Each local session has its own browser-private masking context, associated with
+its approved briefing reference. Its original private terms and tag mappings
+survive reloads without modifying the ordinary API exercise's global ledger.
+Changing the current household does not change an older session's privacy
+context. The context is saved before the approved text can leave the browser;
+blocked/full storage prevents transmission. Missing or corrupt context makes a
+saved session read-only rather than substituting another household's terms.
+Refresh can retry association from an interrupted creation's private draft.
+Otherwise create a new session and review its briefing again. These mappings
+contain private information, remain unencrypted in this browser, and are not
+stored in the exercise database.
+
 Debrief-task acceptance/repair, evidence-tool pagination, ordinary API migration,
 automatic accepted-state notifications and the MCP adapter remain subsequent
 increments. The optional short-step control sends only a displayed fixed
@@ -231,7 +243,10 @@ Once setup is unlocked:
    Until then, fixture tools can retrieve/submit a candidate and the browser's
    Refresh shows only accepted results. A ReadyState button does not wake Claude.
 5. Review each participant response before release. Cancel an outstanding task
-   to invalidate it while preserving a pending approved response.
+   to invalidate it while preserving a pending approved response. Withdraw an
+   approved response to remove it from future context and invalidate its task
+   before reviewing a replacement. Withdrawal cannot recall information a
+   connector or Claude has already retrieved.
 6. Revoke a code/connection to deny future requests and invalidate outstanding
    work without deleting accepted history. Locking setup ends only the owner
    browser session, not independently paired connections.
@@ -244,6 +259,14 @@ Do **not** delete either database as a login-recovery shortcut.
 If only one of the two database files exists, startup refuses to create its
 missing counterpart. Inspect/restore the complete local data pair rather than
 silently replacing owner identity or hiding previously saved sessions.
+Existing databases must contain the expected schema, metadata and owner row;
+empty or partially initialized files are refused without initializing them.
+Initialization is reserved for an entirely new pair. The local launcher passes
+the real source/install roots to the standalone process; data-path checks
+resolve junctions/symlinks and missing descendants before directory creation.
+Do not invoke a standalone server directly without supplying the absolute
+`READYSTATE_LOCAL_SOURCE_ROOT` and `READYSTATE_LOCAL_INSTALL_ROOT` protection
+roots. A standalone server's changed working directory is not the install root.
 
 Browser requests must have the exact configured Host and Origin; cross-site
 fetch metadata is refused. Next canonicalizes internal loopback Request URLs,
@@ -257,6 +280,8 @@ expiry, consumed-code markers, principal/session/permission metadata and stable
 owner identity. Pairing codes/tokens are generated cryptographically and returned
 only once; raw credentials are not persisted. Revocation denies the credential
 before grant cleanup; a cleanup failure is explicit and can be retried.
+Repeating a revocation after another tab already revoked the connection
+succeeds without logging the owner out.
 Keep this credential database out of exercise exports/backups intended for
 sharing. Safe full backup/delete/restore coordination for both stores, including
 connection revocation after restoration, is still a pre-release requirement.
@@ -276,6 +301,12 @@ stale-response refresh, task cancellation, 1280/390/320px layouts, keyboard
 focus, reload, actual server process restart and connection revocation. External
 and model requests are intercepted/blocked; none are attempted in the passing
 walkthrough, and no browser runtime errors are observed.
+The review-fix walkthrough also covers approved-response withdrawal and
+replacement, invalidated-task refusal, masking after changing the current
+household, missing/corrupt privacy context, quota refusal before transmission,
+pairing-code hiding on session creation/switching, and repeated revocation
+without owner logout. Storage regressions separately exercise empty/incomplete
+stores, missing owners and source/install-tree confinement including links.
 
 This is **interface inspection**, not human usability or live Claude testing.
 Physical phones, Safari, Firefox, Windows installer ACL provisioning, extension

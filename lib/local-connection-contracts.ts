@@ -13,6 +13,7 @@ export const localBrowserCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("create"), approval }).strict(),
   z.object({ action: z.literal("state"), sessionId: id }).strict(),
   z.object({ action: z.literal("response"), command, approval }).strict(),
+  z.object({ action: z.literal("withdraw-response"), command }).strict(),
   z.object({ action: z.literal("cancel"), command }).strict(),
   z.object({ action: z.literal("short-step"), command, reason: z.literal(LOCAL_SHORT_STEP_REASON) }).strict(),
   z.object({ action: z.literal("pair"), sessionId: id, permission: z.enum(["read", "write"]) }).strict(),

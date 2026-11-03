@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { lstatSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 
@@ -13,12 +14,38 @@ const connectionSchema = z.object({
   permission: z.enum(["read", "write"]), expires: z.number(), paired: z.number().int(),
 });
 
+function fileIsAbsent(filename: string) {
+  try { lstatSync(filename); return false; }
+  catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return true;
+    throw error;
+  }
+}
+
+function validateCredentialDatabase(db: DatabaseSync) {
+  const version = db.prepare("PRAGMA user_version").get()?.user_version;
+  const app = db.prepare("PRAGMA application_id").get()?.application_id;
+  const names = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map(row => row.name).join(",");
+  if (version !== 1 || app !== 1381188931
+    || names !== "connection_codes,connection_meta,connection_owners,connections") {
+    throw new Error("Unrecognized or uninitialized local credential database. Refusing to reset it.");
+  }
+  const owner = db.prepare("SELECT value FROM connection_meta WHERE key = 'owner'").get()?.value;
+  if (typeof owner !== "string") throw new Error("Local credential database is missing its owner identity. Refusing to replace it.");
+  return z.string().uuid().parse(owner);
+}
+
 /** Separate credential database: hashes only, excluded from exercise exports. */
 export class LocalConnectionAuth {
   private readonly db: DatabaseSync;
   readonly owner: string;
 
-  constructor(filename: string, private readonly ownerCode: string, private readonly now = Date.now) {
+  constructor(
+    filename: string,
+    private readonly ownerCode: string,
+    private readonly now = Date.now,
+    allowInitialization = fileIsAbsent(filename),
+  ) {
     if (!validSecret(ownerCode)) throw new Error("Local owner setup requires a random 32-byte hexadecimal code.");
     this.db = new DatabaseSync(filename);
     try {
@@ -26,29 +53,34 @@ export class LocalConnectionAuth {
       const version = this.db.prepare("PRAGMA user_version").get()?.user_version;
       const app = this.db.prepare("PRAGMA application_id").get()?.application_id;
       const names = this.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map(row => row.name).join(",");
-      if ((version !== 0 || app !== 0 || names) && (version !== 1 || app !== 1381188931
-        || names !== "connection_codes,connection_meta,connection_owners,connections")) {
-        throw new Error("Unrecognized local credential database. Refusing to reset it.");
+      if (version === 0 && app === 0 && names === "") {
+        if (!allowInitialization) throw new Error("Local credential database is uninitialized. Refusing to replace it.");
+        this.db.exec(`
+          CREATE TABLE connection_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+          CREATE TABLE connection_codes (hash TEXT PRIMARY KEY);
+          CREATE TABLE connection_owners (hash TEXT PRIMARY KEY, expires INTEGER NOT NULL);
+          CREATE TABLE connections (
+            id TEXT PRIMARY KEY, principal TEXT NOT NULL UNIQUE, session_id TEXT NOT NULL,
+            permission TEXT NOT NULL, code_hash TEXT UNIQUE, token_hash TEXT UNIQUE,
+            expires INTEGER NOT NULL, paired INTEGER NOT NULL DEFAULT 0
+          );
+          PRAGMA application_id = 1381188931;
+          PRAGMA user_version = 1;
+        `);
+        this.db.prepare("INSERT INTO connection_meta VALUES ('owner', ?)").run(randomUUID());
       }
-      this.db.exec(`
-        CREATE TABLE IF NOT EXISTS connection_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS connection_codes (hash TEXT PRIMARY KEY);
-        CREATE TABLE IF NOT EXISTS connection_owners (hash TEXT PRIMARY KEY, expires INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS connections (
-          id TEXT PRIMARY KEY, principal TEXT NOT NULL UNIQUE, session_id TEXT NOT NULL,
-          permission TEXT NOT NULL, code_hash TEXT UNIQUE, token_hash TEXT UNIQUE,
-          expires INTEGER NOT NULL, paired INTEGER NOT NULL DEFAULT 0
-        );
-        PRAGMA application_id = 1381188931;
-        PRAGMA user_version = 1;
-      `);
-      this.db.prepare("INSERT OR IGNORE INTO connection_meta VALUES ('owner', ?)").run(randomUUID());
-      this.owner = z.string().uuid().parse(this.db.prepare("SELECT value FROM connection_meta WHERE key = 'owner'").get()?.value);
+      this.owner = validateCredentialDatabase(this.db);
       this.db.exec("COMMIT");
     } catch (error) {
       this.db.close();
       throw error;
     }
+  }
+
+  static assertInitialized(filename: string) {
+    const db = new DatabaseSync(filename, { readOnly: true });
+    try { validateCredentialDatabase(db); }
+    finally { db.close(); }
   }
 
   close() { this.db.close(); }
@@ -124,8 +156,9 @@ export class LocalConnectionAuth {
   }
 
   revoke(connectionId: string, revokeGrant: (sessionId: string, principal: string) => void) {
+    z.string().uuid().parse(connectionId);
     const row = this.db.prepare("SELECT * FROM connections WHERE id = ?").get(connectionId);
-    if (!row) throw new LocalConnectionDenied();
+    if (!row) return;
     const connection = connectionSchema.parse(row);
     // Deny the credential first, including if grant cleanup fails and must be retried.
     this.db.prepare("UPDATE connections SET token_hash = NULL, code_hash = NULL WHERE id = ?").run(connectionId);

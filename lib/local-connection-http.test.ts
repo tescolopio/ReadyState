@@ -1,6 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -29,7 +28,7 @@ let exercises: LocalExerciseService;
 let cookie: string;
 let now: number;
 beforeEach(async () => {
-  directory = mkdtempSync(join(tmpdir(), "readystate-connection-"));
+  directory = mkdtempSync(join(process.cwd(), ".readystate-connection-"));
   ownerCode = secret();
   now = Date.now();
   auth = new LocalConnectionAuth(join(directory, "auth.sqlite"), ownerCode, () => now);
@@ -197,6 +196,69 @@ describe("local browser / connector boundary", () => {
     expect(() => auth.revoke(paired.id, () => { throw new Error("Synthetic cleanup failure"); })).toThrow("Synthetic cleanup failure");
     expect(() => auth.authenticateConnector(paired.token, created.sessionId, false)).toThrow(LocalConnectionDenied);
     expect((await browser({ action: "revoke", connectionId: paired.id })).status).toBe(200);
+    expect((await browser({ action: "revoke", connectionId: paired.id })).status).toBe(200);
+    expect((await browser({ action: "status" })).status).toBe(200);
+  });
+
+  it("makes cross-tab repeated revocation harmless without clearing the authenticated owner cookie", async () => {
+    const created = await session();
+    const paired = await pair(created.sessionId);
+    const action = { action: "revoke", connectionId: paired.id };
+    const tabCookie = cookie;
+    const first = await browser(action, tabCookie);
+    const revision = exercises.getState(created.sessionId, auth.owner).revision;
+    const second = await browser(action, tabCookie);
+    for (const result of [first, second]) {
+      expect(result.status).toBe(200);
+      expect(await result.json()).toEqual({ revoked: true });
+      expect(result.headers.get("set-cookie")).toBeNull();
+    }
+    expect(exercises.getState(created.sessionId, auth.owner).revision).toBe(revision);
+    expect((await browser({ action: "status" }, tabCookie)).status).toBe(200);
+    expect((await connector({ action: "state", sessionId: created.sessionId }, paired.token)).status).toBe(401);
+    expect((await browser(action, "")).status).toBe(401);
+    expect((await browser(action, `readystate-local-owner=${paired.token}`)).status).toBe(401);
+    expect((await connector(action, paired.token)).status).toBe(409);
+    expect((await browser({ action: "revoke", connectionId: "malformed" })).status).toBe(409);
+    expect(() => auth.revoke("malformed", () => {})).toThrow();
+    const cleanup = vi.fn();
+    expect(() => auth.revoke(randomUUID(), cleanup)).not.toThrow();
+    expect(cleanup).not.toHaveBeenCalled();
+  });
+
+  it("allows only the authenticated browser to withdraw a response and prevents stale connector acceptance", async () => {
+    const created = await session();
+    const paired = await pair(created.sessionId);
+    const baselineTask = generatedTask.parse(await (await connector({ action: "task", sessionId: created.sessionId }, paired.token)).json());
+    expect((await connector({ action: "turn", command: { sessionId: created.sessionId, expectedRevision: 0, key: randomUUID() },
+      taskId: baselineTask.id, candidate: initialTurn }, paired.token)).status).toBe(200);
+    const command = (expectedRevision: number) => ({ sessionId: created.sessionId, expectedRevision, key: randomUUID() });
+    expect((await browser({ action: "response", command: command(1),
+      approval: { id: randomUUID(), text: "I check supplies." } })).status).toBe(200);
+    const task = generatedTask.parse(await (await connector({ action: "task", sessionId: created.sessionId }, paired.token)).json());
+    const action = { action: "withdraw-response", command: command(2) };
+    expect((await connector(action, paired.token)).status).toBe(409);
+    expect((await browser(action, "")).status).toBe(401);
+    expect((await browser(action, `readystate-local-owner=${paired.token}`)).status).toBe(401);
+    const withdrawn = await browser(action);
+    expect(withdrawn.status).toBe(200);
+    expect(await withdrawn.json()).toEqual({ sessionId: created.sessionId, revision: 3 });
+    expect(await (await browser(action)).json()).toEqual({ sessionId: created.sessionId, revision: 3 });
+    const state = localConnectionStateSchema.parse(await (await browser({ action: "state", sessionId: created.sessionId })).json());
+    expect(state.pendingResponse).toBeUndefined();
+    expect(state.task).toBeUndefined();
+    expect(state.events).toHaveLength(1);
+    expect((await connector({ action: "task", sessionId: created.sessionId }, paired.token)).status).toBe(409);
+    const nextTurn = { ...initialTurn, feedback: { covered: ["The recorded decision."], consider: [], why: "Keep supplies usable." },
+      hours_elapsed: 6, time_elapsed: "Hour 6" };
+    const stale = await connector({ action: "turn", command: command(3), taskId: task.id, candidate: nextTurn }, paired.token);
+    expect(stale.status).toBe(409);
+    expect((await stale.json()).code).toBe("stale-task");
+    expect((await browser({ action: "response", command: command(3),
+      approval: { id: randomUUID(), text: "I contact someone instead." } })).status).toBe(200);
+    const replacement = generatedTask.parse(await (await connector({ action: "task", sessionId: created.sessionId }, paired.token)).json());
+    expect(replacement.id).not.toBe(task.id);
+    expect((await connector({ action: "turn", command: command(4), taskId: replacement.id, candidate: nextTurn }, paired.token)).status).toBe(200);
   });
 
   it("releases only the fixed owner-approved short-step reason, never arbitrary unreviewed free text", async () => {

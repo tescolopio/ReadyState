@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { lstatSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 
@@ -71,6 +72,26 @@ function canonical(value: unknown): string {
 }
 const digest = (value: unknown) => createHash("sha256").update(canonical(value)).digest("hex");
 
+function fileIsAbsent(filename: string) {
+  try { lstatSync(filename); return false; }
+  catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return true;
+    throw error;
+  }
+}
+
+function validateExerciseDatabase(db: DatabaseSync) {
+  const application = db.prepare("PRAGMA application_id").get()?.application_id;
+  const version = db.prepare("PRAGMA user_version").get()?.user_version;
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all();
+  const names = tables.map(row => row.name).sort().join(",");
+  if (application !== 1381188952 || version !== 1
+    || names !== "exercise_access,exercise_receipts,exercise_sessions"
+    || !db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'exercise_approved_baseline'").get()) {
+    throw new LocalExerciseError("corrupt-storage");
+  }
+}
+
 /**
  * Internal local-app service, not a network/MCP endpoint. Callers must authenticate
  * principals before invoking it; a principal ID is not a bearer credential.
@@ -79,7 +100,7 @@ const digest = (value: unknown) => createHash("sha256").update(canonical(value))
 export class LocalExerciseService {
   private readonly db: DatabaseSync;
 
-  constructor(filename: string) {
+  constructor(filename: string, allowInitialization = fileIsAbsent(filename)) {
     this.db = new DatabaseSync(filename);
     try {
       this.db.exec("PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
@@ -87,33 +108,37 @@ export class LocalExerciseService {
         const application = this.db.prepare("PRAGMA application_id").get()?.application_id;
         const version = this.db.prepare("PRAGMA user_version").get()?.user_version;
         const tables = this.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all();
-        const initialized = application === 1381188952 && version === 1;
-        const names = tables.map(row => row.name).sort().join(",");
-        if ((application !== 0 || version !== 0 || tables.length) && (!initialized
-          || names !== "exercise_access,exercise_receipts,exercise_sessions")) {
-          throw new LocalExerciseError("corrupt-storage");
+        if (application === 0 && version === 0 && tables.length === 0) {
+          if (!allowInitialization) throw new LocalExerciseError("corrupt-storage");
+          this.db.exec(`
+            CREATE TABLE exercise_sessions (id TEXT PRIMARY KEY, state TEXT NOT NULL);
+            CREATE TABLE exercise_access (
+              session_id TEXT NOT NULL REFERENCES exercise_sessions(id), principal TEXT NOT NULL,
+              can_write INTEGER NOT NULL CHECK (can_write IN (0,1)), PRIMARY KEY(session_id, principal)
+            );
+            CREATE TABLE exercise_receipts (
+              session_id TEXT NOT NULL REFERENCES exercise_sessions(id), principal TEXT NOT NULL,
+              key TEXT NOT NULL, fingerprint TEXT NOT NULL, result TEXT NOT NULL,
+              PRIMARY KEY(session_id, principal, key)
+            );
+            CREATE UNIQUE INDEX exercise_approved_baseline
+              ON exercise_sessions(json_extract(state, '$.owner'), json_extract(state, '$.baseline.id'));
+            PRAGMA application_id = 1381188952;
+            PRAGMA user_version = 1;
+          `);
         }
-        this.db.exec(`
-          CREATE TABLE IF NOT EXISTS exercise_sessions (id TEXT PRIMARY KEY, state TEXT NOT NULL);
-          CREATE TABLE IF NOT EXISTS exercise_access (
-            session_id TEXT NOT NULL REFERENCES exercise_sessions(id), principal TEXT NOT NULL,
-            can_write INTEGER NOT NULL CHECK (can_write IN (0,1)), PRIMARY KEY(session_id, principal)
-          );
-          CREATE TABLE IF NOT EXISTS exercise_receipts (
-            session_id TEXT NOT NULL REFERENCES exercise_sessions(id), principal TEXT NOT NULL,
-            key TEXT NOT NULL, fingerprint TEXT NOT NULL, result TEXT NOT NULL,
-            PRIMARY KEY(session_id, principal, key)
-          );
-          CREATE UNIQUE INDEX IF NOT EXISTS exercise_approved_baseline
-            ON exercise_sessions(json_extract(state, '$.owner'), json_extract(state, '$.baseline.id'));
-          PRAGMA application_id = 1381188952;
-          PRAGMA user_version = 1;
-        `);
+        validateExerciseDatabase(this.db);
       });
     } catch (error) {
       this.db.close();
       throw error;
     }
+  }
+
+  static assertInitialized(filename: string) {
+    const db = new DatabaseSync(filename, { readOnly: true });
+    try { validateExerciseDatabase(db); }
+    finally { db.close(); }
   }
 
   close() { this.db.close(); }
@@ -266,6 +291,17 @@ export class LocalExerciseService {
         throw new LocalExerciseError("idempotency-conflict");
       }
       state.pendingResponse = response;
+      return {};
+    }, true);
+  }
+
+  /** Denies future release/acceptance; cannot recall data already retrieved by Claude. */
+  withdrawApprovedResponse(owner: string, command: ExerciseCommand): ExerciseReceipt {
+    return this.mutate(owner, command, "withdraw-response", null, state => {
+      if (state.phase !== "loop" || !state.pendingResponse) throw new LocalExerciseError("wrong-phase");
+      state.pendingResponse = undefined;
+      state.task = undefined;
+      state.shortStepReason = undefined;
       return {};
     }, true);
   }
