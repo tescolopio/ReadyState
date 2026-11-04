@@ -20,7 +20,8 @@ Local evidence applies to code commit
 - The private Windows x64 archive has SHA-256
   `2E726585CA7569473F17CDEAE4772D64A96F5DA695B4BD4D33C06CC984AE947D`.
   This archive is a test artifact, not a GitHub release.
-- GitHub CI for this code commit is pending.
+- GitHub CI for the PR head, including Docker and Windows/Linux bundles,
+  **PASS**. Final-head review is pending.
 
 This is **fiction-only evidence, not live Claude qualification**. Subsequent
 code changes invalidate affected evidence and require the affected checks to
@@ -49,6 +50,24 @@ The installer refuses an existing destination; it does not upgrade in place.
 Synthetic `.env.local` and user-file markers survived refusal and uninstall.
 Browser-managed household/settings data was not exercised in this package
 test. No Claude executable detection or sign-in was performed during packaging.
+
+### Native sign-in and status-only check
+
+The status UI can be used while model inference remains disabled, but the
+optional local connection route is off in the package by default. To test that
+stage, first install the official Claude Code runtime separately and complete
+`claude auth login` in its native terminal/browser flow. Then create
+`.env.local` beside the installed `launch.mjs` with self-hosted mode,
+`READYSTATE_LOCAL_CONNECTIONS=1`, the loopback origin
+`http://localhost:3000`, a private absolute `READYSTATE_LOCAL_DATA_DIR`, and a
+fresh 64-character lowercase-hex `READYSTATE_LOCAL_OWNER_CODE`. Keep
+`READYSTATE_CLAUDE_CLI_EVALUATION=0` and all provider API keys unset.
+
+In ReadyState, **Check installed Claude and sign-in** runs only
+`claude --version` and `claude auth status`; it does not generate a model
+response. These calls were verified in source/tests, not against a live Claude
+installation. No actual Claude CLI detection, sign-in or status request has
+been performed. Do not select **Send fictional diagnostic to Claude**.
 
 ## In-ReadyState CLI diagnostic primary gate
 
