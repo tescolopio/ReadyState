@@ -23,8 +23,9 @@ Local evidence applies to code commit
 - GitHub CI for the PR head, including Docker and Windows/Linux bundles,
   **PASS**. Final-head review is pending.
 
-This is **fiction-only evidence, not live Claude qualification**. Subsequent
-code changes invalidate affected evidence and require the affected checks to
+The automated results above are **fiction-only evidence, not live Claude
+qualification**. The user-reported status-only baseline below is separate.
+Subsequent code changes invalidate affected evidence and require the affected checks to
 be rerun; these results do not qualify a later code revision.
 
 ### Private Windows test install
@@ -51,6 +52,28 @@ Synthetic `.env.local` and user-file markers survived refusal and uninstall.
 Browser-managed household/settings data was not exercised in this package
 test. No Claude executable detection or sign-in was performed during packaging.
 
+### User-reported Windows hands-on baseline
+
+The user reports successful Windows installation/startup, owner unlock and
+this live ReadyState status:
+
+> Runtime: Claude Code 2.1.314. Authentication: native-subscription. Evaluation: disabled.
+
+- Tested package source: `6d1da4fedbc2fff1c3b52d176f183ebf29ba7811`.
+- Tested archive SHA-256:
+  `2E726585CA7569473F17CDEAE4772D64A96F5DA695B4BD4D33C06CC984AE947D`.
+- Preserved baseline installation:
+  `C:\Users\DigitalByooki\AppData\Local\ReadyState-ClaudeStatus-9e46c3d1e5bf4346bcb7488b56da3ccf\Installed`.
+
+This is **user-reported live status evidence**, not an automated fixture
+result or an independently repeated inspection. It establishes only the
+reported Windows installation/startup, owner unlock and status display, not a
+real Claude response or full connection qualification. Evaluation remains
+disabled. Real response validation, signed-out/expired-authentication behavior
+and Linux hands-on qualification are all **pending**. Preserve this baseline;
+this documentation update does not inspect or change the installation, secret
+configuration, data, credentials or running processes.
+
 ### Native sign-in and status-only check
 
 The status UI can be used while model inference remains disabled, but the
@@ -65,9 +88,11 @@ fresh 64-character lowercase-hex `READYSTATE_LOCAL_OWNER_CODE`. Keep
 
 In ReadyState, **Check installed Claude and sign-in** runs only
 `claude --version` and `claude auth status`; it does not generate a model
-response. These calls were verified in source/tests, not against a live Claude
-installation. No actual Claude CLI detection, sign-in or status request has
-been performed. Do not select **Send fictional diagnostic to Claude**.
+response. Automated coverage uses fictional CLI fixtures; the separate
+user-reported Windows baseline above records live runtime/authentication
+status only. It does not establish a newly performed native sign-in flow or
+signed-out/expired-authentication recovery. Do not select **Send fictional
+diagnostic to Claude**.
 
 ## In-ReadyState CLI diagnostic primary gate
 
@@ -75,8 +100,9 @@ The next success criterion is a validated request/response entirely inside
 ReadyState's interface. MCP discovery in Claude Desktop is a separate optional
 path, documented below, and does not satisfy this gate.
 
-**Status: source-only, inference OFF, live qualification and subscription-use
-clarification pending.** Do not advertise subscription support, turn this into
+**Status: user-reported Windows status-only baseline recorded; inference OFF,
+real-response qualification and subscription-use clarification pending.**
+Do not advertise subscription support, turn this into
 a release, or infer approval from Hermes's implementation. Anthropic documents
 [programmatic CLI operation](https://code.claude.com/docs/en/headless) and
 [conditional hosting of its unmodified CLI](https://code.claude.com/docs/en/legal-and-compliance);
