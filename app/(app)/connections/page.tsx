@@ -45,6 +45,7 @@ export default function ConnectionsPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  const operationDone = useRef<Promise<void> | undefined>(undefined);
   const [input, setInput] = useState("");
   const [pairing, setPairing] = useState<{ code: string; expiresAt: number }>();
   const [permission, setPermission] = useState<"read" | "write">("read");
@@ -121,6 +122,8 @@ export default function ConnectionsPage() {
   const run = async (operation: () => Promise<void>) => {
     if (busyRef.current) return;
     busyRef.current = true;
+    let release!: () => void;
+    operationDone.current = new Promise<void>(resolve => { release = resolve; });
     setBusy(true);
     setError("");
     try { await operation(); }
@@ -132,7 +135,23 @@ export default function ConnectionsPage() {
       }
       setError(failure instanceof Error ? failure.message : "Local connection operation failed.");
     }
-    finally { busyRef.current = false; setBusy(false); }
+    finally {
+      busyRef.current = false;
+      operationDone.current = undefined;
+      setBusy(false);
+      release();
+    }
+  };
+  const refreshSavedResult = async (sessionId: string) => {
+    while (selectedSessionId.current === sessionId) {
+      const currentOperation = operationDone.current;
+      if (currentOperation) {
+        await currentOperation;
+        continue;
+      }
+      await run(() => refresh(sessionId));
+      if (!busyRef.current) return;
+    }
   };
   const save = async (write: ApprovedWrite) => {
     const receipt = receiptSchema.parse(await call(write));
@@ -401,7 +420,7 @@ export default function ConnectionsPage() {
               <p>This verifies transport and saving only, not scenario quality or independently verified model identity.
                 For the optional MCP connector, model selection stays in the assistant and model evidence is unavailable.</p>
               <ClaudeCliDiagnostic key={session.id} sessionId={session.id} accepted={session.events.length > 0}
-                onSaved={() => run(() => refresh(session.id))} />
+                onSaved={() => refreshSavedResult(session.id)} />
               <label htmlFor="diagnostic-session" className="block font-semibold">Diagnostic session ID</label>
               <input id="diagnostic-session" readOnly value={session.id} className="w-full rounded-control border border-line p-2 font-mono" />
               <p>Optional assistant-hosted MCP path: configure the source connector for this ID and exact origin, create a write-enabled pairing code below,

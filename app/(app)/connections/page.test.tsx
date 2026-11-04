@@ -394,6 +394,34 @@ describe("local connection send-time privacy", () => {
 });
 
 describe("local connection refresh races", () => {
+  it("refreshes a saved diagnostic after an overlapping refresh returns pre-acceptance state", async () => {
+    await startDiagnostic();
+    const diagnostic = deferred();
+    const diagnosticStarted = deferred();
+    const staleState = deferred();
+    const stateStarted = deferred();
+    diagnosticWait = diagnostic.promise;
+    onDiagnosticRequest = () => diagnosticStarted.resolve();
+    stateWaitQueue.set(sessionId, [staleState.promise]);
+    onStateRequest = id => { if (id === sessionId) stateStarted.resolve(); };
+
+    trigger("Send fictional diagnostic to Claude");
+    await diagnosticStarted.promise;
+    await click("Refresh accepted results");
+    await stateStarted.promise;
+    await act(async () => { diagnostic.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(saved.events).toHaveLength(1);
+    expect(container.textContent).toContain("Waiting for diagnostic acknowledgement");
+
+    await act(async () => { staleState.resolve(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    await waitForText("Diagnostic acknowledgement saved");
+    expect(container.textContent).not.toContain("Waiting for diagnostic acknowledgement");
+    expect([...container.querySelectorAll("button")].find(button =>
+      button.textContent?.trim() === "Send fictional diagnostic to Claude")?.disabled).toBe(true);
+    expect(requests.filter(request =>
+      (request as { action?: string }).action === "claude-diagnostic")).toHaveLength(1);
+  });
+
   it("keeps the selected session refresh current when a stale diagnostic callback arrives", async () => {
     await startDiagnostic();
     const diagnostic = deferred();
