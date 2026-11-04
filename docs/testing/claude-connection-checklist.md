@@ -94,6 +94,28 @@ status only. It does not establish a newly performed native sign-in flow or
 signed-out/expired-authentication recovery. Do not select **Send fictional
 diagnostic to Claude**.
 
+### Isolated authentication and Linux follow-up
+
+- With a fresh disposable `CLAUDE_CONFIG_DIR` and inherited authentication and
+  provider overrides cleared, the official Windows Claude Code 2.1.314
+  `auth status` exited 1 with `loggedIn=false` and `authMethod=none`.
+  The profile was removed afterward. No login, logout or model request was
+  performed, and the working Windows profile was not changed.
+- This is a **CLI-level signed-out check**, not an in-ReadyState recovery pass.
+  ReadyState's subprocess environment currently filters `CLAUDE_CONFIG_DIR`.
+  Explicit profile support is needed before testing isolated in-app
+  reauthentication. Expired-authentication recovery remains unverified.
+- Ubuntu 24.04 under WSL2 and a Linux Docker daemon are available. An existing
+  ReadyState Linux image launched and returned HTTP 200 from `/api/config`,
+  but its owner endpoint returned 404. This older image does not qualify the
+  current native Linux package, owner unlock or connection path.
+- No current Linux native bundle was available locally for hands-on testing.
+  The WSL Claude CLI is 2.1.119, below the adapter's 2.1.268 minimum, and
+  reported signed out. A current Linux bundle and supported native CLI are
+  prerequisites for the native install/unlock/detection test.
+- Disposable Linux test containers and data were removed. The Windows
+  baseline was preserved. No additional simulated suite was run.
+
 ## In-ReadyState CLI diagnostic primary gate
 
 The next success criterion is a validated request/response entirely inside
