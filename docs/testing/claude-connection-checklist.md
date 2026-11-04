@@ -3,21 +3,52 @@
 ## Verified source-only baseline (PR #41)
 
 Local evidence applies to code commit
-`16d4ed61ae914bab00d1a55905ccd966419b9fbe`:
+`6d1da4fedbc2fff1c3b52d176f183ebf29ba7811`:
 
-- Source-only tests: **773 passed, 1 skipped, 1 todo across 41 test files**;
+- Source-only tests: **774 passed, 1 skipped, 1 todo across 41 test files**;
   lint, typecheck and production build **PASS**.
 - Windows Node 24 / Microsoft Edge fictional CLI harness **PASS**: cancellation,
   usage-limit failure, explicit retry, exactly one saved SQLite event, restart
   recovery and responsive widths; **zero model calls**.
 - The new regressions cover serialized saved-result refreshes, current-session
   preservation, persisted mask-rule reload on remount and mask-draft
-  synchronization.
+  synchronization, and refreshing an accepted result after an overlapping
+  pre-acceptance refresh.
+- Windows package tests: **22 passed, 1 skipped**. Package inspection and
+  relocated-package smoke test passed; install/uninstall preserved synthetic
+  user files and refused to overwrite an existing destination.
+- The private Windows x64 archive has SHA-256
+  `2E726585CA7569473F17CDEAE4772D64A96F5DA695B4BD4D33C06CC984AE947D`.
+  This archive is a test artifact, not a GitHub release.
 - GitHub CI for this code commit is pending.
 
 This is **fiction-only evidence, not live Claude qualification**. Subsequent
 code changes invalidate affected evidence and require the affected checks to
 be rerun; these results do not qualify a later code revision.
+
+### Private Windows test install
+
+The tested archive is `ReadyState-0.1.0-windows-x64.zip`. It bundles ReadyState
+and Node 24, not Claude Code. It was built with inference disabled and provider
+keys unset. For an extracted package, run `.\start.ps1` for portable startup,
+or install to a new destination and launch it:
+
+```powershell
+.\install.ps1 -Destination "$env:LOCALAPPDATA\ReadyState-Test\Installed" -NoShortcut
+& "$env:LOCALAPPDATA\ReadyState-Test\Installed\start.ps1"
+```
+
+Keep the terminal open; Ctrl+C stops the local server. Then open the local
+ReadyState URL it prints. To remove the test app after stopping it:
+
+```powershell
+& "$env:LOCALAPPDATA\ReadyState-Test\Installed\uninstall.ps1" -RemoveInstallation
+```
+
+The installer refuses an existing destination; it does not upgrade in place.
+Synthetic `.env.local` and user-file markers survived refusal and uninstall.
+Browser-managed household/settings data was not exercised in this package
+test. No Claude executable detection or sign-in was performed during packaging.
 
 ## In-ReadyState CLI diagnostic primary gate
 
