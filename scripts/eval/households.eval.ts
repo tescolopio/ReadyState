@@ -13,14 +13,27 @@ import { readUIMessageStream, type UIMessageChunk } from "ai";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { CAPTURE_HEADER, type DebriefCapture } from "@/lib/debrief-capture";
+import { EVAL_BUDGET_HEADER, EVAL_MAX_OUTPUT_HEADER } from "@/lib/eval-call-budget";
 import { leakedTerms, privateTerms } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
 import { PRIVACY_LEAKS, TEST_HOUSEHOLDS, type TestHousehold } from "@/lib/test-households";
-import { DEBRIEF_REQUEST, OMITTED_IMPROVEMENT_NOTICE, deriveTtxState, improvementText, participantResponses, type AfterActionReport, type TtxUIMessage, type TurnOutput } from "@/lib/ttx";
+import {
+  DEBRIEF_REQUEST,
+  OMITTED_IMPROVEMENT_NOTICE,
+  TARGET_DURATION_HOURS,
+  deriveTtxState,
+  improvementText,
+  participantResponses,
+  type AfterActionReport,
+  type ProviderCallUsage,
+  type TtxUIMessage,
+  type TurnOutput,
+} from "@/lib/ttx";
 import { usePrivacyStore } from "@/store/usePrivacyStore";
 import { maskInput } from "@/utils/obfuscator";
 
 import { CHECK_CATEGORIES, contentFindings, type CheckCategory, type Finding } from "./checks";
+import { MAX_PROVIDER_CALLS_PER_REQUEST, chargeRequest, overBound, reportedTokens } from "./budget";
 import { sendWithRetries, type SendOutcome } from "./retry";
 
 const BASE_URL = process.env.EVAL_BASE_URL ?? "http://localhost:3000";
@@ -43,6 +56,26 @@ const REPLAY = process.env.EVAL_REPLAY;
  * server must also set READYSTATE_CAPTURE_DEBRIEF_DRAFTS=1 (lib/debrief-capture.ts).
  */
 const CAPTURE = process.env.EVAL_CAPTURE_DRAFTS === "1";
+/** Replay only the first N successful turns of EVAL_REPLAY, then continue live (G6: Hours 0–66 of a run that ended at Hour 72). */
+const REPLAY_TURNS = process.env.EVAL_REPLAY_TURNS ? Number(process.env.EVAL_REPLAY_TURNS) : undefined;
+/**
+ * The exercise clock the server must report before any call: set READYSTATE_EVAL_TARGET_HOURS on the local server
+ * (lib/exercise-clock.ts) to the same value. Checked whenever this or EVAL_BUDGET is set.
+ */
+const EXERCISE_HOURS = Number(process.env.EVAL_EXERCISE_HOURS ?? TARGET_DURATION_HOURS);
+/**
+ * A hard token cap for the run, enforced by the server before every provider call (lib/eval-call-budget.ts; start it
+ * with READYSTATE_EVAL_BUDGET=1). Setting it also turns off the eval's own resends, so each turn is one request.
+ */
+const BUDGET = process.env.EVAL_BUDGET ? Number(process.env.EVAL_BUDGET) : undefined;
+/** The output limit the server enforces on each provider call in a budgeted run. */
+const MAX_OUTPUT = Number(process.env.EVAL_MAX_OUTPUT ?? 2500);
+/** Without a budget, what a call without reported usage is charged: the old per-call allowance. */
+const UNBUDGETED_CALL_CHARGE = 8000;
+/** G6's target for a single provider call's input on a turn. */
+const G6_INPUT_TARGET = 5000;
+/** The run's tokens: reported by the provider, and charged against the budget. */
+const spend = { reported: 0, charged: 0 };
 
 const outDir = path.join("eval-results", new Date().toISOString().replace(/[:.]/g, "-"));
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -71,8 +104,13 @@ interface CallRecord {
   stillFailing?: string[];
   /** An improvement the server dropped after the repair, with the checks it failed. */
   omittedImprovement?: { action: string; checks: string[] };
+  /** The whole response's usage: for a debrief, the first draft plus any repair. Not one call's size: see `calls`. */
   inputTokens?: number;
   outputTokens?: number;
+  /** Each provider call's own usage, retries and repairs included. */
+  calls?: ProviderCallUsage[];
+  /** Charged against the budget: each call's reported usage, or its allowance when it reported none. */
+  charged?: number;
   turn?: TurnOutput;
   error?: string;
   /** Copied from EVAL_REPLAY without calling the model. */
@@ -113,10 +151,18 @@ const SETTINGS =
     ? { provider: process.env.EVAL_PROVIDER ?? "groq", model: process.env.EVAL_MODEL }
     : undefined;
 
+/** What's left of the run's budget: sent with each request, for the server to enforce. */
+const remainingBudget = () => (BUDGET === undefined ? undefined : Math.max(0, BUDGET - spend.charged));
+
 async function send(messages: TtxUIMessage[]): Promise<SendOutcome<TtxUIMessage>> {
+  const remaining = remainingBudget();
   const res = await fetch(`${BASE_URL}/api/ttx`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(CAPTURE ? { [CAPTURE_HEADER]: "1" } : {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(CAPTURE ? { [CAPTURE_HEADER]: "1" } : {}),
+      ...(remaining !== undefined ? { [EVAL_BUDGET_HEADER]: String(remaining), [EVAL_MAX_OUTPUT_HEADER]: String(MAX_OUTPUT) } : {}),
+    },
     body: JSON.stringify({ messages, settings: SETTINGS }),
   });
   if (!res.ok || !res.body) return { error: `HTTP ${res.status}: ${(await res.text()).slice(0, 300)}` };
@@ -159,6 +205,7 @@ function loadReplay(householdId: string) {
   if (!saved) return undefined;
   const succeeded = saved.turns.filter((record) => record.turn);
   const failed = saved.turns.find((record) => record.error);
+  if (REPLAY_TURNS !== undefined && REPLAY_TURNS < succeeded.length) return { succeeded: succeeded.slice(0, REPLAY_TURNS), resend: undefined };
   return { succeeded, resend: failed?.sent };
 }
 
@@ -181,14 +228,24 @@ async function play(household: TestHousehold): Promise<Result> {
       result.turns.push({ sent: record.sent, requestMs: 0, waitedMs: 0, attempts: 0, turn: record.turn, replayed: true });
     });
     start = replay.succeeded.length;
-    const state = deriveTtxState(messages);
+    const state = deriveTtxState(messages, EXERCISE_HOURS);
     next = replay.resend ?? (state.phase === "ended" ? DEBRIEF_REQUEST : mask(pick(state.latestTurn!.response_options, start - 1)));
     result.notes.push(`Replayed ${start} turns from ${REPLAY}${replay.resend ? "; resent the failed call" : ""}`);
   }
 
   for (let i = start; i <= MAX_TURNS; i++) {
+    const remaining = remainingBudget();
+    if (remaining === 0) {
+      result.findings.push({ category: "completion", text: `Call ${i + 1} not sent: the ${BUDGET}-token budget is spent, with ${spend.charged} charged` });
+      break;
+    }
     messages.push(userMessage(`u${i}`, next));
-    const outcome = await sendWithRetries(() => send(messages), { sleep, notes: result.notes, label: `Call ${i + 1}` });
+    const outcome = await sendWithRetries(() => send(messages), {
+      sleep,
+      notes: result.notes,
+      label: `Call ${i + 1}`,
+      ...(BUDGET !== undefined ? { maxWaits: 0, resubmit: false } : {}),
+    });
     const metadata = outcome.message?.metadata;
     const record: CallRecord = {
       sent: next,
@@ -203,22 +260,50 @@ async function play(household: TestHousehold): Promise<Result> {
       omittedImprovement: metadata?.debriefChecks?.omittedImprovement,
       inputTokens: metadata?.usage?.inputTokens,
       outputTokens: metadata?.usage?.outputTokens,
+      calls: metadata?.calls,
+      // The server never reserves past what was sent, so a request without per-call metadata is charged all of it.
+      charged:
+        remaining !== undefined
+          ? chargeRequest(metadata?.calls, remaining, remaining)
+          : chargeRequest(metadata?.calls, UNBUDGETED_CALL_CHARGE, UNBUDGETED_CALL_CHARGE * MAX_PROVIDER_CALLS_PER_REQUEST),
     };
+    spend.charged += record.charged!;
+    spend.reported += (record.calls ?? []).reduce((sum, call) => sum + (reportedTokens(call) ?? 0), 0);
+    const over = BUDGET !== undefined ? overBound(record.calls) : [];
+    const stopOver = () =>
+      result.findings.push({
+        category: "completion",
+        text: `Call ${i + 1} over its bound: ${over.map((c) => `a provider call reported ${c.inputTokens} input tokens (bound ${c.inputBound}) and ${c.outputTokens} output (limit ${c.maxOutputTokens})`).join("; ")}, so the budget's guarantee no longer holds and the run stopped`,
+      });
     if (metadata?.debriefCapture) writeCapture(household, record, outcome.error, metadata.debriefCapture);
+    if (metadata?.budgetStop) {
+      result.turns.push({ ...record, error: outcome.error });
+      const { needed, remaining: left } = metadata.budgetStop;
+      result.findings.push({
+        category: "completion",
+        text: `Call ${i + 1} stopped by the budget: its next provider call needed up to ${needed} tokens and ${left} remained, so the server didn't send it`,
+      });
+      break;
+    }
     if (outcome.error || !outcome.message) {
       result.turns.push({ ...record, error: outcome.error });
       result.findings.push({ category: "completion", text: `Call ${i + 1} failed: ${outcome.error}` });
       break;
     }
     messages.push({ ...outcome.message, id: `a${i}` });
-    const state = deriveTtxState(messages);
+    const state = deriveTtxState(messages, EXERCISE_HOURS);
 
     if (state.report) {
       result.report = state.report;
       result.debrief = record;
+      if (over.length) stopOver();
       break;
     }
     result.turns.push({ ...record, turn: state.latestTurn });
+    if (over.length) {
+      stopOver();
+      break;
+    }
     if (state.phase === "ended") next = DEBRIEF_REQUEST;
     else {
       const options = state.latestTurn?.response_options ?? [];
@@ -290,7 +375,8 @@ function check(result: Result, messages: TtxUIMessage[]) {
   );
   result.notes.push(
     `${turns.length} turns, reached ${turns.at(-1)?.time_elapsed ?? "Hour 0"}${result.report ? ", debrief written" : ""}`,
-    `Input tokens per call: max ${inputs.length ? Math.max(...inputs) : "n/a"}, average ${inputs.length ? Math.round(sum(inputs) / inputs.length) : "n/a"}; output tokens total ${sum(outputs)}`,
+    `Input tokens per response (generation plus any retry or repair): max ${inputs.length ? Math.max(...inputs) : "n/a"}, average ${inputs.length ? Math.round(sum(inputs) / inputs.length) : "n/a"}; output tokens total ${sum(outputs)}`,
+    largestTurnCall(result),
     `Average request time ${calls.length ? Math.round(sum(calls.map((c) => c.requestMs)) / calls.length) : 0} ms; waited ${Math.round(sum(calls.map((c) => c.waitedMs)) / 1000)} s for rate limits`,
     `Server retries over ${calls.length} calls: ${schemaRetries} after a malformed turn, ${rateLimitRetries} after a rate limit, ${sum(calls.map((call) => call.debriefRepairs ?? 0))} debrief repair(s)`,
     ...(result.debrief?.omittedImprovement
@@ -329,9 +415,55 @@ const byCategory = (findings: Finding[], category: CheckCategory) =>
 const callLine = (call: CallRecord) =>
   call.replayed
     ? "_Replayed from an earlier run._"
-    : `_Request ${call.requestMs} ms, waited ${Math.round(call.waitedMs / 1000)} s, ${call.attempts} request(s), ${call.providerCalls ?? "?"} provider call(s) (${call.schemaRetries ?? 0} schema retries, ${call.debriefRepairs ?? 0} debrief repairs), ${call.inputTokens ?? "?"} input / ${call.outputTokens ?? "?"} output tokens._`;
+    : `_Request ${call.requestMs} ms, waited ${Math.round(call.waitedMs / 1000)} s, ${call.attempts} request(s), ${call.providerCalls ?? "?"} provider call(s) (${call.schemaRetries ?? 0} schema retries, ${call.debriefRepairs ?? 0} debrief repairs), ${call.inputTokens ?? "?"} input / ${call.outputTokens ?? "?"} output tokens for the whole response._`;
 
-function reportMarkdown({ household, baseline, turns, debrief, report, findings, notes }: Result) {
+/** The live calls in order, with the label each has in the report. */
+const liveCalls = ({ turns, debrief }: Result) => [
+  ...turns.flatMap((call, index) => (call.replayed ? [] : [{ label: `Call ${index + 1}, ${call.turn?.time_elapsed ?? "no turn"}`, call, kind: "turn" as const }])),
+  ...(debrief ? [{ label: "Debrief", call: debrief, kind: "debrief" as const }] : []),
+];
+
+/** G6's measure: the largest input of any single provider call on a turn, against its 5,000-token target. */
+function largestTurnCall(result: Result) {
+  const inputs = liveCalls(result)
+    .filter(({ kind }) => kind === "turn")
+    .flatMap(({ call }) => (call.calls ?? []).flatMap((c) => (c.inputTokens !== undefined ? [c.inputTokens] : [])));
+  if (!inputs.length) return "Largest single provider call's input on a turn: n/a (no per-call usage reported)";
+  const largest = Math.max(...inputs);
+  return `Largest single provider call's input on a turn: ${largest} (G6 target ${G6_INPUT_TARGET}: ${largest < G6_INPUT_TARGET ? "under" : "**not met**"})`;
+}
+
+/** Each provider call's own usage, apart from each response's total (generation plus any retry or repair). */
+function tokenSection(result: Result) {
+  const rows = liveCalls(result).flatMap(({ label, call, kind }) => {
+    const calls = call.calls ?? [];
+    const total = `| ${label} | **response total** | ${call.inputTokens ?? "?"} | ${call.outputTokens ?? "?"} | | | ${call.charged ?? "?"} | |`;
+    if (!calls.length) return [`| ${label} | no per-call usage reported | | | | | ${call.charged ?? "?"} | |`];
+    return [
+      ...calls.map((c, n) => {
+        const reported = reportedTokens(c);
+        const what = c.rejected ? `rejected${c.status !== undefined ? ` (status ${c.status})` : ""}` : reported === undefined ? "no usage reported (cut off)" : "reported";
+        const target = kind === "turn" && c.inputTokens !== undefined ? (c.inputTokens < G6_INPUT_TARGET ? "under" : "**over**") : "";
+        return `| ${label} | provider call ${n + 1}: ${what} | ${c.inputTokens ?? ""} | ${c.outputTokens ?? ""} | ${c.inputBound ?? ""} | ${c.maxOutputTokens ?? ""} | ${reported ?? c.reserved ?? UNBUDGETED_CALL_CHARGE} | ${target} |`;
+      }),
+      ...(calls.length > 1 ? [total] : []),
+    ];
+  });
+  if (!rows.length) return [];
+  return [
+    "## Tokens per provider call",
+    "",
+    `Each provider call's own usage, apart from each response's total, which adds retries and, for a debrief, the repair. In a budgeted run the server enforced each call's input bound and output limit before sending it. Charged: a call's reported usage, or, when it reported none, its whole reserve (bound plus limit; ${UNBUDGETED_CALL_CHARGE} without a budget). G6's target applies to a single turn call's input.`,
+    "",
+    `| Call | Provider call | Input | Output | Input bound | Output limit | Charged | Input vs ${G6_INPUT_TARGET} |`,
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ...rows,
+    "",
+  ];
+}
+
+function reportMarkdown(result: Result) {
+  const { household, baseline, turns, debrief, report, findings, notes } = result;
   const out = [
     `# ${household.persona}`,
     "",
@@ -352,6 +484,7 @@ function reportMarkdown({ household, baseline, turns, debrief, report, findings,
       : []),
     list(notes),
     "",
+    ...tokenSection(result),
     "## What the scenario engine received",
     "",
     "```text",
@@ -525,11 +658,27 @@ const households = TEST_HOUSEHOLDS.filter((household) => !ONLY || ONLY.includes(
 const results: Result[] = [];
 
 describe(`test households against ${BASE_URL}`, () => {
-  // A server without the capture flag would spend the run's tokens and save no drafts.
+  // A server without the capture flag would spend the run's tokens and save no drafts; one on a different clock would
+  // measure a different game.
   beforeAll(async () => {
-    if (!CAPTURE) return;
+    const checkClock = BUDGET !== undefined || process.env.EVAL_EXERCISE_HOURS !== undefined;
+    if (!CAPTURE && !checkClock) return;
     const res = await fetch(`${BASE_URL}/api/ttx`, { headers: { [CAPTURE_HEADER]: "1" } });
     const body = res.ok ? await res.json() : null;
+    if (checkClock && body?.exerciseHours !== EXERCISE_HOURS) {
+      throw new Error(
+        `${BASE_URL} runs a ${body?.exerciseHours ?? "unknown"}-hour clock, not ${EXERCISE_HOURS}: start it with READYSTATE_EVAL_TARGET_HOURS=${EXERCISE_HOURS}. No model call was made.`,
+      );
+    }
+    if (BUDGET !== undefined) {
+      if (body?.evalBudget !== true) {
+        throw new Error(`EVAL_BUDGET is set, but ${BASE_URL} won't enforce it: start it with READYSTATE_EVAL_BUDGET=1. No model call was made.`);
+      }
+      console.log(
+        `Budget ${BUDGET} tokens, enforced by the server before every provider call; output limit ${MAX_OUTPUT} per call; the eval's own resends off; clock ${EXERCISE_HOURS} hours`,
+      );
+    }
+    if (!CAPTURE) return;
     if (body?.captureDebriefDrafts !== true) {
       throw new Error(`EVAL_CAPTURE_DRAFTS=1, but ${BASE_URL} won't capture drafts: start it with READYSTATE_CAPTURE_DEBRIEF_DRAFTS=1. No model call was made.`);
     }
@@ -554,11 +703,13 @@ describe(`test households against ${BASE_URL}`, () => {
       [
         `# Household evaluation, ${new Date().toISOString()}`,
         "",
-        `Server ${BASE_URL}; model ${SETTINGS ? `${SETTINGS.provider}/${SETTINGS.model ?? "default"}` : "server default"}; up to ${MAX_TURNS} turns; responses chosen "${CHOOSE}"${REPLAY ? `; replaying ${REPLAY}` : ""}.`,
+        `Server ${BASE_URL}; model ${SETTINGS ? `${SETTINGS.provider}/${SETTINGS.model ?? "default"}` : "server default"}; up to ${MAX_TURNS + 1} calls; responses chosen "${CHOOSE}"${REPLAY ? `; replaying ${REPLAY}${REPLAY_TURNS !== undefined ? ` (first ${REPLAY_TURNS} turns)` : ""}` : ""}; clock ${EXERCISE_HOURS} hours.`,
+        "",
+        `**Tokens:** ${spend.reported} reported tokens; ${spend.charged} conservatively charged against the budget${BUDGET !== undefined ? ` of ${BUDGET}` : ""}. The charge is budget accounting, not measured usage: a provider call without reported usage is charged its whole reserve (input bound plus output limit).`,
         "",
         "Completing an exercise is reported separately from its content: a run can finish and still have continuity, safety or suitability problems. Content checks are heuristics: passing means \"passed the implemented checks\", not verified safe or accurate. A valid citation shows the cited event exists, not that the advice describes it correctly. Findings from replayed turns are listed but not counted.",
         "",
-        "**The test runner's pass or fail is not a quality result.** It fails a household only on a privacy leak or a failed call, so a passing household can still have every content finding below and an unreviewed debrief.",
+        "**The test runner's pass or fail is not a quality result.** It fails a household only on a privacy leak, a failed call or a budget stop, so a passing household can still have every content finding below and an unreviewed debrief.",
         "",
         "**Manual review is a separate result.** The automated columns can all pass while the debrief fails a reading of every displayed line, including the checklist. The runner can't do that reading, so it's marked pending here; record it in docs/testing.",
         "",
@@ -581,8 +732,10 @@ describe(`test households against ${BASE_URL}`, () => {
     const result = await play(household);
     results.push(result);
     writeFileSync(path.join(outDir, `${household.id}.md`), reportMarkdown(result));
-    // Only a privacy leak or a failed call fails the test runner. That's a gate on the run, not a quality result:
-    // content findings (grading language included) are reported for review, and the manual verdict is separate.
-    expect(result.findings.filter((f) => f.category === "privacy" || (f.category === "completion" && /^Call \d+ failed:/.test(f.text)))).toEqual([]);
+    // Only a privacy leak, a failed call or a budget stop fails the test runner. That's a gate on the run, not a quality
+    // result: content findings (grading language included) are reported for review, and the manual verdict is separate.
+    expect(
+      result.findings.filter((f) => f.category === "privacy" || (f.category === "completion" && /^Call \d+ (failed|not sent|stopped by the budget|over its bound):/.test(f.text))),
+    ).toEqual([]);
   });
 });

@@ -22,6 +22,9 @@ const providerFailure = (error: unknown): ProviderFailure | undefined => {
   return undefined;
 };
 
+/** The HTTP status of a provider failure, if it has one: content-free, unlike the provider's message. */
+export const providerStatus = (error: unknown): number | undefined => providerFailure(error)?.status;
+
 /** "4m35.616s", "12s" or "277.5ms" from a provider message, in seconds; else the Retry-After header. */
 export function retryAfterSeconds(error: unknown): number | undefined {
   const failure = providerFailure(error);

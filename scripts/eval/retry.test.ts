@@ -76,4 +76,15 @@ describe("sendWithRetries", () => {
     const result = await sendWithRetries(twice.send, { sleep: noSleep, notes: [], label: "Call 1" });
     expect(result).toMatchObject({ error: incomplete, attempts: 2 });
   });
+
+  it("sends once, with no wait or resubmission, for a budgeted run", async () => {
+    const incomplete = "The model returned an incomplete turn. Submit your response again.";
+    for (const error of [limited, incomplete]) {
+      const fake = server([{ error }, { message: "never reached" }]);
+      const notes: string[] = [];
+      const result = await sendWithRetries(fake.send, { sleep: noSleep, notes, label: "Call 1", maxWaits: 0, resubmit: false });
+      expect(result).toMatchObject({ error, attempts: 1 });
+      expect(notes).toEqual([]);
+    }
+  });
 });
