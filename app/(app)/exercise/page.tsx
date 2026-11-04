@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { exerciseChat, resendLast, resetExercise, sendToExercise, useExerciseSession } from "@/lib/exercise-session";
 import { SCENARIOS, hasProfile, privateTerms, type HouseholdProfile } from "@/lib/household";
 import { engineBaseline } from "@/lib/inventory";
+import { addAlwaysMaskRule, getLocalPrivacyStorage } from "@/lib/local-session-privacy";
 import { createApprover, editReview, prepareReview, type OutgoingReview } from "@/lib/outgoing-review";
 import { TEST_HOUSEHOLDS } from "@/lib/test-households";
 import {
@@ -71,7 +72,6 @@ export default function ExercisePage() {
   const { messages, setMessages, status, error } = useChat<TtxUIMessage>({ chat: exerciseChat });
   // Subscribe so unmasked output re-renders whenever the ledger changes.
   const entityMap = usePrivacyStore((state) => state.entityMap);
-  const alwaysMaskList = usePrivacyStore((state) => state.alwaysMask);
   const { activeProfile, sampleId: activeSampleId } = useExerciseSession();
 
   const ttx = deriveTtxState(messages);
@@ -101,6 +101,8 @@ export default function ExercisePage() {
   const [review, setReview] = useState<OutgoingReview | null>(null);
   const [reviewNotice, setReviewNotice] = useState<string>();
   const [reviewBlocked, setReviewBlocked] = useState<string[]>();
+  const [maskUpdating, setMaskUpdating] = useState(false);
+  const maskUpdateInProgress = useRef(false);
 
   // The household's names and medication names are always masked, even in typed responses.
   const alwaysMask = (profile?: HouseholdProfile) => [
@@ -146,17 +148,34 @@ export default function ExercisePage() {
     reviewBaseline(profile, sampleId);
   };
   const sendReview = () => {
-    if (!review || exerciseBusy()) return;
+    if (!review || exerciseBusy() || maskUpdateInProgress.current) return;
     const result = approve(review);
     if (result.status === "sent" || result.status === "duplicate") setReview(null);
     else if (result.status === "blocked") setReviewBlocked(result.problems);
     else openReview(result.review, result.reason);
   };
-  const maskAndRebuild = (value: string) => {
-    if (!review) return;
+  const maskAndRebuild = async (value: string) => {
+    if (!review || maskUpdateInProgress.current) return;
+    maskUpdateInProgress.current = true;
+    setMaskUpdating(true);
+    setReviewNotice("Applying the selected mask. Sending is disabled until the review is rebuilt.");
     const store = usePrivacyStore.getState();
-    store.setAlwaysMask([...store.alwaysMask, value]);
-    openReview(prepareReview(review.kind, review.build, ledger(), alwaysMask(review.start?.profile), review.start), `"${value}" is now masked everywhere. Review the rebuilt message.`);
+    try {
+      const update = await addAlwaysMaskRule(getLocalPrivacyStorage(), store.alwaysMask, value);
+      store.setAlwaysMask(update.rules, update.persisted);
+      const persistenceNotice = update.persisted
+        ? ""
+        : " This rule is in memory only and will not be saved in this browser; local-session sends still require Web Locks.";
+      openReview(
+        prepareReview(review.kind, review.build, ledger(), alwaysMask(review.start?.profile), review.start),
+        `"${value}" is now masked everywhere.${persistenceNotice} Review the rebuilt message.`,
+      );
+    } catch {
+      setReviewNotice("The selected mask could not be saved safely. The existing message is unchanged; nothing was sent.");
+    } finally {
+      maskUpdateInProgress.current = false;
+      setMaskUpdating(false);
+    }
   };
   const leaveReview = () => {
     const kind = review?.kind;
@@ -224,7 +243,7 @@ export default function ExercisePage() {
       review={review}
       notice={reviewNotice}
       blocked={reviewBlocked}
-      sending={busy}
+      sending={busy || maskUpdating}
       onEdit={(text) => {
         setReview(editReview(review, text));
         setReviewBlocked(undefined);
@@ -445,8 +464,7 @@ export default function ExercisePage() {
                 ))}
               </ul>
             )}
-            {/* Keyed by the list, so a word masked from a review shows up in the card. */}
-            <AlwaysMaskCard key={alwaysMaskList.join("\0")} />
+            <AlwaysMaskCard />
           </div>
         </details>
 

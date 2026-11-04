@@ -172,10 +172,12 @@ Neither Send nor debrief was pressed. Provider keys were unset; no model or
 browser download occurred. Restart reused each platform's exact origin
 (`127.0.0.1:64321` / `127.0.0.1:41991`) and browser profile.
 
-The privacy ledger and additional always-mask rules are intentionally in memory,
-not persisted. Household/provider settings persistence passed; this does not
-claim masking rules survive a browser restart. Post-uninstall checks establish
-browser storage retention, not continued app availability.
+At qualification time, the ordinary API exercise's privacy ledger and additional
+always-mask rules were in memory, not persisted. Household/provider settings
+persistence passed; that run did not verify masking-rule persistence. Local
+connection sessions now retain their browser-private context and explicit Settings
+rules locally for cross-tab coordination. Post-uninstall checks establish browser
+storage retention, not continued app availability.
 
 ### Observed first-run navigation limitation
 

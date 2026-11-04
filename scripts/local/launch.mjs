@@ -11,6 +11,14 @@ export function localPort(value = "3000") {
   return Number(value);
 }
 
+export function localLaunchRoots(scriptPath = fileURLToPath(import.meta.url)) {
+  const scriptDirectory = path.dirname(realpathSync(scriptPath));
+  const localScriptsDirectory = path.basename(scriptDirectory) === "local"
+    && path.basename(path.dirname(scriptDirectory)) === "scripts";
+  const sourceRoot = localScriptsDirectory ? path.dirname(path.dirname(scriptDirectory)) : "";
+  return { sourceRoot, installRoot: sourceRoot || scriptDirectory };
+}
+
 export async function checkPort(port) {
   const probe = createServer();
   await new Promise((resolve, reject) => {
@@ -36,6 +44,7 @@ export async function launch(args = process.argv.slice(2)) {
   if (process.env.READYSTATE_MODE && process.env.READYSTATE_MODE !== "self-hosted") {
     throw new Error("Local packages support READYSTATE_MODE=self-hosted only.");
   }
+  const { sourceRoot, installRoot } = localLaunchRoots();
   const port = localPort(process.env.PORT);
   try {
     await checkPort(port);
@@ -45,7 +54,11 @@ export async function launch(args = process.argv.slice(2)) {
   const url = `http://localhost:${port}/journal`;
   const child = spawn(process.execPath, [server], {
     cwd: path.dirname(server),
-    env: { ...process.env, HOSTNAME: "127.0.0.1", PORT: String(port), NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", READYSTATE_MODE: "self-hosted", VERCEL: "" },
+    env: {
+      ...process.env, HOSTNAME: "127.0.0.1", PORT: String(port), NODE_ENV: "production",
+      NEXT_TELEMETRY_DISABLED: "1", READYSTATE_MODE: "self-hosted", VERCEL: "",
+      READYSTATE_LOCAL_SOURCE_ROOT: sourceRoot, READYSTATE_LOCAL_INSTALL_ROOT: installRoot,
+    },
     stdio: "inherit",
   });
   let exited = false;
